@@ -278,74 +278,75 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pl-64 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Passion Fruit WhatsApp Control Console"
+        title="Passion fruit Control Console"
         subtitle="Official Meta Cloud API • Shared Team Inbox with AI • Broadcast Campaigns & Automations"
       />
 
       <main className="p-8 space-y-8 flex-1">
-        {/* Friendly Top Welcome & Getting Started Banner */}
-        <section className="rounded-3xl bg-gradient-to-r from-[#0066FF] to-[#00A3FF] p-6 text-white shadow-xl shadow-blue-500/10 space-y-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/20 text-white inline-block">
-                Welcome to Passion Fruit
+        {/* Official Brand Hero Banner */}
+        <section className="rounded-3xl bg-[#0D0F2D] border border-[#7C3AED]/30 p-7 text-white shadow-xl shadow-purple-900/10 space-y-5 relative overflow-hidden">
+          <div className="absolute -top-10 -right-10 w-80 h-80 bg-[#7C3AED]/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full bg-[#7C3AED]/20 text-[#C4B5FD] border border-[#7C3AED]/40 inline-block">
+                Same energy. Bigger possibilities.
               </span>
-              <h2 className="text-xl sm:text-2xl font-bold">
-                Everything you need to grow on WhatsApp in one friendly place
+              <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+                Welcome to <span className="text-white">Passion</span> <span className="text-[#7C3AED]">fruit</span>
               </h2>
-              <p className="text-xs text-blue-100 max-w-xl">
-                Easily send broadcasts, chat with your customers using AI suggestions, and create automated replies.
+              <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                Everything you need to grow on WhatsApp in one clean, modern, and scalable SaaS platform.
               </p>
             </div>
             <Link
               href="/setup"
-              className="px-5 py-2.5 rounded-xl bg-white text-[#0066FF] font-bold text-xs hover:bg-blue-50 transition-all flex items-center gap-2 shadow-sm flex-shrink-0 w-fit"
+              className="px-5 py-2.5 rounded-xl gradient-button text-white font-bold text-xs shadow-pf-btn hover:shadow-pf-hover transition-all flex items-center gap-2 flex-shrink-0 w-fit"
             >
-              <BookOpen className="w-4 h-4 text-amber-500" />
+              <BookOpen className="w-4 h-4 text-white" />
               <span>5-Min Setup Guide</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
           {/* 3 Quick Start Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-white/20 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t border-white/10 text-xs relative z-10">
             <Link
               href="/setup"
-              className="bg-white/10 hover:bg-white/15 p-3.5 rounded-2xl transition-all flex items-center justify-between group"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 rounded-2xl transition-all flex items-center justify-between group"
             >
               <div className="space-y-0.5">
-                <span className="text-[10px] text-blue-200 font-bold uppercase">Step 1</span>
+                <span className="text-[10px] text-[#C4B5FD] font-bold uppercase">Step 1</span>
                 <p className="font-bold text-white">Connect Meta WhatsApp API</p>
-                <p className="text-[11px] text-blue-100">Simple 5-minute visual guide</p>
+                <p className="text-[11px] text-slate-300">Simple 5-minute visual guide</p>
               </div>
-              <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 text-[#C4B5FD] group-hover:translate-x-1 transition-transform" />
             </Link>
 
             <Link
               href="/contacts"
-              className="bg-white/10 hover:bg-white/15 p-3.5 rounded-2xl transition-all flex items-center justify-between group"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 rounded-2xl transition-all flex items-center justify-between group"
             >
               <div className="space-y-0.5">
-                <span className="text-[10px] text-blue-200 font-bold uppercase">Step 2</span>
+                <span className="text-[10px] text-[#C4B5FD] font-bold uppercase">Step 2</span>
                 <p className="font-bold text-white">Upload Customer Contacts</p>
-                <p className="text-[11px] text-blue-100">Add phone numbers or CSV</p>
+                <p className="text-[11px] text-slate-300">Add phone numbers or CSV</p>
               </div>
-              <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 text-[#C4B5FD] group-hover:translate-x-1 transition-transform" />
             </Link>
 
             <Link
               href="/campaigns"
-              className="bg-white/10 hover:bg-white/15 p-3.5 rounded-2xl transition-all flex items-center justify-between group"
+              className="bg-white/5 hover:bg-white/10 border border-white/10 p-3.5 rounded-2xl transition-all flex items-center justify-between group"
             >
               <div className="space-y-0.5">
-                <span className="text-[10px] text-blue-200 font-bold uppercase">Step 3</span>
+                <span className="text-[10px] text-[#C4B5FD] font-bold uppercase">Step 3</span>
                 <p className="font-bold text-white">Send First Broadcast</p>
-                <p className="text-[11px] text-blue-100">Reach 100% of your audience</p>
+                <p className="text-[11px] text-slate-300">Reach 100% of your audience</p>
               </div>
-              <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
+              <ArrowRight className="w-4 h-4 text-[#C4B5FD] group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
         </section>
@@ -373,12 +374,12 @@ export default function DashboardPage() {
                   <div className={cn(
                     "w-12 h-12 p-2.5 rounded-2xl transition-all duration-200 flex items-center justify-center border",
                     cap.highlight
-                      ? "bg-amber-50 border-amber-200 text-amber-600 shadow-sm group-hover:bg-amber-100"
-                      : "bg-slate-50 border-slate-200 text-[#0066FF] group-hover:bg-blue-50 group-hover:border-blue-200 group-hover:scale-105"
+                      ? "bg-purple-50 border-[#C4B5FD] text-[#7C3AED] shadow-sm group-hover:bg-purple-100"
+                      : "bg-[#F4F6FB] border-[#E2E8F0] text-[#7C3AED] group-hover:bg-purple-50 group-hover:border-[#C4B5FD] group-hover:scale-105"
                   )}>
                     <Icon className="w-5 h-5 transition-colors" />
                   </div>
-                  <p className="font-semibold text-slate-600 group-hover:text-slate-900 text-[11px] text-center transition-colors">
+                  <p className="font-semibold text-[#64748B] group-hover:text-[#0D0F2D] text-[11px] text-center transition-colors">
                     {cap.name}
                   </p>
                 </Link>
@@ -395,7 +396,7 @@ export default function DashboardPage() {
             trend="+18.4%"
             subtitle="vs. last month"
             icon={Send}
-            accent="blue"
+            accent="purple"
           />
           <StatCard
             title="WhatsApp Delivery Rate"
@@ -419,7 +420,7 @@ export default function DashboardPage() {
             trend="+32.6%"
             subtitle="From Instagram & FB Ads"
             icon={Megaphone}
-            accent="amber"
+            accent="purple"
           />
         </div>
 
@@ -429,31 +430,31 @@ export default function DashboardPage() {
         </section>
 
         {/* 4. Click-to-WhatsApp Ads (CTWA) Meta Ads Tracker */}
-        <section id="ctwa" className="rounded-3xl bg-white border border-slate-200 p-7 space-y-5 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+        <section id="ctwa" className="rounded-3xl bg-white border border-[#E2E8F0] p-7 space-y-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E2E8F0] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#7C3AED] flex items-center justify-center">
                   <Megaphone className="w-4 h-4" />
                 </div>
-                <h3 className="text-sm font-bold text-slate-900">
+                <h3 className="text-sm font-bold text-[#0D0F2D]">
                   Instagram & Facebook Ad Leads (Click-to-WhatsApp)
                 </h3>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#64748B]">
                 Automatically capture and reply to customers who tap your ads on Instagram and Facebook.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-50 text-[#7C3AED] border border-[#C4B5FD]">
                 Avg Cost / Chat: $1.39
               </span>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 text-[10px] uppercase text-slate-400 tracking-wider border-b border-slate-200">
+          <div className="overflow-x-auto rounded-2xl border border-[#E2E8F0]">
+            <table className="w-full text-left text-xs text-[#64748B]">
+              <thead className="bg-[#F4F6FB] text-[10px] uppercase text-[#64748B] tracking-wider border-b border-[#E2E8F0]">
                 <tr>
                   <th className="p-3.5 font-bold">Ad Campaign</th>
                   <th className="p-3.5 font-bold">Channel</th>
@@ -464,19 +465,19 @@ export default function DashboardPage() {
                   <th className="p-3.5 text-right font-bold">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 text-xs">
+              <tbody className="divide-y divide-[#E2E8F0] text-xs">
                 {ctwaCampaigns.map((ad, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="p-3.5 font-bold text-slate-900">{ad.name}</td>
-                    <td className="p-3.5 text-purple-700 font-medium">{ad.platform}</td>
+                  <tr key={idx} className="hover:bg-purple-50/40 transition-colors">
+                    <td className="p-3.5 font-bold text-[#0D0F2D]">{ad.name}</td>
+                    <td className="p-3.5 text-[#7C3AED] font-medium">{ad.platform}</td>
                     <td className="p-3.5 font-mono">{ad.spend}</td>
-                    <td className="p-3.5 font-bold text-emerald-600 font-mono">+{ad.chatsStarted}</td>
+                    <td className="p-3.5 font-bold text-[#22C55E] font-mono">+{ad.chatsStarted}</td>
                     <td className="p-3.5 font-mono">{ad.costPerChat}</td>
-                    <td className="p-3.5 font-semibold text-slate-800">{ad.conversionRate}</td>
+                    <td className="p-3.5 font-semibold text-[#0D0F2D]">{ad.conversionRate}</td>
                     <td className="p-3.5 text-right">
                       <Link
                         href="/automations"
-                        className="text-xs font-bold text-[#0066FF] hover:underline flex items-center justify-end gap-1"
+                        className="text-xs font-bold text-[#7C3AED] hover:underline flex items-center justify-end gap-1"
                       >
                         Edit Bot Reply <ArrowUpRight className="w-3 h-3" />
                       </Link>
@@ -489,17 +490,17 @@ export default function DashboardPage() {
         </section>
 
         {/* 5. Quick WhatsApp Message Sender (Friendly, Real Working Component) */}
-        <section id="quick-sender" className="rounded-3xl bg-white border border-slate-200 p-7 space-y-6 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <section id="quick-sender" className="rounded-3xl bg-white border border-[#E2E8F0] p-7 space-y-6 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E2E8F0] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Smartphone className="w-5 h-5 text-[#0066FF]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#22C55E] animate-pulse" />
+                <h2 className="text-base font-bold text-[#0D0F2D] flex items-center gap-2">
+                  <Smartphone className="w-5 h-5 text-[#7C3AED]" />
                   Send a WhatsApp Message to Any Phone
                 </h2>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#64748B]">
                 Type any phone number (like your own mobile) and send an instant live WhatsApp message right from your browser.
               </p>
             </div>
@@ -517,9 +518,9 @@ export default function DashboardPage() {
               <button
                 onClick={runQuickDemoInbound}
                 disabled={loadingFlow1 || loadingFlow2}
-                className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+                className="px-4 py-2 rounded-xl bg-white hover:bg-purple-50/50 border border-[#E2E8F0] text-[#0D0F2D] font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
               >
-                <RotateCw className={cn('w-3.5 h-3.5 text-[#0066FF]', loadingFlow2 && 'animate-spin')} />
+                <RotateCw className={cn('w-3.5 h-3.5 text-[#7C3AED]', loadingFlow2 && 'animate-spin')} />
                 <span>{loadingFlow2 ? 'Testing...' : 'Simulate Customer Reply'}</span>
               </button>
             </div>
@@ -530,7 +531,7 @@ export default function DashboardPage() {
             <div className="lg:col-span-7 space-y-5">
               <form onSubmit={handleQuickSend} className="space-y-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                     Recipient Mobile Number (with Country Code)
                   </label>
                   <div className="relative">
@@ -541,7 +542,7 @@ export default function DashboardPage() {
                       value={customPhone}
                       onChange={(e) => setCustomPhone(e.target.value)}
                       placeholder="+91 98765 43210 or +1 415 555 2671"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0066FF] focus:bg-white"
+                      className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#0D0F2D] font-mono focus:outline-none focus:border-[#7C3AED] focus:bg-white"
                     />
                   </div>
                   <p className="text-[10px] text-slate-400">
@@ -550,21 +551,21 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                     Message Text
                   </label>
                   <textarea
                     rows={3}
                     value={customMessage}
                     onChange={(e) => setCustomMessage(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:border-[#0066FF] focus:bg-white leading-relaxed"
+                    className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl p-3 text-xs text-[#0D0F2D] focus:outline-none focus:border-[#7C3AED] focus:bg-white leading-relaxed"
                   />
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
                   {quickSendSuccess && (
-                    <span className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4" /> {quickSendSuccess}
+                    <span className="text-xs text-[#22C55E] font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-[#22C55E]" /> {quickSendSuccess}
                     </span>
                   )}
                   {!quickSendSuccess && <div />}
@@ -572,7 +573,7 @@ export default function DashboardPage() {
                   <button
                     type="submit"
                     disabled={quickSendLoading}
-                    className="gradient-button px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-sm flex items-center gap-2"
+                    className="gradient-button px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-pf-btn flex items-center gap-2"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>{quickSendLoading ? 'Delivering...' : 'Send WhatsApp Message'}</span>

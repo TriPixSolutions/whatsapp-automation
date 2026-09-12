@@ -117,7 +117,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pl-64 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="Settings & Admin Security"
@@ -126,23 +126,26 @@ export default function SettingsPage() {
 
       <main className="p-8 space-y-8 flex-1 max-w-5xl">
         {/* Quick link banner to setup guide */}
-        <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold flex-shrink-0">
+        <div className="rounded-3xl bg-[#0D0F2D] border border-[#7C3AED]/30 p-6 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl shadow-purple-900/10">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-[#7C3AED] text-white flex items-center justify-center font-bold flex-shrink-0 shadow-sm">
               <BookOpen className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
-                First Time Setting Up WhatsApp?
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#C4B5FD] block">
+                Same energy. Bigger possibilities.
+              </span>
+              <h4 className="text-sm font-bold text-white">
+                First Time Connecting Meta WhatsApp?
               </h4>
-              <p className="text-xs text-amber-800">
-                Follow our 5-minute visual setup guide with step-by-step instructions.
+              <p className="text-xs text-slate-300">
+                Follow our 5-minute visual setup guide with 1-click copyable webhooks.
               </p>
             </div>
           </div>
           <Link
             href="/setup"
-            className="gradient-button px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-sm w-fit"
+            className="gradient-button px-5 py-2.5 rounded-xl text-white font-bold text-xs flex items-center gap-2 shadow-pf-btn hover:shadow-pf-hover flex-shrink-0 w-fit"
           >
             <span>Open Setup Guide</span>
             <ExternalLink className="w-3.5 h-3.5" />
@@ -150,20 +153,20 @@ export default function SettingsPage() {
         </div>
 
         {/* 1. SUPER ADMIN CREDENTIALS CARD */}
-        <section className="rounded-3xl bg-white border border-slate-200 p-7 space-y-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <section className="rounded-3xl bg-white border border-[#E2E8F0] p-7 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#0066FF]" />
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                <ShieldCheck className="w-5 h-5 text-[#7C3AED]" />
+                <h3 className="text-sm font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Super Admin Account & Security
                 </h3>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#64748B]">
                 Configure your manual Super Admin login credentials to protect your dashboard access.
               </p>
             </div>
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-[#0066FF] border border-blue-200">
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-50 text-[#7C3AED] border border-[#C4B5FD]">
               Active Security Lock
             </span>
           </div>
@@ -171,35 +174,35 @@ export default function SettingsPage() {
           <form onSubmit={handleSaveAdminCreds} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Admin Username
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <User className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     required
                     value={adminUser}
                     onChange={(e) => setAdminUser(e.target.value)}
                     placeholder="admin"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-[#0066FF] focus:bg-white"
+                    className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#0D0F2D] font-medium focus:outline-none focus:border-[#7C3AED] focus:bg-white"
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Admin Password
                 </label>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <KeyRound className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     required
                     value={adminPass}
                     onChange={(e) => setAdminPass(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:border-[#0066FF] focus:bg-white"
+                    className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#0D0F2D] font-medium focus:outline-none focus:border-[#7C3AED] focus:bg-white"
                   />
                 </div>
               </div>
@@ -207,18 +210,18 @@ export default function SettingsPage() {
 
             <div className="flex items-center justify-between pt-2">
               {adminSaved ? (
-                <span className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> Super Admin credentials updated successfully!
+                <span className="text-xs text-[#22C55E] font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-[#22C55E]" /> Super Admin credentials updated successfully!
                 </span>
               ) : (
-                <span className="text-[11px] text-slate-400">
-                  Default credentials are: <strong>admin</strong> / <strong>passionfruit2025</strong>
+                <span className="text-[11px] text-[#64748B]">
+                  Default credentials: <strong>admin</strong> / <strong>passionfruit2025</strong>
                 </span>
               )}
 
               <button
                 type="submit"
-                className="gradient-button px-5 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-sm"
+                className="gradient-button px-5 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-pf-btn hover:shadow-pf-hover"
               >
                 Update Admin Login
               </button>
@@ -227,16 +230,16 @@ export default function SettingsPage() {
         </section>
 
         {/* 2. META DEVELOPER WEBHOOK CARD */}
-        <section className="rounded-3xl bg-white border border-slate-200 p-7 space-y-5 shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+        <section className="rounded-3xl bg-white border border-[#E2E8F0] p-7 space-y-5 shadow-sm">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-[#0066FF]" />
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                <Globe className="w-5 h-5 text-[#7C3AED]" />
+                <h3 className="text-sm font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Meta Developer Portal Webhook Connection
                 </h3>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#64748B]">
                 Copy and paste these into your Meta App &rarr; WhatsApp &rarr; Configuration &rarr; Webhook
               </p>
             </div>
@@ -244,7 +247,7 @@ export default function SettingsPage() {
               href="https://developers.facebook.com/apps/"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs text-[#0066FF] hover:underline font-bold"
+              className="flex items-center gap-1.5 text-xs text-[#7C3AED] hover:underline font-bold"
             >
               <span>developers.facebook.com</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -253,19 +256,19 @@ export default function SettingsPage() {
 
           {/* Callback URL */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
               Webhook Callback URL
             </label>
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-[#0066FF] font-mono select-all overflow-x-auto font-semibold">
+              <div className="flex-1 bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#7C3AED] font-mono select-all overflow-x-auto font-semibold">
                 {webhookUrl}
               </div>
               <button
                 type="button"
                 onClick={copyToClipboard}
-                className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 flex items-center gap-2 transition-all shadow-sm"
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-[#F4F6FB] border border-[#E2E8F0] text-xs font-bold text-[#0D0F2D] flex items-center gap-2 transition-all shadow-sm"
               >
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-[#22C55E]" /> : <Copy className="w-4 h-4" />}
                 <span>{copied ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
@@ -273,7 +276,7 @@ export default function SettingsPage() {
 
           {/* Verify Token */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
               Webhook Verify Token
             </label>
             <div className="flex items-center gap-2">
@@ -281,13 +284,13 @@ export default function SettingsPage() {
                 type="text"
                 value={verifyToken}
                 onChange={(e) => setVerifyToken(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0066FF]"
+                className="flex-1 bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0D0F2D] font-mono focus:outline-none focus:border-[#7C3AED]"
               />
               <button
                 type="button"
                 onClick={testWebhookEndpoint}
                 disabled={isTestingWebhook}
-                className="px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#0066FF] text-xs font-bold flex items-center gap-2 transition-all"
+                className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-[#C4B5FD] text-[#7C3AED] text-xs font-bold flex items-center gap-2 transition-all"
               >
                 {isTestingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
                 <span>Test Webhook Handshake</span>
@@ -305,7 +308,7 @@ export default function SettingsPage() {
               )}
             >
               {webhookTestResult.success ? (
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-[#22C55E]" />
               ) : (
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
               )}
@@ -315,13 +318,13 @@ export default function SettingsPage() {
         </section>
 
         {/* 3. META CREDENTIALS FORM */}
-        <section className="rounded-3xl bg-white border border-slate-200 p-7 space-y-6 shadow-sm">
-          <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Key className="w-5 h-5 text-[#0066FF]" />
+        <section className="rounded-3xl bg-white border border-[#E2E8F0] p-7 space-y-6 shadow-sm">
+          <div className="border-b border-[#E2E8F0] pb-4">
+            <h3 className="text-sm font-bold text-[#0D0F2D] uppercase tracking-wider flex items-center gap-2">
+              <Key className="w-5 h-5 text-[#7C3AED]" />
               WhatsApp Cloud API Keys & IDs
             </h3>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-[#64748B] mt-1">
               Found on your Meta for Developers dashboard under WhatsApp &rarr; API Setup
             </p>
           </div>
@@ -329,23 +332,23 @@ export default function SettingsPage() {
           <form onSubmit={handleSaveMeta} className="space-y-5">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Permanent Access Token (System User)
                 </label>
-                <span className="text-[10px] text-slate-400">Meta System User Token</span>
+                <span className="text-[10px] text-[#64748B]">Meta System User Token</span>
               </div>
               <input
                 type="password"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder="EAAG..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0066FF]"
+                className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0D0F2D] font-mono focus:outline-none focus:border-[#7C3AED]"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Phone Number ID
                 </label>
                 <input
@@ -353,12 +356,12 @@ export default function SettingsPage() {
                   value={phoneId}
                   onChange={(e) => setPhoneId(e.target.value)}
                   placeholder="e.g. 109823485764321"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0066FF]"
+                  className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0D0F2D] font-mono focus:outline-none focus:border-[#7C3AED]"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                   WhatsApp Business Account (WABA) ID
                 </label>
                 <input
@@ -366,21 +369,21 @@ export default function SettingsPage() {
                   value={wabaId}
                   onChange={(e) => setWabaId(e.target.value)}
                   placeholder="e.g. 102938475610293"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0066FF]"
+                  className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0D0F2D] font-mono focus:outline-none focus:border-[#7C3AED]"
                 />
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">
               {isSaved ? (
-                <span className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> WhatsApp configuration saved!
+                <span className="text-xs text-[#22C55E] font-bold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-[#22C55E]" /> WhatsApp configuration saved!
                 </span>
               ) : <div />}
 
               <button
                 type="submit"
-                className="gradient-button px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-sm"
+                className="gradient-button px-6 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-pf-btn hover:shadow-pf-hover"
               >
                 Save Meta Configuration
               </button>
@@ -389,20 +392,20 @@ export default function SettingsPage() {
         </section>
 
         {/* 4. CUSTOM SUBDOMAIN & BRAND DOMAIN SETUP */}
-        <section className="rounded-3xl bg-white border border-slate-200 p-7 space-y-5 shadow-sm">
-          <div className="border-b border-slate-200 pb-4">
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <Globe className="w-5 h-5 text-[#0066FF]" />
+        <section className="rounded-3xl bg-white border border-[#E2E8F0] p-7 space-y-5 shadow-sm">
+          <div className="border-b border-[#E2E8F0] pb-4">
+            <h3 className="text-sm font-bold text-[#0D0F2D] uppercase tracking-wider flex items-center gap-2">
+              <Globe className="w-5 h-5 text-[#7C3AED]" />
               Custom Subdomain & White-Label Domain
             </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Host Passion Fruit on your own branded domain (e.g. <code>app.yourbrand.com</code>)
+            <p className="text-xs text-[#64748B] mt-1">
+              Host Passion fruit on your own branded domain (e.g. <code>app.yourbrand.com</code>)
             </p>
           </div>
 
           <form onSubmit={handleSaveSubdomain} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                 Your Preferred Subdomain
               </label>
               <div className="flex items-center gap-2">
@@ -411,11 +414,11 @@ export default function SettingsPage() {
                   value={customSubdomain}
                   onChange={(e) => setCustomSubdomain(e.target.value)}
                   placeholder="app.yourbrand.com"
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-mono focus:outline-none focus:border-[#0066FF]"
+                  className="flex-1 bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl px-3.5 py-2.5 text-xs text-[#0D0F2D] font-mono focus:outline-none focus:border-[#7C3AED]"
                 />
                 <button
                   type="submit"
-                  className="gradient-button px-5 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-sm"
+                  className="gradient-button px-5 py-2.5 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-pf-btn hover:shadow-pf-hover"
                 >
                   Save Subdomain
                 </button>
@@ -424,13 +427,13 @@ export default function SettingsPage() {
 
             {subdomainSaved && (
               <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" /> Subdomain saved! Point your CNAME record to finish connection.
+                <CheckCircle2 className="w-4 h-4 text-[#22C55E]" /> Subdomain saved! Point your CNAME record to finish connection.
               </div>
             )}
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-              <p className="font-bold text-slate-800">DNS Configuration Instructions:</p>
-              <ul className="space-y-1 text-slate-600 text-[11px] list-disc list-inside">
+            <div className="p-4 rounded-2xl bg-[#F4F6FB] border border-[#E2E8F0] space-y-2 text-xs">
+              <p className="font-bold text-[#0D0F2D]">DNS Configuration Instructions:</p>
+              <ul className="space-y-1 text-[#64748B] text-[11px] list-disc list-inside">
                 <li>Log in to your DNS provider (Cloudflare, GoDaddy, Hostinger, Namecheap).</li>
                 <li>Add a new <strong>CNAME</strong> record.</li>
                 <li>Set <strong>Host / Name:</strong> <code>app</code> (or your chosen subdomain prefix).</li>

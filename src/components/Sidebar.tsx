@@ -43,10 +43,10 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-64 h-screen bg-white border-r border-[#E5E7EB] flex flex-col justify-between p-5 select-none fixed left-0 top-0 z-30 shadow-sm overflow-y-auto">
+    <aside className="w-64 h-screen bg-white border-r border-[#E2E8F0] flex flex-col justify-between p-5 select-none fixed left-0 top-0 z-30 shadow-sm overflow-y-auto">
       {/* Top Brand Identity */}
       <div>
-        <Link href="/" className="block px-1 py-2 mb-4 border-b border-[#E5E7EB] pb-4 group">
+        <Link href="/" className="block px-1 py-2 mb-4 border-b border-[#E2E8F0] pb-4 group">
           <PassionFruitLogo size="sm" showSubtitle={true} />
         </Link>
 
@@ -62,10 +62,10 @@ export function Sidebar() {
                 className={cn(
                   'flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 group relative',
                   isActive
-                    ? 'bg-gradient-to-r from-[#0066FF] to-[#00A3FF] text-white shadow-zap-btn'
+                    ? 'bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] text-white shadow-md shadow-purple-500/20'
                     : item.highlight
-                    ? 'bg-amber-50/70 text-amber-900 border border-amber-200/60 hover:bg-amber-100/60'
-                    : 'text-[#555555] hover:text-[#222222] hover:bg-slate-50'
+                    ? 'bg-purple-50/70 text-[#7C3AED] border border-[#C4B5FD]/50 hover:bg-purple-100/60'
+                    : 'text-[#64748B] hover:text-[#0D0F2D] hover:bg-[#F4F6FB]'
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -75,8 +75,8 @@ export function Sidebar() {
                       isActive
                         ? 'text-white'
                         : item.highlight
-                        ? 'text-amber-600'
-                        : 'text-[#777777] group-hover:text-[#0066FF]'
+                        ? 'text-[#7C3AED]'
+                        : 'text-[#94A3B8] group-hover:text-[#7C3AED]'
                     )}
                   />
                   <span>{item.name}</span>
@@ -88,8 +88,8 @@ export function Sidebar() {
                       isActive
                         ? 'bg-white/20 text-white'
                         : item.highlight
-                        ? 'bg-amber-500 text-white shadow-sm'
-                        : 'bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-200/60'
+                        ? 'bg-[#7C3AED] text-white shadow-sm'
+                        : 'bg-purple-50 text-[#7C3AED] border border-[#C4B5FD]/60'
                     )}
                   >
                     {item.badge}
@@ -102,36 +102,36 @@ export function Sidebar() {
       </div>
 
       {/* Footer / Meta API Status */}
-      <div className="space-y-3 pt-3 border-t border-[#E5E7EB]">
-        <div className="bg-[#FAFAFA] border border-[#E5E7EB] rounded-xl p-3 space-y-1.5">
+      <div className="space-y-3 pt-3 border-t border-[#E2E8F0]">
+        <div className="bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl p-3 space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-[#777777]">Meta Cloud API</span>
-            <span className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-bold font-mono">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-medium text-[#64748B]">Meta Cloud API</span>
+            <span className="flex items-center gap-1.5 text-[10px] text-[#22C55E] font-bold font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
               Connected (v18.0)
             </span>
           </div>
-          <div className="text-[10px] text-slate-500 flex items-center justify-between">
-            <span>Delivery Protection: Safe</span>
-            <span className="text-fuchsia-600 font-bold">Wati AI On</span>
+          <div className="text-[10px] text-[#64748B] flex items-center justify-between">
+            <span>Delivery: 100% Safe</span>
+            <span className="text-[#7C3AED] font-bold">Wati AI On</span>
           </div>
         </div>
 
         {/* Workspace Account & Logout */}
         <div className="flex items-center justify-between gap-2 px-1 py-1">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-fuchsia-600 to-amber-500 flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-[#0D0F2D] border border-[#7C3AED]/40 flex items-center justify-center text-white font-black text-xs shadow-sm flex-shrink-0">
               PF
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-bold text-[#222222] truncate">Super Admin</p>
-              <p className="text-[10px] text-[#777777] truncate">pkrishal462@gmail.com</p>
+              <p className="text-xs font-bold text-[#0D0F2D] truncate">Super Admin</p>
+              <p className="text-[10px] text-[#64748B] truncate">admin@passionfruit.com</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
             title="Sign Out Super Admin"
-            className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            className="p-2 rounded-xl text-[#94A3B8] hover:text-rose-600 hover:bg-rose-50 transition-colors"
           >
             <LogOut className="w-4 h-4" />
           </button>

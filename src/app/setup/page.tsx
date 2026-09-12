@@ -148,7 +148,7 @@ export default function SetupGuidePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pl-64 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="Meta WhatsApp Cloud API Setup Guide"
@@ -156,35 +156,35 @@ export default function SetupGuidePage() {
       />
 
       <main className="p-8 space-y-8 flex-1 max-w-5xl">
-        {/* Welcome Callout Banner */}
-        <div className="rounded-3xl bg-gradient-to-r from-[#0066FF] via-[#0080FF] to-fuchsia-600 p-8 text-white shadow-xl shadow-blue-500/10 relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-96 h-full bg-white/10 blur-3xl pointer-events-none transform -skew-x-12" />
+        {/* Welcome Callout Banner with Official Brand Colors */}
+        <div className="rounded-3xl bg-[#0D0F2D] border border-[#7C3AED]/30 p-8 text-white shadow-xl shadow-purple-900/10 relative overflow-hidden space-y-4">
+          <div className="absolute right-0 top-0 w-96 h-full bg-[#7C3AED]/15 blur-3xl pointer-events-none transform -skew-x-12" />
           <div className="relative z-10 space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              Easy 5-Minute Setup for Anyone
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/40 text-[#C4B5FD] text-xs font-bold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 text-[#C4B5FD]" />
+              Same energy. Bigger possibilities.
             </div>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              Connect Your WhatsApp Business in 5 Easy Steps
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              Connect <span className="text-white">Passion</span> <span className="text-[#7C3AED]">fruit</span> to Meta WhatsApp in 5 Easy Steps
             </h2>
-            <p className="text-sm text-blue-100 leading-relaxed">
-              You do NOT need coding knowledge. Meta (Facebook) provides the official WhatsApp Cloud API for free with 1,000 free customer conversations every month. Follow the guide below to connect Passion Fruit.
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Clean, modern, and scalable. You do NOT need coding knowledge. Meta provides the official WhatsApp Cloud API for free with 1,000 free customer conversations every month. Follow the guide below to launch your platform.
             </p>
           </div>
         </div>
 
         {/* STEP 1 */}
-        <section className="bg-white rounded-3xl border border-slate-200 p-8 shadow-sm space-y-6">
+        <section className="bg-white rounded-3xl border border-[#E2E8F0] p-8 shadow-sm space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-200 text-[#0066FF] font-bold text-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-purple-50 border border-[#C4B5FD] text-[#7C3AED] font-black text-lg flex items-center justify-center flex-shrink-0">
                 1
               </div>
               <div className="space-y-1">
-                <h3 className="text-lg font-bold text-slate-900">
+                <h3 className="text-lg font-bold text-[#0D0F2D]">
                   Step 1: Sign in to Meta for Developers
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#64748B]">
                   Meta for Developers is the official portal run by Facebook for WhatsApp tools.
                 </p>
               </div>
@@ -193,7 +193,7 @@ export default function SetupGuidePage() {
               href="https://developers.facebook.com"
               target="_blank"
               rel="noreferrer"
-              className="gradient-button text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm text-white flex-shrink-0"
+              className="gradient-button text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-pf-btn text-white flex-shrink-0"
             >
               <span>Open Meta Portal</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -201,9 +201,9 @@ export default function SetupGuidePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-              <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 1. Use Existing Facebook
+            <div className="p-4 rounded-2xl bg-[#F4F6FB] border border-[#E2E8F0] space-y-1.5">
+              <span className="font-bold text-[#0D0F2D] flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-[#22C55E]" /> 1. Use Existing Facebook
               </span>
               <p className="text-slate-500 text-[11px] leading-relaxed">
                 Log in with your existing personal or company Facebook account. No new password needed.

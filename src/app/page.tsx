@@ -210,34 +210,35 @@ export default function PassionFruitLandingPage() {
       </header>
 
       {/* 2. HERO SECTION */}
-      <section className="pt-36 pb-12 px-4 sm:px-6 lg:px-16 xl:px-24 flex flex-col items-center text-center relative overflow-hidden bg-gradient-to-b from-[#0066FF]/[0.03] via-transparent to-white">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-xs font-semibold text-[#0066FF] mb-6 animate-in fade-in slide-in-from-top-2 duration-400">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>OFFICIAL META WHATSAPP CLOUD API • WATI-POWERED AI AUTOMATION</span>
+      <section className="pt-36 pb-12 px-4 sm:px-6 lg:px-16 xl:px-24 flex flex-col items-center text-center relative overflow-hidden bg-gradient-to-b from-purple-50/50 via-transparent to-white">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-purple-50 border border-[#C4B5FD] text-xs font-bold text-[#7C3AED] mb-6 animate-in fade-in slide-in-from-top-2 duration-400">
+          <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
+          <span>SAME ENERGY. BIGGER POSSIBILITIES. • OFFICIAL META WHATSAPP CLOUD API</span>
         </div>
 
         {/* Passion Fruit Headline */}
-        <h1 className="text-3xl sm:text-5xl md:text-6xl font-semibold tracking-tight text-[#222222] max-w-5xl leading-[1.2]">
-          AI-Powered Customer Engagement & Workflow Automation Platform for{' '}
-          <span className="gradient-text-blue font-bold">WhatsApp Business API</span>
+        <h1 className="text-3xl sm:text-5xl md:text-6xl font-black tracking-tight text-[#0D0F2D] max-w-5xl leading-[1.15]">
+          AI-Powered Customer Engagement & Growth Platform for{' '}
+          <span className="gradient-text-purple font-black">WhatsApp Business API</span>
         </h1>
 
         {/* Passion Fruit Description */}
-        <p className="text-base sm:text-lg font-normal text-[#555555] max-w-3xl mt-6 leading-relaxed">
-          <strong className="text-slate-900">Passion Fruit</strong> combines Meta WhatsApp Cloud API, Wati-style No-Code Visual Chatbots, Shared Multi-Agent Team Inbox, and Meta Click-to-WhatsApp (CTWA) Ads into one high-converting enterprise engine.
+        <p className="text-base sm:text-lg font-normal text-[#64748B] max-w-3xl mt-6 leading-relaxed">
+          <strong className="text-[#0D0F2D] font-bold">Passion fruit</strong> delivers a clean, modern, and scalable SaaS platform uniting official Meta WhatsApp Cloud API, No-Code Visual Chatbots, Shared Team Inbox with AI, and Click-to-WhatsApp (CTWA) Ad conversion.
         </p>
 
         {/* Hero CTA Buttons */}
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/dashboard" className="gradient-button text-base px-8 py-3.5 rounded-md font-semibold">
+          <Link href="/dashboard" className="gradient-button text-base px-8 py-3.5 rounded-xl font-bold shadow-pf-btn hover:shadow-pf-hover">
             Get Started Free
           </Link>
-          <a
-            href="#solutions"
-            className="px-6 py-3.5 bg-white border border-[#E5E7EB] text-[#555555] rounded-md font-semibold text-base hover:bg-[#222222] hover:text-white duration-300 transition shadow-sm"
+          <Link
+            href="/setup"
+            className="px-6 py-3.5 bg-white border border-[#E2E8F0] text-[#0D0F2D] rounded-xl font-bold text-base hover:bg-[#F4F6FB] hover:border-[#C4B5FD] duration-300 transition shadow-sm flex items-center gap-2"
           >
-            View All Solutions
-          </a>
+            <span>5-Min Setup Guide</span>
+            <ArrowRight className="w-4 h-4 text-[#7C3AED]" />
+          </Link>
         </div>
 
         {/* 3. PASSION FRUIT 8-CAPABILITY ICON BAR */}
@@ -251,8 +252,8 @@ export default function PassionFruitLandingPage() {
                   href={cap.href}
                   className="flex flex-col items-center gap-2 group cursor-pointer"
                 >
-                  <div className="w-16 h-16 bg-white border-[3px] border-white p-3.5 rounded-2xl transition-all duration-300 group-hover:bg-blue-50 group-hover:shadow-lg group-hover:scale-110 flex items-center justify-center">
-                    <Icon className="w-7 h-7 text-[#0066FF] group-hover:text-fuchsia-600 transition-colors" />
+                  <div className="w-16 h-16 bg-white border-[3px] border-white p-3.5 rounded-2xl transition-all duration-300 group-hover:bg-purple-50 group-hover:shadow-lg group-hover:scale-110 flex items-center justify-center">
+                    <Icon className="w-7 h-7 text-[#7C3AED] group-hover:text-[#6D28D9] transition-colors" />
                   </div>
                   <p className="font-semibold text-[#555555] group-hover:text-[#222222] text-xs text-center transition-colors">
                     {cap.name}

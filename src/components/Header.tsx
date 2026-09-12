@@ -11,27 +11,27 @@ interface HeaderProps {
 
 export function Header({ title, subtitle }: HeaderProps) {
   return (
-    <header className="h-18 border-b border-[#E5E7EB] bg-white/90 backdrop-blur-md sticky top-0 z-20 px-8 py-4 flex items-center justify-between shadow-zap-sm">
+    <header className="h-18 border-b border-[#E2E8F0] bg-white/90 backdrop-blur-md sticky top-0 z-20 px-8 py-4 flex items-center justify-between shadow-sm">
       <div>
-        <h1 className="text-lg font-bold tracking-tight text-[#222222] flex items-center gap-2">
+        <h1 className="text-lg font-bold tracking-tight text-[#0D0F2D] flex items-center gap-2">
           {title}
         </h1>
-        {subtitle && <p className="text-xs text-[#777777] mt-0.5">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-[#64748B] mt-0.5">{subtitle}</p>}
       </div>
 
       <div className="flex items-center gap-3">
         {/* Wati AI Copilot Status */}
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-fuchsia-50 border border-fuchsia-200/70 text-xs text-fuchsia-700 font-semibold">
-          <Sparkles className="w-3.5 h-3.5 text-fuchsia-500 fill-current" />
+        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 border border-[#C4B5FD]/70 text-xs text-[#7C3AED] font-semibold">
+          <Sparkles className="w-3.5 h-3.5 text-[#7C3AED] fill-current" />
           <span>Wati AI Copilot Active</span>
         </div>
 
         {/* WhatsApp Setup Guide Link */}
         <Link
           href="/setup"
-          className="hidden md:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200/80 text-xs font-bold text-amber-900 transition-colors shadow-sm"
+          className="hidden md:flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#F4F6FB] hover:bg-purple-50 border border-[#E2E8F0] hover:border-[#C4B5FD] text-xs font-bold text-[#0D0F2D] hover:text-[#7C3AED] transition-all shadow-sm"
         >
-          <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+          <BookOpen className="w-3.5 h-3.5 text-[#7C3AED]" />
           <span>Setup Guide</span>
         </Link>
 

@@ -37,9 +37,9 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-6 relative font-sans">
-      {/* Soft Background Accents */}
-      <div className="absolute top-0 inset-x-0 h-64 bg-gradient-to-b from-fuchsia-100/50 via-blue-50/40 to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-[#F4F6FB] flex flex-col justify-center items-center p-6 relative font-sans">
+      {/* Soft Brand Ambience */}
+      <div className="absolute top-0 inset-x-0 h-72 bg-gradient-to-b from-purple-100/60 via-indigo-50/30 to-transparent pointer-events-none" />
       
       <div className="w-full max-w-md relative z-10 space-y-6">
         {/* Brand Header */}
@@ -47,17 +47,17 @@ export default function AdminLoginPage() {
           <Link href="/" className="inline-block group">
             <PassionFruitLogo size="lg" showSubtitle={true} />
           </Link>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-[11px] font-bold text-[#0066FF] uppercase tracking-wider">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 border border-[#C4B5FD] text-[11px] font-bold text-[#7C3AED] uppercase tracking-wider">
             <ShieldCheck className="w-3.5 h-3.5" />
             Super Admin Control Center
           </div>
-          <p className="text-xs text-slate-500 max-w-xs">
+          <p className="text-xs text-[#64748B] max-w-xs">
             Enter your Super Admin credentials to access your WhatsApp Automation SaaS Dashboard
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-3xl border border-slate-200 p-8 shadow-xl shadow-slate-200/50 space-y-6">
+        <div className="bg-white rounded-3xl border border-[#E2E8F0] p-8 shadow-xl shadow-purple-900/5 space-y-6">
           {errorMsg && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
@@ -67,45 +67,45 @@ export default function AdminLoginPage() {
 
           {success && (
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-[#22C55E]" />
               <span>Login successful! Opening dashboard...</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                 Admin Username
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <User className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="admin"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0066FF] focus:bg-white transition-all font-medium"
+                  className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#0D0F2D] placeholder-slate-400 focus:outline-none focus:border-[#7C3AED] focus:bg-white transition-all font-medium"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                <label className="text-xs font-bold text-[#0D0F2D] uppercase tracking-wider">
                   Password
                 </label>
-                <span className="text-[11px] text-[#0066FF] font-medium">Secured</span>
+                <span className="text-[11px] text-[#7C3AED] font-semibold">Secured</span>
               </div>
               <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <KeyRound className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#0066FF] focus:bg-white transition-all font-medium"
+                  className="w-full bg-[#F4F6FB] border border-[#E2E8F0] rounded-xl pl-10 pr-4 py-2.5 text-xs text-[#0D0F2D] placeholder-slate-400 focus:outline-none focus:border-[#7C3AED] focus:bg-white transition-all font-medium"
                 />
               </div>
             </div>
@@ -113,7 +113,7 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading || success}
-              className="w-full gradient-button py-3 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-2"
+              className="w-full gradient-button py-3 rounded-xl text-white font-bold text-xs uppercase tracking-wider shadow-pf-btn hover:shadow-pf-hover transition-all flex items-center justify-center gap-2 mt-2"
             >
               <span>{loading ? 'Authenticating...' : 'Sign In to Dashboard'}</span>
               <ArrowRight className="w-4 h-4" />
@@ -121,24 +121,24 @@ export default function AdminLoginPage() {
           </form>
 
           {/* Quick Info Box for First Time Setup */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 space-y-1 text-slate-700 text-xs">
-            <p className="font-bold text-amber-900 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
-              <Lock className="w-3.5 h-3.5 text-amber-700" />
+          <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-[#C4B5FD]/70 space-y-1 text-[#0D0F2D] text-xs">
+            <p className="font-bold text-[#7C3AED] flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+              <Lock className="w-3.5 h-3.5 text-[#7C3AED]" />
               Default Super Admin Login
             </p>
-            <p className="text-[11px] text-amber-900/80">
-              Username: <strong className="font-mono text-slate-900">admin</strong> &nbsp;|&nbsp; Password: <strong className="font-mono text-slate-900">passionfruit2025</strong>
+            <p className="text-[11px] text-[#0D0F2D]">
+              Username: <strong className="font-mono text-[#0D0F2D]">admin</strong> &nbsp;|&nbsp; Password: <strong className="font-mono text-[#0D0F2D]">passionfruit2025</strong>
             </p>
-            <p className="text-[10px] text-slate-500 pt-0.5">
-              You can change this password anytime in <strong className="text-slate-700">Dashboard &rarr; Settings</strong>.
+            <p className="text-[10px] text-[#64748B] pt-0.5">
+              Change this password anytime in <strong className="text-[#0D0F2D]">Dashboard &rarr; Settings</strong>.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="text-center text-xs text-slate-500">
+        <div className="text-center text-xs text-[#64748B]">
           Need help? Check out our{' '}
-          <Link href="/setup" className="text-[#0066FF] font-semibold hover:underline">
+          <Link href="/setup" className="text-[#7C3AED] font-semibold hover:underline">
             Meta WhatsApp Setup Guide
           </Link>
         </div>
