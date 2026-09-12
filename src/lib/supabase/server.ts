@@ -23,7 +23,13 @@ export const getAdminClient = () => {
 };
 
 // In-Memory mock store for zero-setup demo & local preview
-export const mockStore = {
+export const mockStore: {
+  workspace: any;
+  contacts: any[];
+  campaigns: any[];
+  messages: any[];
+  automations: any[];
+} = {
   workspace: {
     id: '00000000-0000-0000-0000-000000000001',
     name: 'AURA Private Luxury Agency',
@@ -72,7 +78,7 @@ export const mockStore = {
       campaign_name: 'Exclusive Teaser Drop - Fall Collection',
       template_name: 'teaser_alert',
       target_tag: 'teaser_list',
-      status: 'completed' as const,
+      status: 'completed' as 'pending' | 'processing' | 'completed' | 'failed',
       total_recipients: 3,
       sent_count: 3,
       failed_count: 0,
