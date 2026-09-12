@@ -1,0 +1,144 @@
+// Prisma Schema for WhatsApp Automation SaaS Platform
+// Provider: PostgreSQL / SQLite
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WorkspaceSettings {
+  id                  String   @id @default("default")
+  name                String   @default("Passion Fruit Workspace")
+  wabaId              String   @default("")
+  phoneNumberId       String   @default("")
+  accessToken         String   @default("")
+  verifyToken         String   @default("passion_fruit_verify_token_2025")
+  webhookUrl          String   @default("")
+  adminUsername       String   @default("User 1")
+  adminPassword       String   @default("0725")
+  customSubdomain     String   @default("")
+  updatedAt           DateTime @updatedAt
+  createdAt           DateTime @default(now())
+
+  @@map("workspace_settings")
+}
+
+model Contact {
+  id           String    @id @default(uuid())
+  phoneNumber  String    @unique
+  firstName    String    @default("")
+  lastName     String    @default("")
+  tags         String[]  @default([])
+  optinStatus  Boolean   @default(true)
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  messages     Message[]
+
+  @@map("contacts")
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageType {
+  text
+  interactive
+  template
+  list
+  carousel
+  image
+  document
+}
+
+enum MessageStatus {
+  pending
+  sent
+  delivered
+  read
+  failed
+}
+
+model Message {
+  id            String           @id @default(uuid())
+  metaMessageId String?          @unique
+  phoneNumber   String
+  contactId     String?
+  contact       Contact?         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  direction     MessageDirection
+  type          MessageType      @default(text)
+  status        MessageStatus    @default(pending)
+  content       String           @default("")
+  payload       Json?
+  errorMessage  String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([phoneNumber])
+  @@index([direction])
+  @@index([status])
+  @@map("messages")
+}
+
+enum FlowTriggerType {
+  keyword
+  button_click
+  list_selection
+  welcome
+  exact_match
+}
+
+enum FlowActionType {
+  text
+  buttons
+  list
+  carousel
+}
+
+model AutomationFlow {
+  id             String          @id @default(uuid())
+  name           String
+  triggerKeyword String
+  triggerType    FlowTriggerType @default(keyword)
+  actionType     FlowActionType  @default(buttons)
+  actionPayload  Json
+  isActive       Boolean         @default(true)
+  executionCount Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([triggerKeyword])
+  @@index([isActive])
+  @@map("automation_flows")
+}
+
+enum CampaignStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+model Campaign {
+  id              String         @id @default(uuid())
+  name            String
+  templateName    String
+  targetTag       String         @default("all")
+  status          CampaignStatus @default(pending)
+  totalRecipients Int            @default(0)
+  sentCount       Int            @default(0)
+  deliveredCount  Int            @default(0)
+  readCount       Int            @default(0)
+  failedCount     Int            @default(0)
+  variables       Json?
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+
+  @@map("campaigns")
+}

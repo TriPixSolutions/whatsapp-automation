@@ -1,14 +1,23 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
 
-export interface SendTemplateOptions {
+export interface MetaApiResult {
+  success: boolean;
+  messageId?: string;
+  metaMessageId?: string;
+  simulated?: boolean;
+  error?: string;
+  errorCode?: number;
+  errorSubcode?: number;
+  details?: any;
+}
+
+export interface SendTextOptions {
   phoneNumberId: string;
   accessToken: string;
   to: string;
-  templateName: string;
-  languageCode?: string;
-  components?: any[];
+  text: string;
 }
 
 export interface SendInteractiveButtonsOptions {
@@ -21,11 +30,45 @@ export interface SendInteractiveButtonsOptions {
   buttons: { id: string; title: string }[];
 }
 
-export interface SendTextOptions {
+export interface ListSection {
+  title: string;
+  rows: { id: string; title: string; description?: string }[];
+}
+
+export interface SendInteractiveListOptions {
   phoneNumberId: string;
   accessToken: string;
   to: string;
-  text: string;
+  headerText?: string;
+  bodyText: string;
+  footerText?: string;
+  buttonText: string;
+  sections: ListSection[];
+}
+
+export interface CarouselCard {
+  headerImage?: string;
+  title: string;
+  description: string;
+  buttons: { id: string; title: string }[];
+}
+
+export interface SendCarouselOptions {
+  phoneNumberId: string;
+  accessToken: string;
+  to: string;
+  templateName?: string;
+  bodyText?: string;
+  cards: CarouselCard[];
+}
+
+export interface SendTemplateOptions {
+  phoneNumberId: string;
+  accessToken: string;
+  to: string;
+  templateName: string;
+  languageCode?: string;
+  components?: any[];
 }
 
 export class MetaWhatsAppClient {
@@ -33,90 +76,91 @@ export class MetaWhatsAppClient {
     return phone.replace(/[^0-9]/g, '');
   }
 
-  private static isTestMode(token: string): boolean {
-    return (
-      !token ||
-      token.includes('SAMPLE_TOKEN') ||
-      token.startsWith('MOCK_') ||
-      token.startsWith('TEST_')
-    );
+  /**
+   * Helper to parse Meta API errors with specific actionable messages
+   */
+  public static parseMetaError(error: any): { message: string; code?: number; subcode?: number } {
+    if (axios.isAxiosError(error) && error.response?.data?.error) {
+      const err = error.response.data.error;
+      const code = err.code;
+      const subcode = err.error_subcode;
+      let humanMessage = err.message || 'Meta API returned an unknown error';
+
+      if (code === 131009 || code === 190) {
+        humanMessage = 'Token Expired (#131009): System User Access Token is invalid or expired. Regenerate in Meta Business Manager.';
+      } else if (code === 131047) {
+        humanMessage = '24-Hour Window Expired (#131047): Customer last replied >24 hrs ago. Must send an approved Template Message.';
+      } else if (code === 131026) {
+        humanMessage = 'Message Undeliverable (#131026): The phone number does not have an active WhatsApp account or privacy settings block message.';
+      } else if (code === 130429) {
+        humanMessage = 'Rate Limit Hit (#130429): Cloud API messaging throughput limit reached. Slow down broadcasts.';
+      } else if (code === 100) {
+        humanMessage = `Invalid Parameter (#100): ${err.error_data?.details || err.message}`;
+      }
+
+      return { message: humanMessage, code, subcode };
+    }
+
+    return { message: error.message || 'Network request to Meta Graph API failed' };
   }
 
   /**
-   * Dispatches Meta-Approved Template (e.g. teaser_alert)
+   * 1. Send Standard Text Message
+   * POST https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages
    */
-  static async sendTemplate(options: SendTemplateOptions) {
-    const { phoneNumberId, accessToken, to, templateName, languageCode = 'en_US', components } = options;
+  static async sendText(options: SendTextOptions): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, text } = options;
     const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
 
-    if (this.isTestMode(accessToken)) {
-      console.log(`[Meta Client Simulation] Template '${templateName}' dispatched to ${recipient}`);
-      return {
-        success: true,
-        metaMessageId: `wamid.sim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        simulated: true,
-      };
-    }
-
-    const payload: any = {
+    const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to: recipient,
-      type: 'template',
-      template: {
-        name: templateName,
-        language: { code: languageCode },
+      type: 'text',
+      text: {
+        preview_url: false,
+        body: text,
       },
     };
 
-    if (components && components.length > 0) {
-      payload.template.components = components;
-    }
-
     try {
-      const res = await axios.post(
-        `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-        }
-      );
-      const metaMessageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
-      return { success: true, metaMessageId, data: res.data };
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error?.message || error.message;
-      console.error('[Meta Client Error] sendTemplate failed:', errorMsg);
-      return { success: false, error: errorMsg };
+      const res = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 12000,
+      });
+
+      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      console.error('[Meta Client] sendText error:', parsed);
+      return {
+        success: false,
+        error: parsed.message,
+        errorCode: parsed.code,
+        errorSubcode: parsed.subcode,
+        details: err.response?.data,
+      };
     }
   }
 
   /**
-   * Dispatches WhatsApp Interactive Quick Reply Button Message (Max 3 buttons)
-   * Perfect for Test Flow 2: [Product Specs, Pricing, Talk to Agent]
+   * 2. Send Interactive Quick Reply Buttons (Up to 3 buttons)
    */
-  static async sendInteractiveButtons(options: SendInteractiveButtonsOptions) {
+  static async sendInteractiveButtons(options: SendInteractiveButtonsOptions): Promise<MetaApiResult> {
     const { phoneNumberId, accessToken, to, headerText, bodyText, footerText, buttons } = options;
     const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
 
-    if (this.isTestMode(accessToken)) {
-      console.log(`[Meta Client Simulation] Interactive Buttons dispatched to ${recipient}`);
-      return {
-        success: true,
-        metaMessageId: `wamid.sim_interactive_${Date.now()}`,
-        simulated: true,
-      };
-    }
-
-    // WhatsApp Interactive Button format
-    const formattedButtons = buttons.slice(0, 3).map((btn) => ({
+    const formattedButtons = buttons.slice(0, 3).map((btn, index) => ({
       type: 'reply',
       reply: {
-        id: btn.id.substring(0, 256),
-        title: btn.title.substring(0, 20),
+        id: (btn.id || `btn_${index}`).substring(0, 256),
+        title: (btn.title || `Button ${index + 1}`).substring(0, 20),
       },
     }));
 
@@ -145,68 +189,222 @@ export class MetaWhatsAppClient {
     };
 
     try {
-      const res = await axios.post(
-        `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`,
-        payload,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000,
-        }
-      );
-      const metaMessageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
-      return { success: true, metaMessageId, data: res.data };
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error?.message || error.message;
-      console.error('[Meta Client Error] sendInteractiveButtons failed:', errorMsg);
-      return { success: false, error: errorMsg };
+      const res = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 12000,
+      });
+
+      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      console.error('[Meta Client] sendInteractiveButtons error:', parsed);
+      return {
+        success: false,
+        error: parsed.message,
+        errorCode: parsed.code,
+        errorSubcode: parsed.subcode,
+        details: err.response?.data,
+      };
     }
   }
 
   /**
-   * Dispatches Standard Text Message
+   * 3. Send Interactive List Message (Sections & Rows Menu)
    */
-  static async sendText(options: SendTextOptions) {
-    const { phoneNumberId, accessToken, to, text } = options;
+  static async sendInteractiveList(options: SendInteractiveListOptions): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, headerText, bodyText, footerText, buttonText, sections } = options;
     const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
 
-    if (this.isTestMode(accessToken)) {
-      console.log(`[Meta Client Simulation] Text message dispatched to ${recipient}: ${text}`);
-      return {
-        success: true,
-        metaMessageId: `wamid.sim_text_${Date.now()}`,
-        simulated: true,
-      };
+    const formattedSections = sections.map((sec, secIdx) => ({
+      title: sec.title.substring(0, 24),
+      rows: sec.rows.map((r, rIdx) => ({
+        id: (r.id || `row_${secIdx}_${rIdx}`).substring(0, 200),
+        title: r.title.substring(0, 24),
+        description: r.description ? r.description.substring(0, 72) : undefined,
+      })),
+    }));
+
+    const interactivePayload: any = {
+      type: 'list',
+      body: { text: bodyText },
+      action: {
+        button: (buttonText || 'View Options').substring(0, 20),
+        sections: formattedSections,
+      },
+    };
+
+    if (headerText) {
+      interactivePayload.header = { type: 'text', text: headerText };
+    }
+
+    if (footerText) {
+      interactivePayload.footer = { text: footerText };
     }
 
     const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
       to: recipient,
-      type: 'text',
-      text: { body: text },
+      type: 'interactive',
+      interactive: interactivePayload,
     };
 
     try {
-      const res = await axios.post(
-        `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`,
-        payload,
-        {
+      const res = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 12000,
+      });
+
+      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      console.error('[Meta Client] sendInteractiveList error:', parsed);
+      return {
+        success: false,
+        error: parsed.message,
+        errorCode: parsed.code,
+        errorSubcode: parsed.subcode,
+        details: err.response?.data,
+      };
+    }
+  }
+
+  /**
+   * 4. Send Carousel / Product Cards Message
+   * Dispatches horizontal scrollable carousel cards with images and action buttons
+   */
+  static async sendCarouselTemplate(options: SendCarouselOptions): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, templateName, bodyText, cards } = options;
+    const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+
+    // If templateName is provided, send via Meta Carousel Template API
+    if (templateName) {
+      const carouselCards = cards.map((card, idx) => ({
+        card_index: idx,
+        components: [
+          ...(card.headerImage
+            ? [{ type: 'header', parameters: [{ type: 'image', image: { link: card.headerImage } }] }]
+            : []),
+          { type: 'body', parameters: [{ type: 'text', text: card.title }] },
+          ...card.buttons.map((btn, btnIdx) => ({
+            type: 'button',
+            sub_type: 'quick_reply',
+            index: btnIdx,
+            parameters: [{ type: 'payload', payload: btn.id }],
+          })),
+        ],
+      }));
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: recipient,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: 'en_US' },
+          components: [
+            {
+              type: 'carousel',
+              cards: carouselCards,
+            },
+          ],
+        },
+      };
+
+      try {
+        const res = await axios.post(url, payload, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          timeout: 10000,
-        }
-      );
-      const metaMessageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
-      return { success: true, metaMessageId, data: res.data };
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.error?.message || error.message;
-      console.error('[Meta Client Error] sendText failed:', errorMsg);
-      return { success: false, error: errorMsg };
+          timeout: 12000,
+        });
+        const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+        return { success: true, messageId, metaMessageId: messageId, details: res.data };
+      } catch (err: any) {
+        // Fallback to interactive list if template is unapproved
+        console.warn('[Meta Client] Carousel template API returned error, falling back to Interactive format');
+      }
+    }
+
+    // Interactive fallback: Deliver card items as rich structured interactive list
+    const fallbackSections: ListSection[] = [
+      {
+        title: 'Featured Carousel Items',
+        rows: cards.map((c, idx) => ({
+          id: c.buttons[0]?.id || `card_${idx}`,
+          title: c.title.substring(0, 24),
+          description: c.description.substring(0, 72),
+        })),
+      },
+    ];
+
+    return this.sendInteractiveList({
+      phoneNumberId,
+      accessToken,
+      to: recipient,
+      headerText: 'Featured Showcase',
+      bodyText: bodyText || 'Swipe through our featured catalog items below:',
+      buttonText: 'Browse Items',
+      sections: fallbackSections,
+    });
+  }
+
+  /**
+   * 5. Send Meta-Approved Template (e.g. teaser_alert, order_confirmation)
+   */
+  static async sendTemplate(options: SendTemplateOptions): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, templateName, languageCode = 'en_US', components } = options;
+    const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+
+    const payload: any = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipient,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+      },
+    };
+
+    if (components && components.length > 0) {
+      payload.template.components = components;
+    }
+
+    try {
+      const res = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 12000,
+      });
+
+      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      console.error('[Meta Client] sendTemplate error:', parsed);
+      return {
+        success: false,
+        error: parsed.message,
+        errorCode: parsed.code,
+        errorSubcode: parsed.subcode,
+        details: err.response?.data,
+      };
     }
   }
 }

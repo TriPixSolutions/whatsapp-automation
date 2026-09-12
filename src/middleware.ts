@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 // Protected internal routes that require authentication
 const PROTECTED_PREFIXES = [
   '/dashboard',
+  '/inbox',
   '/campaigns',
   '/automations',
   '/contacts',

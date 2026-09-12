@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { PhoneMockup } from '@/components/PhoneMockup';
@@ -66,7 +66,7 @@ const META_TEMPLATES = [
 
 export default function CampaignsPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState('teaser_alert');
-  const [campaignName, setCampaignName] = useState('');
+  const [campaignName, setCampaignName] = useState('Exclusive Product Announcement');
   const [targetTag, setTargetTag] = useState('all');
   const [var1, setVar1] = useState('');
   const [var2, setVar2] = useState('');
@@ -74,7 +74,39 @@ export default function CampaignsPage() {
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<any>(null);
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [availableContacts, setAvailableContacts] = useState<any[]>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>(['all']);
+
+  // Fetch campaigns and contacts on mount
+  const loadData = async () => {
+    try {
+      const [campRes, contRes] = await Promise.all([
+        fetch('/api/campaigns/dispatch'),
+        fetch('/api/contacts'),
+      ]);
+
+      if (campRes.ok) {
+        const camps = await campRes.json();
+        setCampaigns(camps);
+      }
+
+      if (contRes.ok) {
+        const contacts = await contRes.json();
+        setAvailableContacts(contacts);
+        const tags = Array.from(
+          new Set(['all', ...contacts.flatMap((c: any) => c.tags || [])])
+        );
+        setAvailableTags(tags as string[]);
+      }
+    } catch (e) {
+      console.warn('Failed to load campaigns/contacts data:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const activeTemplate = META_TEMPLATES.find((t) => t.id === selectedTemplateId) || META_TEMPLATES[0];
 
@@ -84,6 +116,11 @@ export default function CampaignsPage() {
     .replace('{{3}}', var3 || '1001');
 
   const computedPreviewHeader = activeTemplate.header.replace('{{3}}', var3 || '1001');
+
+  const matchingContactsCount =
+    targetTag === 'all'
+      ? availableContacts.length
+      : availableContacts.filter((c) => (c.tags || []).includes(targetTag)).length;
 
   const handleDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,8 +132,7 @@ export default function CampaignsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          campaignId: `camp_${Date.now()}`,
-          workspaceId: '00000000-0000-0000-0000-000000000001',
+          campaignName: campaignName.trim() || activeTemplate.name,
           templateName: activeTemplate.name,
           targetTag,
           variables: { '1': var1, '2': var2, '3': var3 },
@@ -107,21 +143,8 @@ export default function CampaignsPage() {
       setDispatchStatus(data);
 
       if (res.ok && data.success) {
-        setCampaigns((prev) => [
-          {
-            id: `camp_${Date.now()}`,
-            workspace_id: '00000000-0000-0000-0000-000000000001',
-            campaign_name: campaignName,
-            template_name: activeTemplate.name,
-            target_tag: targetTag,
-            status: 'completed',
-            total_recipients: 3,
-            sent_count: 3,
-            failed_count: 0,
-            created_at: new Date().toISOString(),
-          },
-          ...prev,
-        ]);
+        // Refetch real campaigns from database
+        loadData();
       }
     } catch (err: any) {
       setDispatchStatus({ error: err.message });
@@ -131,11 +154,11 @@ export default function CampaignsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-60 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="Send WhatsApp Broadcasts & Product Offers"
-        subtitle="Reach 1,000s of customers with official Meta templates, order alerts, and catalog showcases"
+        subtitle="Reach opted-in customer lists with official Meta templates, order alerts, and catalog showcases"
       />
 
       <main className="p-8 space-y-8 flex-1">
@@ -189,17 +212,22 @@ export default function CampaignsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#222222]">Target Segment Tag</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-[#222222]">Target Segment Tag</label>
+                      <span className="text-[11px] font-bold text-[#7C3AED]">
+                        {matchingContactsCount} Recipients
+                      </span>
+                    </div>
                     <select
                       value={targetTag}
                       onChange={(e) => setTargetTag(e.target.value)}
                       className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                     >
-                      <option value="teaser_list">teaser_list (Test Flow 1)</option>
-                      <option value="vip">vip (All High-Value Patrons)</option>
-                      <option value="ctwa-instagram">ctwa-instagram (Ad Leads)</option>
-                      <option value="haute-horlogerie">haute-horlogerie</option>
-                      <option value="all">All Opted-In Audience</option>
+                      {availableTags.map((tag) => (
+                        <option key={tag} value={tag}>
+                          {tag === 'all' ? 'All Opted-In Audience' : `Tag: ${tag}`}
+                        </option>
+                      ))}
                     </select>
                   </div>
 

@@ -1,6 +1,16 @@
 // Meta WhatsApp Cloud API (v18.0+) Client & Utilities
 // Official Facebook Graph API endpoint: https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages
 
+import {
+  MetaWhatsAppClient,
+  SendTextOptions,
+  SendInteractiveButtonsOptions,
+  SendInteractiveListOptions,
+  SendCarouselOptions,
+  SendTemplateOptions,
+  MetaApiResult,
+} from './meta/api';
+
 export interface MetaCredentials {
   wabaId: string;
   phoneNumberId: string;
@@ -23,7 +33,7 @@ export function getMetaCredentials(): MetaCredentials {
       wabaId: process.env.META_WABA_ID || '',
       phoneNumberId: process.env.META_PHONE_NUMBER_ID || '',
       accessToken: process.env.META_ACCESS_TOKEN || '',
-      verifyToken: process.env.META_VERIFY_TOKEN || 'passion_fruit_verify_token_2025',
+      verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || 'passion_fruit_verify_token_2025',
     };
   }
 
@@ -46,159 +56,59 @@ export function getMetaCredentials(): MetaCredentials {
 }
 
 export function saveMetaCredentials(creds: Partial<MetaCredentials>): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    return;
+  }
   const current = getMetaCredentials();
   const updated: MetaCredentials = {
     ...current,
     ...creds,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+  // Sync to backend DB asynchronously
+  fetch('/api/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updated),
+  }).catch((err) => console.warn('Backend settings sync error:', err));
 }
 
-export interface SendTextMessageParams {
+export {
+  MetaWhatsAppClient,
+  type SendTextOptions,
+  type SendInteractiveButtonsOptions,
+  type SendInteractiveListOptions,
+  type SendCarouselOptions,
+  type SendTemplateOptions,
+  type MetaApiResult,
+};
+
+// Top-level convenient exports
+export const sendText = MetaWhatsAppClient.sendText.bind(MetaWhatsAppClient);
+export const sendInteractiveButtons = MetaWhatsAppClient.sendInteractiveButtons.bind(MetaWhatsAppClient);
+export const sendInteractiveList = MetaWhatsAppClient.sendInteractiveList.bind(MetaWhatsAppClient);
+export const sendCarouselTemplate = MetaWhatsAppClient.sendCarouselTemplate.bind(MetaWhatsAppClient);
+export const sendTemplate = MetaWhatsAppClient.sendTemplate.bind(MetaWhatsAppClient);
+export const parseMetaError = MetaWhatsAppClient.parseMetaError.bind(MetaWhatsAppClient);
+
+// Backward-compatible aliases
+export async function sendWhatsAppTextMessage(params: {
   phoneNumberId: string;
   accessToken: string;
   to: string;
   text: string;
+}) {
+  return MetaWhatsAppClient.sendText(params);
 }
 
-export interface SendTemplateMessageParams {
+export async function sendWhatsAppTemplateMessage(params: {
   phoneNumberId: string;
   accessToken: string;
   to: string;
   templateName: string;
   languageCode?: string;
   components?: any[];
-}
-
-export interface MetaSendResult {
-  success: boolean;
-  messageId?: string;
-  status?: string;
-  error?: string;
-  details?: any;
-}
-
-/**
- * Sends a real-time text message to a WhatsApp user via Meta Cloud API v18.0
- */
-export async function sendWhatsAppTextMessage({
-  phoneNumberId,
-  accessToken,
-  to,
-  text,
-}: SendTextMessageParams): Promise<MetaSendResult> {
-  const cleanTo = to.replace(/[^0-9]/g, '');
-  const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
-
-  const payload = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: cleanTo,
-    type: 'text',
-    text: {
-      preview_url: false,
-      body: text,
-    },
-  };
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || data.error) {
-      return {
-        success: false,
-        error: data.error?.message || `Meta API returned HTTP ${response.status}`,
-        details: data.error,
-      };
-    }
-
-    const messageId = data.messages?.[0]?.id || `wamid.${Date.now()}`;
-    return {
-      success: true,
-      messageId,
-      status: 'sent',
-      details: data,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message || 'Network request to Meta Graph API failed',
-    };
-  }
-}
-
-/**
- * Sends an official Meta-approved template message via Meta Cloud API v18.0
- */
-export async function sendWhatsAppTemplateMessage({
-  phoneNumberId,
-  accessToken,
-  to,
-  templateName,
-  languageCode = 'en_US',
-  components = [],
-}: SendTemplateMessageParams): Promise<MetaSendResult> {
-  const cleanTo = to.replace(/[^0-9]/g, '');
-  const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
-
-  const payload: any = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: cleanTo,
-    type: 'template',
-    template: {
-      name: templateName,
-      language: {
-        code: languageCode,
-      },
-    },
-  };
-
-  if (components.length > 0) {
-    payload.template.components = components;
-  }
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || data.error) {
-      return {
-        success: false,
-        error: data.error?.message || `Meta API returned HTTP ${response.status}`,
-        details: data.error,
-      };
-    }
-
-    const messageId = data.messages?.[0]?.id || `wamid.${Date.now()}`;
-    return {
-      success: true,
-      messageId,
-      status: 'sent',
-      details: data,
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message || 'Network request to Meta Graph API failed',
-    };
-  }
+}) {
+  return MetaWhatsAppClient.sendTemplate(params);
 }

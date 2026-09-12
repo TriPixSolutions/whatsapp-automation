@@ -49,15 +49,18 @@ export default function SettingsPage() {
   const [subdomainSaved, setSubdomainSaved] = useState(false);
 
   useEffect(() => {
-    const creds = getStoredAdminCredentials();
-    if (creds.username) setAdminUser(creds.username);
-    if (creds.password) setAdminPass(creds.password);
-
-    const metaCreds = getMetaCredentials();
-    if (metaCreds.accessToken) setToken(metaCreds.accessToken);
-    if (metaCreds.phoneNumberId) setPhoneId(metaCreds.phoneNumberId);
-    if (metaCreds.wabaId) setWabaId(metaCreds.wabaId);
-    if (metaCreds.verifyToken) setVerifyToken(metaCreds.verifyToken);
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((settings) => {
+        if (settings.accessToken) setToken(settings.accessToken);
+        if (settings.phoneNumberId) setPhoneId(settings.phoneNumberId);
+        if (settings.wabaId) setWabaId(settings.wabaId);
+        if (settings.verifyToken) setVerifyToken(settings.verifyToken);
+        if (settings.adminUsername) setAdminUser(settings.adminUsername);
+        if (settings.adminPassword) setAdminPass(settings.adminPassword);
+        if (settings.customSubdomain) setCustomSubdomain(settings.customSubdomain);
+      })
+      .catch((e) => console.warn('Could not fetch settings from API:', e));
   }, []);
 
   const webhookUrl = typeof window !== 'undefined'
@@ -70,7 +73,7 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSaveMeta = (e: React.FormEvent) => {
+  const handleSaveMeta = async (e: React.FormEvent) => {
     e.preventDefault();
     saveMetaCredentials({
       accessToken: token.trim(),
@@ -78,25 +81,63 @@ export default function SettingsPage() {
       wabaId: wabaId.trim(),
       verifyToken: verifyToken.trim(),
     });
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accessToken: token.trim(),
+          phoneNumberId: phoneId.trim(),
+          wabaId: wabaId.trim(),
+          verifyToken: verifyToken.trim(),
+        }),
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleSaveAdminCreds = (e: React.FormEvent) => {
+  const handleSaveAdminCreds = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminUser.trim() || !adminPass.trim()) {
       alert('Username and password cannot be empty.');
       return;
     }
     saveAdminCredentials(adminUser, adminPass);
-    setAdminSaved(true);
-    setTimeout(() => setAdminSaved(false), 3000);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminUsername: adminUser.trim(),
+          adminPassword: adminPass.trim(),
+        }),
+      });
+      setAdminSaved(true);
+      setTimeout(() => setAdminSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleSaveSubdomain = (e: React.FormEvent) => {
+  const handleSaveSubdomain = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubdomainSaved(true);
-    setTimeout(() => setSubdomainSaved(false), 3000);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customSubdomain: customSubdomain.trim(),
+        }),
+      });
+      setSubdomainSaved(true);
+      setTimeout(() => setSubdomainSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const testWebhookEndpoint = async () => {

@@ -1,107 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminClient, mockStore, isSupabaseConfigured } from '@/lib/supabase/server';
+import { ContactsDB } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const tag = searchParams.get('tag');
-  const search = searchParams.get('search')?.toLowerCase();
+  try {
+    const { searchParams } = new URL(request.url);
+    const tag = searchParams.get('tag') || undefined;
+    const search = searchParams.get('search') || undefined;
 
-  const supabase = getAdminClient();
+    const contacts = ContactsDB.list({ tag, search });
 
-  if (supabase) {
-    let query = supabase.from('contacts').select('*').order('created_at', { ascending: false });
+    // Map to frontend-friendly structure
+    const mapped = contacts.map((c) => ({
+      id: c.id,
+      phone_number: c.phoneNumber,
+      phoneNumber: c.phoneNumber,
+      first_name: c.firstName,
+      firstName: c.firstName,
+      last_name: c.lastName,
+      lastName: c.lastName,
+      tags: c.tags || [],
+      optin_status: c.optinStatus,
+      optinStatus: c.optinStatus,
+      created_at: c.createdAt,
+      createdAt: c.createdAt,
+    }));
 
-    if (tag && tag !== 'all') {
-      query = query.contains('tags', [tag]);
-    }
-
-    const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    let filtered = data || [];
-    if (search) {
-      filtered = filtered.filter(
-        (c) =>
-          c.phone_number.toLowerCase().includes(search) ||
-          c.first_name?.toLowerCase().includes(search) ||
-          c.last_name?.toLowerCase().includes(search)
-      );
-    }
-    return NextResponse.json(filtered);
+    return NextResponse.json(mapped);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
-
-  // Fallback to mock store
-  let filtered = [...mockStore.contacts];
-  if (tag && tag !== 'all') {
-    filtered = filtered.filter((c) => c.tags.includes(tag));
-  }
-  if (search) {
-    filtered = filtered.filter(
-      (c) =>
-        c.phone_number.toLowerCase().includes(search) ||
-        c.first_name?.toLowerCase().includes(search) ||
-        c.last_name?.toLowerCase().includes(search)
-    );
-  }
-
-  return NextResponse.json(filtered);
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const {
-      workspaceId = process.env.DEFAULT_WORKSPACE_ID || '00000000-0000-0000-0000-000000000001',
       phoneNumber,
+      phone_number,
       firstName,
+      first_name,
       lastName,
+      last_name,
       tags = ['vip'],
       optinStatus = true,
+      optin_status,
     } = body;
 
-    if (!phoneNumber) {
+    const rawPhone = phoneNumber || phone_number;
+    if (!rawPhone) {
       return NextResponse.json({ error: 'Phone number is required.' }, { status: 400 });
     }
 
-    const cleanPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
-    const supabase = getAdminClient();
+    const created = ContactsDB.upsert({
+      phoneNumber: rawPhone,
+      firstName: firstName || first_name || '',
+      lastName: lastName || last_name || '',
+      tags: Array.isArray(tags) ? tags : [tags],
+      optinStatus: optinStatus !== undefined ? optinStatus : optin_status !== undefined ? optin_status : true,
+    });
 
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('contacts')
-        .upsert(
-          {
-            workspace_id: workspaceId,
-            phone_number: cleanPhone,
-            first_name: firstName,
-            last_name: lastName,
-            tags,
-            optin_status: optinStatus,
-          },
-          { onConflict: 'workspace_id,phone_number' }
-        )
-        .select()
-        .single();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json(data, { status: 201 });
-    }
-
-    // Mock store insert
-    const newContact = {
-      id: `00000000-0000-0000-0000-${Date.now().toString().slice(-12)}`,
-      workspace_id: workspaceId,
-      phone_number: cleanPhone,
-      first_name: firstName,
-      last_name: lastName,
-      tags,
-      optin_status: optinStatus,
-      created_at: new Date().toISOString(),
-    };
-
-    mockStore.contacts.unshift(newContact);
-    return NextResponse.json(newContact, { status: 201 });
+    return NextResponse.json(
+      {
+        id: created.id,
+        phone_number: created.phoneNumber,
+        phoneNumber: created.phoneNumber,
+        first_name: created.firstName,
+        firstName: created.firstName,
+        last_name: created.lastName,
+        lastName: created.lastName,
+        tags: created.tags,
+        optin_status: created.optinStatus,
+        optinStatus: created.optinStatus,
+        created_at: created.createdAt,
+        createdAt: created.createdAt,
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 });
+    }
+
+    const deleted = ContactsDB.delete(id);
+    return NextResponse.json({ success: deleted });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

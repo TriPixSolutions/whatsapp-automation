@@ -38,7 +38,7 @@ export default function ContactsPage() {
       const res = await fetch(`/api/contacts?tag=${selectedTag}&search=${encodeURIComponent(search)}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setContacts(data);
         }
       }
@@ -91,7 +91,7 @@ export default function ContactsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-60 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="Customer Contacts Directory"

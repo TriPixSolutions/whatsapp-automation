@@ -41,10 +41,44 @@ export default function DashboardPage() {
   const [metaConfigured, setMetaConfigured] = useState(false);
 
   useEffect(() => {
-    const creds = getMetaCredentials();
-    if (creds.phoneNumberId && creds.accessToken) {
-      setMetaConfigured(true);
-    }
+    const loadDashboardData = async () => {
+      try {
+        const [msgRes, setRes] = await Promise.all([
+          fetch('/api/messages'),
+          fetch('/api/settings'),
+        ]);
+
+        if (msgRes.ok) {
+          const data = await msgRes.json();
+          if (data.stats) {
+            setMessagesSent(data.stats.messagesSent || 0);
+            setDeliveryRate(data.stats.deliveryRate || '0.0%');
+            setActiveChats(data.stats.activeChatsCount || 0);
+          }
+          if (data.conversations && data.conversations.length > 0) {
+            const mapped = data.conversations.map((c: any) => ({
+              id: c.phoneNumber,
+              recipient: c.contactName || c.phoneNumber,
+              preview: c.lastMessage,
+              status: c.status,
+              time: new Date(c.lastTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            }));
+            setConversations(mapped);
+          }
+        }
+
+        if (setRes.ok) {
+          const settings = await setRes.json();
+          if (settings.phoneNumberId && settings.accessToken && !settings.accessToken.includes('SAMPLE_TOKEN')) {
+            setMetaConfigured(true);
+          }
+        }
+      } catch (e) {
+        console.warn('Dashboard fetch error:', e);
+      }
+    };
+
+    loadDashboardData();
   }, []);
 
   const handleQuickSend = async (e: React.FormEvent) => {

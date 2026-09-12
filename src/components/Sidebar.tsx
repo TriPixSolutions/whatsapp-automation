@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
+  MessageSquare,
   Users,
   Send,
   Bot,
@@ -18,6 +19,7 @@ import { clearClientAuthCookie } from '@/lib/auth';
 
 const navItems = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Inbox', href: '/inbox', icon: MessageSquare },
   { name: 'Broadcasts', href: '/campaigns', icon: Send },
   { name: 'Contacts', href: '/contacts', icon: Users },
   { name: 'Flows', href: '/automations', icon: Bot },
