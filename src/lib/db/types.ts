@@ -109,3 +109,43 @@ export interface Campaign {
   createdAt: string;
   completedAt?: string;
 }
+
+export type UserRole = 'super_admin' | 'admin' | 'manager' | 'agent' | 'user';
+export type UserStatus = 'unrequested' | 'pending_approval' | 'approved' | 'rejected';
+
+export interface UserRecord {
+  id: string;
+  email: string;
+  passwordHash?: string;
+  name: string;
+  avatarUrl?: string;
+  provider: 'email' | 'google';
+  role: UserRole;
+  status: UserStatus;
+  company?: string;
+  intendedUse?: string;
+  requestedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  lastLoginAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActivityLogItem {
+  id: string;
+  type: 'user_signup' | 'access_request' | 'user_approved' | 'user_rejected' | 'role_changed' | 'message_sent' | 'campaign_dispatched';
+  title: string;
+  description: string;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
+export interface AdminMetrics {
+  totalApprovedUsers: number;
+  totalPendingRequests: number;
+  totalMessagesSent: number;
+  totalMetaAdsSpend: number;
+  recentActivity: ActivityLogItem[];
+}
+

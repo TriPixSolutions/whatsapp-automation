@@ -142,3 +142,43 @@ model Campaign {
 
   @@map("campaigns")
 }
+
+enum UserRole {
+  super_admin
+  admin
+  manager
+  agent
+  user
+}
+
+enum UserStatus {
+  unrequested
+  pending_approval
+  approved
+  rejected
+}
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  passwordHash  String?
+  name          String      @default("")
+  avatarUrl     String?
+  provider      String      @default("email") // "email" | "google"
+  role          UserRole    @default(user)
+  status        UserStatus  @default(unrequested)
+  company       String?
+  intendedUse   String?
+  requestedAt   DateTime?
+  approvedAt    DateTime?
+  approvedBy    String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@index([role])
+  @@map("users")
+}
+
