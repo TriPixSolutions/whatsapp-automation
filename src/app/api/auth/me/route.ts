@@ -21,16 +21,15 @@ export async function GET() {
 
     const user = UsersDB.getById(userId);
     if (!user) {
-      return NextResponse.json({
-        authenticated: true,
-        user: {
-          id: userId,
-          role: roleCookie || 'user',
-          status: statusCookie || 'approved',
-          name: 'User',
-          email: '',
-        },
+      const unauthResponse = NextResponse.json({
+        authenticated: false,
+        user: null,
       });
+      unauthResponse.cookies.set('pf_auth', '', { path: '/', maxAge: 0 });
+      unauthResponse.cookies.set('pf_user_id', '', { path: '/', maxAge: 0 });
+      unauthResponse.cookies.set('pf_status', '', { path: '/', maxAge: 0 });
+      unauthResponse.cookies.set('pf_role', '', { path: '/', maxAge: 0 });
+      return unauthResponse;
     }
 
     const response = NextResponse.json({
