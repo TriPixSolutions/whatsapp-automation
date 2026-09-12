@@ -148,8 +148,8 @@ export default function CampaignsPage() {
     <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Wati-Powered Broadcast & Commerce Marketing Suite"
-        subtitle="High-converting Meta template broadcasts, Shopify abandoned carts, and WhatsApp catalog messages"
+        title="Send WhatsApp Broadcasts & Product Offers"
+        subtitle="Reach 1,000s of customers with official Meta templates, order alerts, and catalog showcases"
       />
 
       <main className="p-8 space-y-8 flex-1">
@@ -160,10 +160,10 @@ export default function CampaignsPage() {
               <div className="border-b border-[#E5E7EB] pb-4">
                 <h3 className="text-base font-bold text-[#222222] flex items-center gap-2">
                   <Send className="w-4 h-4 text-[#0066FF]" />
-                  Broadcast & E-Commerce Campaign Setup
+                  WhatsApp Broadcast & Campaign Setup
                 </h3>
                 <p className="text-xs text-[#777777] mt-1">
-                  Deploy Meta Cloud API templates with dynamic variables and automated 50ms pacing
+                  Send official Meta Cloud API templates with personalized customer names and safe delivery rate protection
                 </p>
               </div>
 

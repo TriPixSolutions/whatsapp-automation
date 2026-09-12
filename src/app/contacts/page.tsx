@@ -125,8 +125,8 @@ export default function ContactsPage() {
     <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Audience CRM & Segmented Registries"
-        subtitle="Manage phone directories, verified opt-in statuses, and custom segment tags"
+        title="Customer Contacts Directory"
+        subtitle="Manage customer phone numbers, VIP tags, and WhatsApp opt-in status"
       />
 
       <main className="p-8 space-y-6 flex-1">
@@ -169,10 +169,10 @@ export default function ContactsPage() {
 
             <button
               onClick={() => setShowAddModal(true)}
-              className="gradient-button text-xs px-4 py-2.5 rounded-xl font-semibold uppercase tracking-wider flex items-center gap-2 shadow-sm"
+              className="gradient-button text-xs px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-sm text-white"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Add VIP Contact</span>
+              <span>Add Customer Contact</span>
             </button>
           </div>
         </div>
@@ -195,7 +195,7 @@ export default function ContactsPage() {
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-[#0066FF]" />
               <span className="text-xs font-bold text-[#222222] uppercase tracking-wider">
-                Audience Directory ({filtered.length} Contacts)
+                Customer Contacts ({filtered.length})
               </span>
             </div>
           </div>
@@ -255,7 +255,7 @@ export default function ContactsPage() {
             <div className="w-full max-w-md bg-white border border-[#E5E7EB] rounded-2xl p-6 space-y-5 shadow-2xl">
               <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-3">
                 <h3 className="text-sm font-bold text-[#222222] uppercase tracking-wider">
-                  Add Single VIP Contact
+                  Add New Customer Contact
                 </h3>
                 <button
                   onClick={() => setShowAddModal(false)}

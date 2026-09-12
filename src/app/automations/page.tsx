@@ -120,8 +120,8 @@ export default function AutomationsPage() {
     <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Wati-Style No-Code Visual Chatbot & Workflows"
-        subtitle="Visual drag-and-drop conversational branching, AI bot responses, and live agent handoffs"
+        title="No-Code Chatbot & Automated Instant Replies"
+        subtitle="Build visual automated conversation paths, interactive buttons, and instant customer replies"
       />
 
       <main className="p-8 space-y-6 flex-1">
