@@ -304,6 +304,7 @@ function getDefaultSchema(): DatabaseSchema {
         email: 'admin@passionfruit.io',
         passwordHash: hashPassword(process.env.SUPER_ADMIN_INITIAL_PASSWORD || 'Admin@PassionFruit2026'),
         name: 'Super Admin',
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         provider: 'email',
         role: 'super_admin',
         status: 'approved',
@@ -749,24 +750,40 @@ export const CampaignsDB = {
   },
 };
 
+function ensureAvatar(user: UserRecord): UserRecord {
+  if (!user.avatarUrl || user.avatarUrl.trim().length === 0) {
+    if (user.role === 'super_admin') {
+      user.avatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80';
+    } else if (user.provider === 'google') {
+      user.avatarUrl = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+    } else {
+      const cleanName = encodeURIComponent(user.name || user.email.split('@')[0] || 'User');
+      user.avatarUrl = `https://ui-avatars.com/api/?name=${cleanName}&background=7C3AED&color=ffffff&bold=true&rounded=true&size=128`;
+    }
+  }
+  return user;
+}
+
 // -----------------------------------------------------------------------------
 // REPOSITORY 6: USERS & RBAC ACCESS CONTROL
 // -----------------------------------------------------------------------------
 export const UsersDB = {
   getAll(): UserRecord[] {
     const db = readDb();
-    return db.users || [];
+    return (db.users || []).map(ensureAvatar);
   },
 
   getById(id: string): UserRecord | null {
     const db = readDb();
-    return db.users?.find((u) => u.id === id) || null;
+    const user = db.users?.find((u) => u.id === id);
+    return user ? ensureAvatar(user) : null;
   },
 
   getByEmail(email: string): UserRecord | null {
     const db = readDb();
     const clean = (email || '').trim().toLowerCase();
-    return db.users?.find((u) => u.email.toLowerCase() === clean) || null;
+    const user = db.users?.find((u) => u.email.toLowerCase() === clean);
+    return user ? ensureAvatar(user) : null;
   },
 
   verifyCredentials(email: string, password: string): UserRecord | null {
@@ -778,20 +795,20 @@ export const UsersDB = {
     // Check stored password hash
     if (user.passwordHash) {
       if (verifyPassword(password, user.passwordHash)) {
-        return user;
+        return ensureAvatar(user);
       }
     }
 
     // Secure server-side initial super-admin fallback
     if (user.role === 'super_admin' && (password === 'Admin@PassionFruit2026' || password === '0725')) {
-      return user;
+      return ensureAvatar(user);
     }
 
     // If account was created without hash, set hash on first login
     if (!user.passwordHash && password) {
       user.passwordHash = hashPassword(password);
       writeDb(db);
-      return user;
+      return ensureAvatar(user);
     }
 
     return null;
@@ -802,7 +819,7 @@ export const UsersDB = {
     const cleanEmail = (userData.email || '').trim().toLowerCase();
     const existing = db.users?.find((u) => u.email.toLowerCase() === cleanEmail);
     if (existing) {
-      return existing;
+      return ensureAvatar(existing);
     }
 
     const initialStatus = userData.status || 'new_user';
@@ -812,12 +829,19 @@ export const UsersDB = {
       ? hashPassword(userData.password)
       : undefined;
 
+    const cleanName = userData.name || cleanEmail.split('@')[0] || 'User';
+    const generatedAvatar =
+      userData.avatarUrl ||
+      (userData.provider === 'google'
+        ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80'
+        : `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=7C3AED&color=ffffff&bold=true&rounded=true&size=128`);
+
     const newUser: UserRecord = {
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       email: cleanEmail,
       passwordHash: computedHash,
-      name: userData.name || cleanEmail.split('@')[0] || 'User',
-      avatarUrl: userData.avatarUrl || '',
+      name: cleanName,
+      avatarUrl: generatedAvatar,
       provider: userData.provider || 'email',
       role: userData.role || 'user',
       status: initialStatus,
@@ -840,7 +864,7 @@ export const UsersDB = {
     });
 
     writeDb(db);
-    return newUser;
+    return ensureAvatar(newUser);
   },
 
   requestAccess(id: string, details?: { company?: string; intendedUse?: string }): UserRecord | null {

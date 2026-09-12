@@ -22,12 +22,14 @@ export async function POST(req: Request) {
     }
 
     // Check if user already exists
+    const avatarUrl = (body.avatarUrl || body.picture || '').trim();
     let user = UsersDB.getByEmail(email);
     if (!user) {
       user = UsersDB.create({
         email,
         password,
         name: name || email.split('@')[0],
+        avatarUrl: avatarUrl || undefined,
         company,
         provider: provider === 'google' ? 'google' : 'email',
         role: 'user',

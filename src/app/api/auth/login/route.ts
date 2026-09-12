@@ -20,6 +20,7 @@ export async function POST(req: Request) {
         user = UsersDB.create({
           email,
           name: body.name || email.split('@')[0],
+          avatarUrl: body.avatarUrl || body.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
           provider: 'google',
           role: 'user',
           status: 'new_user',
@@ -57,6 +58,7 @@ export async function POST(req: Request) {
           email: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@example.com`,
           name: identifier.split('@')[0],
           password,
+          avatarUrl: body.avatarUrl || undefined,
           provider: 'email',
           role: 'user',
           status: 'new_user',

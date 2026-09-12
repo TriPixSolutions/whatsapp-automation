@@ -30,12 +30,40 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [user, setUser] = React.useState<any>(null);
+  const [imgError, setImgError] = React.useState(false);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadUser() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.authenticated && data.user) {
+            setUser(data.user);
+          }
+        }
+      } catch (e) {}
+    }
+    loadUser();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogout = () => {
     clearClientAuthCookie();
     router.push('/auth/login');
     router.refresh();
   };
+
+  const displayName = user?.name || 'Workspace Member';
+  const displayEmail = user?.email || 'user@passionfruit.io';
+  const displayAvatar =
+    user?.avatarUrl ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=7C3AED&color=ffffff&bold=true&rounded=true&size=128`;
+  const initial = (displayName[0] || 'U').toUpperCase();
 
   return (
     <aside className="w-60 h-screen bg-white border-r border-[#E2E8F0] flex flex-col justify-between p-4 select-none fixed left-0 top-0 z-30">
@@ -74,22 +102,35 @@ export function Sidebar() {
         </nav>
       </div>
 
-      {/* Footer / Minimal User Session & Logout */}
+      {/* Footer / User Session & Logout */}
       <div className="pt-4 border-t border-[#E2E8F0]">
-        <div className="flex items-center justify-between px-2 py-1">
+        <div className="flex items-center justify-between px-2 py-1.5 rounded-2xl bg-slate-50/80 border border-slate-100">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-lg bg-[#0D0F2D] text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
-              U1
+            <div className="w-8 h-8 rounded-xl overflow-hidden bg-gradient-to-tr from-[#7C3AED] to-indigo-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-inner">
+              {!imgError && displayAvatar ? (
+                <img
+                  src={displayAvatar}
+                  alt={displayName}
+                  onError={() => setImgError(true)}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{initial}</span>
+              )}
             </div>
             <div className="overflow-hidden">
-              <p className="text-xs font-bold text-[#0D0F2D] truncate">User 1</p>
-              <p className="text-[10px] text-[#94A3B8] truncate">Production</p>
+              <p className="text-xs font-bold text-[#0D0F2D] truncate" title={displayName}>
+                {displayName}
+              </p>
+              <p className="text-[10px] text-[#94A3B8] font-mono truncate" title={displayEmail}>
+                {displayEmail}
+              </p>
             </div>
           </div>
           <button
             onClick={handleLogout}
             title="Sign out of workspace"
-            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-rose-600 hover:bg-rose-50 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
