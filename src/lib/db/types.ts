@@ -146,6 +146,9 @@ export interface AdminMetrics {
   totalPendingRequests: number;
   totalMessagesSent: number;
   totalMetaAdsSpend: number;
+  totalContacts?: number;
+  totalCampaigns?: number;
+  totalAutomations?: number;
   recentActivity: ActivityLogItem[];
 }
 

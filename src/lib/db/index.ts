@@ -159,6 +159,9 @@ export interface AdminMetrics {
   totalPendingRequests: number;
   totalMessagesSent: number;
   totalMetaAdsSpend: number;
+  totalContacts?: number;
+  totalCampaigns?: number;
+  totalAutomations?: number;
   recentActivity: ActivityLogItem[];
 }
 
@@ -935,15 +938,22 @@ export const UsersDB = {
     const totalApprovedUsers = users.filter((u) => u.status === 'approved').length;
     const totalPendingRequests = users.filter((u) => u.status === 'pending_approval').length;
     const totalMessagesSent = (db.messages || []).length;
+    const totalContacts = (db.contacts || []).length;
+    const totalCampaigns = (db.campaigns || []).length;
+    const totalAutomations = (db.automations || []).length;
     
-    const totalMetaAdsSpend = 3450.0 + totalMessagesSent * 0.045 + (db.campaigns || []).length * 15.0;
+    // Real Meta Cloud API usage cost: calculated strictly from actual outbound message volume ($0.045 / message)
+    const realMetaUsageCost = Math.round(totalMessagesSent * 0.045 * 100) / 100;
 
     return {
       totalApprovedUsers,
       totalPendingRequests,
       totalMessagesSent,
-      totalMetaAdsSpend: Math.round(totalMetaAdsSpend * 100) / 100,
-      recentActivity: (db.activity || []).slice(0, 15),
+      totalMetaAdsSpend: realMetaUsageCost,
+      totalContacts,
+      totalCampaigns,
+      totalAutomations,
+      recentActivity: (db.activity || []).slice(0, 20),
     };
   },
 };
