@@ -34,7 +34,7 @@ export default function SettingsPage() {
 
   const webhookUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/webhooks/meta`
-    : 'https://your-luxury-saas.vercel.app/api/webhooks/meta';
+    : 'https://whatsapp-automation.vercel.app/api/webhooks/meta';
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -79,7 +79,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#07090E] pl-64 flex flex-col">
+    <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="API Credentials & Meta Webhook Configuration"
@@ -88,16 +88,16 @@ export default function SettingsPage() {
 
       <main className="p-8 space-y-8 flex-1 max-w-5xl">
         {/* Meta Developer Portal Integration Card */}
-        <section className="rounded-2xl bg-[#0B0F17]/90 border border-[#D4AF37]/30 p-6 space-y-5 shadow-luxury-md relative overflow-hidden">
-          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+        <section className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-5 shadow-zap-sm">
+          <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-[#E6C687]" />
-                <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                <Globe className="w-4 h-4 text-[#0066FF]" />
+                <h3 className="text-sm font-bold text-[#222222] uppercase tracking-wider">
                   Meta Developer Portal Webhook Setup
                 </h3>
               </div>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[#777777]">
                 Paste these into Meta Developer Portal &rarr; WhatsApp &rarr; Configuration &rarr; Webhook
               </p>
             </div>
@@ -105,7 +105,7 @@ export default function SettingsPage() {
               href="https://developers.facebook.com/apps/"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 text-xs text-[#E6C687] hover:underline font-mono"
+              className="flex items-center gap-1.5 text-xs text-[#0066FF] hover:underline font-semibold"
             >
               <span>developers.facebook.com</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -114,17 +114,17 @@ export default function SettingsPage() {
 
           {/* Callback URL Bar */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300">Generated Webhook Callback URL</label>
+            <label className="text-xs font-semibold text-[#222222]">Generated Webhook Callback URL</label>
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-[#111622] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-[#E6C687] font-mono select-all overflow-x-auto">
+              <div className="flex-1 bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#0066FF] font-mono select-all overflow-x-auto font-semibold">
                 {webhookUrl}
               </div>
               <button
                 type="button"
                 onClick={copyToClipboard}
-                className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-white flex items-center gap-2 transition-colors"
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-[#E5E7EB] text-xs font-semibold text-[#222222] flex items-center gap-2 transition-colors shadow-sm"
               >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
                 <span>{copied ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
@@ -132,19 +132,19 @@ export default function SettingsPage() {
 
           {/* Verify Token Bar */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-zinc-300">Webhook Verify Token</label>
+            <label className="text-xs font-semibold text-[#222222]">Webhook Verify Token</label>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={verifyToken}
                 onChange={(e) => setVerifyToken(e.target.value)}
-                className="flex-1 bg-[#111622] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#D4AF37]"
+                className="flex-1 bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] font-mono focus:outline-none focus:border-[#0066FF]"
               />
               <button
                 type="button"
                 onClick={testWebhookEndpoint}
                 disabled={isTestingWebhook}
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-blue-500/20 hover:from-cyan-500/30 hover:to-blue-500/30 border border-cyan-500/30 text-cyan-300 text-xs font-mono flex items-center gap-2 transition-all"
+                className="px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[#0066FF] text-xs font-semibold flex items-center gap-2 transition-all"
               >
                 {isTestingWebhook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
                 <span>Test Webhook Handshake</span>
@@ -158,8 +158,8 @@ export default function SettingsPage() {
               className={cn(
                 'p-3.5 rounded-xl text-xs font-mono flex items-center gap-2',
                 webhookTestResult.success
-                  ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
-                  : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
               )}
             >
               {webhookTestResult.success ? (
@@ -173,13 +173,13 @@ export default function SettingsPage() {
         </section>
 
         {/* Credentials Form */}
-        <section className="rounded-2xl bg-[#0B0F17]/90 border border-white/10 p-6 space-y-6 shadow-luxury-md">
-          <div className="border-b border-white/5 pb-4">
-            <h3 className="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-              <Key className="w-4 h-4 text-[#E6C687]" />
+        <section className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-6 shadow-zap-sm">
+          <div className="border-b border-[#E5E7EB] pb-4">
+            <h3 className="text-sm font-bold text-[#222222] uppercase tracking-wider flex items-center gap-2">
+              <Key className="w-4 h-4 text-[#0066FF]" />
               Meta Cloud API Credentials (workspaces table)
             </h3>
-            <p className="text-xs text-zinc-400 mt-1">
+            <p className="text-xs text-[#777777] mt-1">
               Used by Vercel Webhooks and Hostinger BullMQ Worker to authenticate Graph API requests
             </p>
           </div>
@@ -187,23 +187,23 @@ export default function SettingsPage() {
           <form onSubmit={handleSave} className="space-y-5">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-zinc-300">
+                <label className="text-xs font-semibold text-[#222222]">
                   Meta Permanent Access Token (System User)
                 </label>
-                <span className="text-[10px] text-zinc-500 font-mono">Scope: whatsapp_business_messaging</span>
+                <span className="text-[10px] text-[#777777] font-mono">Scope: whatsapp_business_messaging</span>
               </div>
               <input
                 type="password"
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder="EAAG..."
-                className="w-full bg-[#111622] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#D4AF37]"
+                className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] font-mono focus:outline-none focus:border-[#0066FF]"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-300">
+                <label className="text-xs font-semibold text-[#222222]">
                   Phone Number ID (Receiving / Sender ID)
                 </label>
                 <input
@@ -211,12 +211,12 @@ export default function SettingsPage() {
                   value={phoneId}
                   onChange={(e) => setPhoneId(e.target.value)}
                   placeholder="e.g. 109823485764321"
-                  className="w-full bg-[#111622] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] font-mono focus:outline-none focus:border-[#0066FF]"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-300">
+                <label className="text-xs font-semibold text-[#222222]">
                   WhatsApp Business Account (WABA) ID
                 </label>
                 <input
@@ -224,40 +224,39 @@ export default function SettingsPage() {
                   value={wabaId}
                   onChange={(e) => setWabaId(e.target.value)}
                   placeholder="e.g. 102938475610293"
-                  className="w-full bg-[#111622] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] font-mono focus:outline-none focus:border-[#0066FF]"
                 />
               </div>
             </div>
 
-            {/* Infrastructure Config */}
-            <div className="pt-4 border-t border-white/5 space-y-4">
-              <h4 className="text-xs font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-                <Server className="w-3.5 h-3.5 text-cyan-400" />
+            <div className="pt-4 border-t border-[#E5E7EB] space-y-4">
+              <h4 className="text-xs font-bold text-[#222222] uppercase tracking-wider flex items-center gap-2">
+                <Server className="w-3.5 h-3.5 text-[#0066FF]" />
                 Infrastructure & Hostinger Redis Cluster
               </h4>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-300">Redis Connection URI</label>
+                <label className="text-xs font-semibold text-[#222222]">Redis Connection URI</label>
                 <input
                   type="text"
                   value={redisUrl}
                   onChange={(e) => setRedisUrl(e.target.value)}
                   placeholder="redis://default:password@hostinger-server:6379"
-                  className="w-full bg-[#111622] border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-[#D4AF37]"
+                  className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] font-mono focus:outline-none focus:border-[#0066FF]"
                 />
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">
               {isSaved ? (
-                <span className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" /> Settings updated successfully in workspace!
+                <span className="text-xs text-emerald-600 font-mono flex items-center gap-1.5 font-semibold">
+                  <CheckCircle2 className="w-4 h-4" /> Settings saved successfully!
                 </span>
               ) : <div />}
 
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-[#AA820A] text-black font-semibold text-xs uppercase tracking-wider hover:opacity-95 shadow-gold-glow transition-all"
+                className="gradient-button px-6 py-2.5 rounded-xl text-white font-semibold text-xs uppercase tracking-wider shadow-sm"
               >
                 Save Workspace Configuration
               </button>

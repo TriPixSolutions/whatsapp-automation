@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { StatCard } from '@/components/StatCard';
 import { PhoneMockup } from '@/components/PhoneMockup';
+import { LiveTeamInbox } from '@/components/LiveTeamInbox';
 import {
   Send,
   CheckCheck,
@@ -14,12 +16,17 @@ import {
   FlaskConical,
   Play,
   RotateCw,
-  Clock,
-  ArrowUpRight,
+  Globe,
+  Users,
+  Inbox,
+  BarChart3,
+  Bot,
+  Zap,
+  MessageSquare,
   ShieldCheck,
   CheckCircle2,
 } from 'lucide-react';
-import { cn, formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
   const [loadingFlow1, setLoadingFlow1] = useState(false);
@@ -27,7 +34,6 @@ export default function DashboardPage() {
   const [testResult, setTestResult] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'outbound' | 'inbound'>('all');
 
-  // Interactive mockup state
   const [mockupState, setMockupState] = useState({
     bodyText: 'Something big is coming soon. Are you ready?',
     inboundText: 'Show me',
@@ -37,7 +43,7 @@ export default function DashboardPage() {
   const [messages, setMessages] = useState<any[]>([
     {
       id: 'm1',
-      recipient: '+971501234567 (Julian Vance)',
+      recipient: '+971 50 123 4567 (Julian Vance)',
       direction: 'outbound',
       type: 'template',
       status: 'delivered',
@@ -46,7 +52,7 @@ export default function DashboardPage() {
     },
     {
       id: 'm2',
-      recipient: '+971501234567 (Julian Vance)',
+      recipient: '+971 50 123 4567 (Julian Vance)',
       direction: 'inbound',
       type: 'text',
       status: 'delivered',
@@ -55,7 +61,7 @@ export default function DashboardPage() {
     },
     {
       id: 'm3',
-      recipient: '+971501234567 (Julian Vance)',
+      recipient: '+971 50 123 4567 (Julian Vance)',
       direction: 'outbound',
       type: 'interactive',
       status: 'read',
@@ -64,7 +70,7 @@ export default function DashboardPage() {
     },
     {
       id: 'm4',
-      recipient: '+447700900123 (Lady Eleanor)',
+      recipient: '+44 7700 900123 (Lady Eleanor)',
       direction: 'outbound',
       type: 'template',
       status: 'delivered',
@@ -73,7 +79,7 @@ export default function DashboardPage() {
     },
     {
       id: 'm5',
-      recipient: '+14155552671 (Marcus Castile)',
+      recipient: '+1 415 555 2671 (Marcus Castile)',
       direction: 'outbound',
       type: 'template',
       status: 'delivered',
@@ -82,7 +88,17 @@ export default function DashboardPage() {
     },
   ]);
 
-  // Run Test Flow 1: Outbound Bulk Campaign
+  const capabilities = [
+    { name: 'Integrations', icon: Globe, href: '/settings' },
+    { name: 'CRM', icon: Users, href: '/contacts' },
+    { name: 'Team Inbox', icon: Inbox, href: '#team-inbox' },
+    { name: 'Analytics', icon: BarChart3, href: '/dashboard' },
+    { name: 'Bulk Broadcast', icon: Send, href: '/campaigns' },
+    { name: 'Inbox', icon: MessageSquare, href: '#team-inbox' },
+    { name: 'AI Chatbot', icon: Bot, href: '/automations' },
+    { name: 'Automation', icon: Zap, href: '/automations' },
+  ];
+
   const runTestFlow1 = async () => {
     setLoadingFlow1(true);
     setTestResult(null);
@@ -102,7 +118,6 @@ export default function DashboardPage() {
           showInbound: false,
         });
 
-        // Prepend fresh messages
         setMessages((prev) => [
           {
             id: `flow1_${Date.now()}`,
@@ -123,7 +138,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Run Test Flow 2: Inbound "Show me" Interactive Automation
   const runTestFlow2 = async () => {
     setLoadingFlow2(true);
     setTestResult(null);
@@ -149,7 +163,7 @@ export default function DashboardPage() {
         setMessages((prev) => [
           {
             id: `flow2_out_${Date.now()}`,
-            recipient: '+971501234567 (Julian Vance)',
+            recipient: '+971 50 123 4567 (Julian Vance)',
             direction: 'outbound',
             type: 'interactive',
             status: 'sent',
@@ -158,7 +172,7 @@ export default function DashboardPage() {
           },
           {
             id: `flow2_in_${Date.now()}`,
-            recipient: '+971501234567 (Julian Vance)',
+            recipient: '+971 50 123 4567 (Julian Vance)',
             direction: 'inbound',
             type: 'text',
             status: 'delivered',
@@ -181,15 +195,46 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#07090E] pl-64 flex flex-col">
+    <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Executive Performance & Broadcast Analytics"
+        title="Executive Performance & Broadcast Console"
         subtitle="Meta Cloud API v18.0 • Hostinger BullMQ Cluster • Real-time Delivery Ledger"
       />
 
       <main className="p-8 space-y-8 flex-1">
-        {/* KPI Cards Grid */}
+        {/* 1. Zapelite 8-Capability Launcher */}
+        <section className="p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-zap-sm">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#777777]">
+              ZapElite Core Suites & Quick Access
+            </span>
+            <span className="text-xs font-semibold text-[#0066FF] font-mono">
+              Meta WhatsApp Business Verified
+            </span>
+          </div>
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-3 justify-items-center">
+            {capabilities.map((cap, i) => {
+              const Icon = cap.icon;
+              return (
+                <Link
+                  key={i}
+                  href={cap.href}
+                  className="flex flex-col items-center gap-2 group cursor-pointer"
+                >
+                  <div className="w-12 h-12 bg-slate-50 border-2 border-white p-2.5 rounded-xl transition-all duration-200 group-hover:bg-blue-50 group-hover:shadow-md group-hover:scale-105 flex items-center justify-center">
+                    <Icon className="w-5 h-5 text-[#0066FF] group-hover:text-[#00C6FF] transition-colors" />
+                  </div>
+                  <p className="font-semibold text-[#555555] group-hover:text-[#222222] text-[11px] text-center transition-colors">
+                    {cap.name}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* 2. Zapelite KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
             title="Total Messages Dispatched"
@@ -197,13 +242,13 @@ export default function DashboardPage() {
             trend="+18.4%"
             subtitle="vs. previous cycle"
             icon={Send}
-            accent="gold"
+            accent="blue"
           />
           <StatCard
             title="Meta Delivery Rate"
             value="98.6%"
             trend="+0.8%"
-            subtitle="Industry avg: 92%"
+            subtitle="Industry benchmark: 92%"
             icon={CheckCheck}
             accent="emerald"
           />
@@ -211,35 +256,38 @@ export default function DashboardPage() {
             title="Read & Engagement Rate"
             value="84.2%"
             trend="+4.1%"
-            subtitle="High-ticket luxury benchmark"
+            subtitle="High-ticket engagement"
             icon={Eye}
-            accent="blue"
+            accent="purple"
           />
           <StatCard
             title="Active Qualified Leads"
             value="432"
             trend="+27.5%"
-            subtitle="VIP inquiries this week"
+            subtitle="Inquiries this cycle"
             icon={TrendingUp}
-            accent="purple"
+            accent="amber"
           />
         </div>
 
-        {/* Test Scenario Lab (Blueprint Section 5) */}
-        <section id="test-lab" className="rounded-2xl bg-[#0B0F17]/90 border border-[#D4AF37]/30 p-6 space-y-6 shadow-luxury-md relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4AF37]/5 rounded-full blur-3xl pointer-events-none" />
+        {/* 3. Zapelite Live Team Inbox */}
+        <section id="team-inbox" className="space-y-3">
+          <LiveTeamInbox />
+        </section>
 
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-4">
+        {/* 4. Test Scenario Lab (Verification Engine) */}
+        <section id="test-lab" className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-6 shadow-zap-md">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                <h2 className="text-sm font-semibold text-white uppercase tracking-wider flex items-center gap-2">
-                  <FlaskConical className="w-4 h-4 text-[#E6C687]" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                <h2 className="text-base font-bold text-[#222222] flex items-center gap-2">
+                  <FlaskConical className="w-5 h-5 text-[#0066FF]" />
                   Interactive Test Scenario Lab (Verification Engine)
                 </h2>
               </div>
-              <p className="text-xs text-zinc-400">
-                Execute Test Flow 1 (Outbound Bulk Teaser) and Test Flow 2 (Inbound "Show me" 3-button interactive response)
+              <p className="text-xs text-[#555555]">
+                Execute Test Flow 1 (Outbound Bulk Teaser) and Test Flow 2 (Inbound &quot;Show me&quot; 3-button interactive response)
               </p>
             </div>
 
@@ -247,7 +295,7 @@ export default function DashboardPage() {
               <button
                 onClick={runTestFlow1}
                 disabled={loadingFlow1 || loadingFlow2}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#D4AF37] to-[#AA820A] text-black font-semibold text-xs uppercase tracking-wider flex items-center gap-2 hover:opacity-95 transition-opacity disabled:opacity-50 shadow-gold-glow"
+                className="gradient-button text-xs px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>{loadingFlow1 ? 'Dispatching...' : 'Run Test Flow 1 (Outbound Bulk)'}</span>
@@ -256,105 +304,94 @@ export default function DashboardPage() {
               <button
                 onClick={runTestFlow2}
                 disabled={loadingFlow1 || loadingFlow2}
-                className="px-4 py-2 rounded-xl bg-[#111622] hover:bg-[#182030] border border-white/10 text-white font-semibold text-xs uppercase tracking-wider flex items-center gap-2 transition-colors disabled:opacity-50"
+                className="px-5 py-2.5 rounded-lg bg-white hover:bg-slate-50 border border-[#E5E7EB] text-[#222222] font-semibold text-xs flex items-center gap-2 shadow-sm transition-all"
               >
-                <RotateCw className={cn('w-3.5 h-3.5 text-cyan-400', loadingFlow2 && 'animate-spin')} />
+                <RotateCw className={cn('w-3.5 h-3.5 text-[#0066FF]', loadingFlow2 && 'animate-spin')} />
                 <span>{loadingFlow2 ? 'Triggering...' : 'Run Test Flow 2 (Inbound "Show me")'}</span>
               </button>
             </div>
           </div>
 
-          {/* Test Scenario Details & Live Verification */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Col: Explanation & JSON Ledger */}
             <div className="lg:col-span-7 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-4 rounded-xl bg-[#07090E] border border-white/5 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[#E6C687]">Test Flow 1</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 font-mono">Outbound Bulk</span>
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    Dispatches template <code className="text-white font-mono">teaser_alert</code>: &quot;Something big is coming soon. Are you ready?&quot; with 50ms pacing. Verifies status logs show <strong className="text-emerald-400">&apos;delivered&apos;</strong>.
+                <div className="p-4 rounded-xl bg-slate-50 border border-[#E5E7EB] space-y-1.5">
+                  <span className="text-xs font-bold text-[#0066FF] uppercase">Test Flow 1</span>
+                  <p className="text-xs text-[#555555] leading-relaxed">
+                    Sends template <code className="text-[#222222] font-bold font-mono">teaser_alert</code>: &quot;Something big is coming soon. Are you ready?&quot; with 50ms pacing. Status logs show <strong className="text-emerald-600">&apos;delivered&apos;</strong>.
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-[#07090E] border border-white/5 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-cyan-300">Test Flow 2</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-mono">Inbound Auto-Reply</span>
-                  </div>
-                  <p className="text-xs text-zinc-400 leading-relaxed">
-                    Simulates user reply <code className="text-white font-mono">&quot;Show me&quot;</code>. Webhook matches rule and instantly returns Meta Interactive Message with 3 Quick Reply buttons: <span className="text-white font-mono">[Product Specs, Pricing, Talk to Agent]</span>.
+                <div className="p-4 rounded-xl bg-slate-50 border border-[#E5E7EB] space-y-1.5">
+                  <span className="text-xs font-bold text-[#00C6FF] uppercase">Test Flow 2</span>
+                  <p className="text-xs text-[#555555] leading-relaxed">
+                    User replies <code className="text-[#222222] font-bold font-mono">&quot;Show me&quot;</code>. Webhook fires Meta Interactive Message with 3 Quick Reply buttons: <span className="text-[#222222] font-semibold">[Product Specs, Pricing, Talk to Agent]</span>.
                   </p>
                 </div>
               </div>
 
               {/* JSON Live Output Display */}
-              <div className="rounded-xl bg-[#07090E] border border-white/10 p-4 space-y-2">
-                <div className="flex items-center justify-between text-xs border-b border-white/5 pb-2">
-                  <span className="font-mono text-zinc-400 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <div className="rounded-xl bg-[#0b2947] text-white p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs border-b border-white/10 pb-2">
+                  <span className="font-mono text-cyan-300 flex items-center gap-1.5 font-semibold">
+                    <ShieldCheck className="w-3.5 h-3.5" />
                     Verified Execution Result
                   </span>
-                  <span className="text-[10px] text-zinc-500 font-mono">
-                    {testResult ? 'HTTP 200 OK' : 'Awaiting Test Trigger'}
+                  <span className="text-[10px] text-zinc-400 font-mono">
+                    {testResult ? 'HTTP 200 OK' : 'Ready'}
                   </span>
                 </div>
 
-                <pre className="text-[11px] font-mono text-zinc-300 overflow-x-auto max-h-48 p-2 leading-relaxed">
+                <pre className="text-[11px] font-mono text-zinc-200 overflow-x-auto max-h-48 p-2 leading-relaxed">
                   {testResult
                     ? JSON.stringify(testResult, null, 2)
-                    : `// Click "Run Test Flow 1" or "Run Test Flow 2" above to execute\n{\n  "status": "ready",\n  "testContacts": 3,\n  "rateLimitDelayMs": 50,\n  "metaApiVersion": "v18.0"\n}`}
+                    : `// Click "Run Test Flow 1" or "Run Test Flow 2" above to verify\n{\n  "status": "ready",\n  "testContacts": 3,\n  "rateLimitDelayMs": 50,\n  "metaApiVersion": "v18.0"\n}`}
                 </pre>
               </div>
             </div>
 
-            {/* Right Col: Live WhatsApp Smartphone Simulation */}
             <div className="lg:col-span-5 flex flex-col items-center justify-center">
               <div className="text-center mb-2">
-                <span className="text-[11px] uppercase tracking-widest text-[#E6C687] font-semibold">
-                  Live Meta Interactive Preview
+                <span className="text-[11px] uppercase tracking-wider text-[#0066FF] font-bold font-mono">
+                  Live Meta Interactive Device Simulation
                 </span>
               </div>
               <PhoneMockup
-                businessName="AURA Concierge"
+                businessName="ZapElite Concierge"
                 templateName="teaser_alert"
                 bodyText={mockupState.bodyText}
-                headerText="AURA Private Showcase"
-                footerText="Confidential • By Private Invitation"
+                headerText="ZapElite Private Showcase"
+                footerText="Official WhatsApp Business"
                 showInboundReply={mockupState.showInbound}
                 inboundText={mockupState.inboundText}
-                onButtonClick={(btn) => {
-                  alert(`Interactive button "${btn}" tapped! In production, this fires Meta webhook callback.`);
-                }}
+                onButtonClick={(btn) => alert(`Interactive button "${btn}" tapped!`)}
               />
             </div>
           </div>
         </section>
 
-        {/* Live Messages & Delivery Ledger Table */}
-        <section className="rounded-2xl bg-[#0B0F17]/90 border border-white/10 p-6 space-y-5">
+        {/* 5. Live Message Delivery Ledger Table */}
+        <section className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-5 shadow-zap-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+              <h3 className="text-sm font-bold text-[#222222] uppercase tracking-wider">
                 Live Meta Message Delivery Ledger (messages_log)
               </h3>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-[#777777]">
                 Audited stream of inbound triggers, template broadcasts, and delivery receipts
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5 bg-[#07090E] p-1 rounded-xl border border-white/5 text-xs">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs">
               {(['all', 'outbound', 'inbound'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    'px-3 py-1 rounded-lg capitalize transition-colors',
+                    'px-3 py-1 rounded-lg capitalize transition-colors font-medium',
                     activeTab === tab
-                      ? 'bg-white/10 text-white font-medium'
-                      : 'text-zinc-500 hover:text-zinc-300'
+                      ? 'bg-white text-[#222222] shadow-sm'
+                      : 'text-[#777777] hover:text-[#222222]'
                   )}
                 >
                   {tab}
@@ -363,9 +400,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-white/5 bg-[#07090E]">
-            <table className="w-full text-left text-xs text-zinc-300">
-              <thead className="bg-white/5 text-[10px] uppercase text-zinc-400 tracking-wider">
+          <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+            <table className="w-full text-left text-xs text-[#555555]">
+              <thead className="bg-slate-50 text-[10px] uppercase text-[#777777] tracking-wider border-b border-[#E5E7EB]">
                 <tr>
                   <th className="p-3.5">Recipient / Contact</th>
                   <th className="p-3.5">Direction</th>
@@ -375,38 +412,38 @@ export default function DashboardPage() {
                   <th className="p-3.5 text-right">Timestamp</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5 font-mono text-[11px]">
+              <tbody className="divide-y divide-[#E5E7EB] font-mono text-[11px]">
                 {filteredMessages.map((msg) => (
-                  <tr key={msg.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="p-3.5 text-white font-sans font-medium">{msg.recipient}</td>
+                  <tr key={msg.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="p-3.5 text-[#222222] font-sans font-semibold">{msg.recipient}</td>
                     <td className="p-3.5">
                       <span
                         className={cn(
-                          'px-2 py-0.5 rounded text-[10px] uppercase font-mono tracking-wider',
+                          'px-2 py-0.5 rounded text-[10px] uppercase font-mono tracking-wider font-semibold',
                           msg.direction === 'inbound'
-                            ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
-                            : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                            ? 'bg-blue-50 text-[#0066FF] border border-blue-200'
+                            : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                         )}
                       >
                         {msg.direction}
                       </span>
                     </td>
                     <td className="p-3.5 capitalize font-sans">{msg.type}</td>
-                    <td className="p-3.5 text-zinc-400 font-sans max-w-xs truncate">{msg.preview}</td>
+                    <td className="p-3.5 text-[#555555] font-sans max-w-xs truncate">{msg.preview}</td>
                     <td className="p-3.5">
                       <span
                         className={cn(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase font-mono',
+                          'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] uppercase font-semibold',
                           msg.status === 'delivered' || msg.status === 'read'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : 'bg-amber-50 text-amber-700 border border-amber-200'
                         )}
                       >
                         <CheckCheck className="w-3 h-3" />
                         {msg.status}
                       </span>
                     </td>
-                    <td className="p-3.5 text-right text-zinc-500 font-sans">{msg.time}</td>
+                    <td className="p-3.5 text-right text-[#777777] font-sans">{msg.time}</td>
                   </tr>
                 ))}
               </tbody>

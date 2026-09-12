@@ -9,7 +9,7 @@ interface StatCardProps {
   trend?: string;
   isPositive?: boolean;
   icon: LucideIcon;
-  accent?: 'gold' | 'emerald' | 'blue' | 'purple';
+  accent?: 'blue' | 'emerald' | 'purple' | 'amber';
 }
 
 export function StatCard({
@@ -19,59 +19,44 @@ export function StatCard({
   trend,
   isPositive = true,
   icon: Icon,
-  accent = 'gold',
+  accent = 'blue',
 }: StatCardProps) {
-  const accentGradients = {
-    gold: 'from-[#D4AF37] to-transparent',
-    emerald: 'from-emerald-400 to-transparent',
-    blue: 'from-cyan-400 to-transparent',
-    purple: 'from-purple-400 to-transparent',
-  };
-
   const iconColors = {
-    gold: 'text-[#E6C687] bg-amber-500/10 border-amber-500/20',
-    emerald: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    blue: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-    purple: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+    blue: 'text-[#0066FF] bg-blue-50 border-blue-100',
+    emerald: 'text-emerald-600 bg-emerald-50 border-emerald-100',
+    purple: 'text-purple-600 bg-purple-50 border-purple-100',
+    amber: 'text-amber-600 bg-amber-50 border-amber-100',
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-[#0B0F17]/80 backdrop-blur-md border border-white/10 p-6 transition-all duration-300 hover:border-white/20 hover:shadow-luxury-md group">
-      {/* Top subtle glow bar */}
-      <div
-        className={cn(
-          'absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r opacity-60 group-hover:opacity-100 transition-opacity',
-          accentGradients[accent]
-        )}
-      />
-
+    <div className="rounded-2xl bg-white border border-[#E5E7EB] p-6 shadow-zap-sm hover:shadow-zap-md transition-all duration-300 group">
       <div className="flex items-center justify-between mb-4">
-        <span className="text-xs font-medium uppercase tracking-wider text-zinc-400">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[#777777]">
           {title}
         </span>
-        <div className={cn('w-9 h-9 rounded-xl border flex items-center justify-center', iconColors[accent])}>
-          <Icon className="w-4 h-4" />
+        <div className={cn('w-10 h-10 rounded-xl border flex items-center justify-center transition-transform group-hover:scale-105', iconColors[accent])}>
+          <Icon className="w-5 h-5" />
         </div>
       </div>
 
       <div className="space-y-1">
-        <div className="text-3xl font-semibold text-white tracking-tight font-sans">
+        <div className="text-3xl font-bold text-[#222222] tracking-tight">
           {value}
         </div>
         <div className="flex items-center gap-2 pt-1">
           {trend && (
             <span
               className={cn(
-                'text-[11px] font-mono font-medium px-1.5 py-0.5 rounded',
+                'text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full',
                 isPositive
-                  ? 'text-emerald-400 bg-emerald-500/10'
-                  : 'text-rose-400 bg-rose-500/10'
+                  ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                  : 'text-rose-700 bg-rose-50 border border-rose-200'
               )}
             >
               {trend}
             </span>
           )}
-          {subtitle && <span className="text-xs text-zinc-400">{subtitle}</span>}
+          {subtitle && <span className="text-xs text-[#777777]">{subtitle}</span>}
         </div>
       </div>
     </div>

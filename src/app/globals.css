@@ -3,8 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --background: #07090e;
-  --foreground: #f4f4f5;
+  --background: #ffffff;
+  --foreground: #222222;
+  --card: #ffffff;
+  --card-foreground: #222222;
+  --border: #e5e7eb;
 }
 
 body {
@@ -14,33 +17,68 @@ body {
   overflow-x: hidden;
 }
 
-/* Custom Luxury Scrollbar */
+/* Zapelite Signature Gradient Button */
+.gradient-button {
+  background: linear-gradient(135deg, #0066FF 0%, #00C6FF 100%);
+  color: #ffffff;
+  font-weight: 500;
+  transition: all 0.3s ease-in-out;
+  box-shadow: 0 4px 14px 0 rgba(0, 102, 255, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.gradient-button:hover {
+  box-shadow: 0 6px 20px 0 rgba(0, 198, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.gradient-button:active {
+  transform: translateY(0);
+}
+
+/* Zapelite Gradient Heading Text */
+.gradient-heading {
+  background: linear-gradient(to right, #222222 0%, rgba(34, 34, 34, 0.65) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-blue {
+  background: linear-gradient(to right, #0066FF, #00C6FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Smooth Modern Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #07090e;
+  background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e2638;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #d4af37;
+  background: #0066FF;
 }
 
-/* Glassmorphism utility */
-.glass-panel {
-  background: rgba(11, 15, 23, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Custom Card Transitions */
+.zap-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.glow-accent {
-  box-shadow: 0 0 35px -5px rgba(212, 175, 55, 0.15);
+.zap-card:hover {
+  box-shadow: 0 12px 30px -10px rgba(0, 102, 255, 0.12);
+  border-color: #bfdbfe;
 }
