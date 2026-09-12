@@ -81,6 +81,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, user: updated, message: `Role updated to ${role}.` });
     }
 
+    if (action === 'revoke' || action === 'remove_access') {
+      const updated = UsersDB.revokeAccess(userId);
+      if (!updated) return NextResponse.json({ error: 'Cannot revoke root Super Admin or user not found' }, { status: 400 });
+      return NextResponse.json({ success: true, user: updated, message: `Access for ${updated.name} has been revoked.` });
+    }
+
+    if (action === 'delete' || action === 'delete_user') {
+      const deleted = UsersDB.deleteUser(userId);
+      if (!deleted) return NextResponse.json({ error: 'Cannot delete root Super Admin or user not found' }, { status: 400 });
+      return NextResponse.json({ success: true, message: 'User account has been permanently removed.' });
+    }
+
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: any) {
     console.error('Super admin action error:', error);

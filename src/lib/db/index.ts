@@ -932,6 +932,53 @@ export const UsersDB = {
     return user;
   },
 
+  revokeAccess(id: string): UserRecord | null {
+    const db = readDb();
+    const user = db.users?.find((u) => u.id === id);
+    if (!user) return null;
+    if (user.role === 'super_admin' && user.email === 'admin@passionfruit.io') {
+      return null; // Root Super Admin protection
+    }
+
+    user.status = 'rejected';
+    user.updatedAt = new Date().toISOString();
+
+    if (!db.activity) db.activity = [];
+    db.activity.unshift({
+      id: `act_${Date.now()}`,
+      type: 'user_rejected',
+      title: 'Access Revoked',
+      description: `Access for ${user.name} (${user.email}) was revoked by Super Admin.`,
+      timestamp: new Date().toISOString(),
+    });
+
+    writeDb(db);
+    return user;
+  },
+
+  deleteUser(id: string): boolean {
+    const db = readDb();
+    const user = db.users?.find((u) => u.id === id);
+    if (!user) return false;
+    if (user.role === 'super_admin' && user.email === 'admin@passionfruit.io') {
+      return false; // Root Super Admin protection
+    }
+
+    db.users = (db.users || []).filter((u) => u.id !== id);
+
+    if (!db.activity) db.activity = [];
+    db.activity.unshift({
+      id: `act_${Date.now()}`,
+      type: 'user_rejected',
+      title: 'User Deleted',
+      description: `Account for ${user.name} (${user.email}) was permanently removed.`,
+      timestamp: new Date().toISOString(),
+    });
+
+    writeDb(db);
+    return true;
+  },
+
   getAdminMetrics(): AdminMetrics {
     const db = readDb();
     const users = db.users || [];
