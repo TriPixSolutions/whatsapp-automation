@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
@@ -35,9 +35,10 @@ export default function SetupGuidePage() {
   const [copiedToken, setCopiedToken] = useState(false);
 
   // User input credentials
-  const [phoneId, setPhoneId] = useState('109823485764321');
-  const [wabaId, setWabaId] = useState('102938475610293');
-  const [accessToken, setAccessToken] = useState('EAAG_SAMPLE_META_ACCESS_TOKEN_REPLACE_WITH_YOURS');
+  const [phoneId, setPhoneId] = useState('');
+  const [wabaId, setWabaId] = useState('');
+  const [accessToken, setAccessToken] = useState('');
+  const [verifyToken, setVerifyToken] = useState('passion_fruit_verify_token_2025');
   const [isSaved, setIsSaved] = useState(false);
 
   // Live WhatsApp Test Sender
@@ -50,11 +51,21 @@ export default function SetupGuidePage() {
   const [isVerifyingWebhook, setIsVerifyingWebhook] = useState(false);
   const [webhookStatus, setWebhookStatus] = useState<any>(null);
 
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.phoneNumberId) setPhoneId(data.phoneNumberId);
+        if (data.wabaId) setWabaId(data.wabaId);
+        if (data.accessToken) setAccessToken(data.accessToken);
+        if (data.verifyToken) setVerifyToken(data.verifyToken);
+      })
+      .catch((err) => console.warn('Could not load settings in setup guide:', err));
+  }, []);
+
   const webhookUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/api/webhooks/meta`
-    : 'https://whatsapp-auto-saas.vercel.app/api/webhooks/meta';
-  
-  const verifyToken = 'apex_luxury_secret_token_2025';
+    ? `${window.location.origin}/api/webhook/whatsapp`
+    : 'https://whatsapp-auto-saas.vercel.app/api/webhook/whatsapp';
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -68,10 +79,24 @@ export default function SetupGuidePage() {
     setTimeout(() => setCopiedToken(false), 2000);
   };
 
-  const handleSaveCredentials = (e: React.FormEvent) => {
+  const handleSaveCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumberId: phoneId.trim(),
+          wabaId: wabaId.trim(),
+          accessToken: accessToken.trim(),
+          verifyToken: verifyToken.trim(),
+        }),
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      alert('Failed to save credentials: ' + err.message);
+    }
   };
 
   const handleTestWebhook = async () => {
@@ -80,7 +105,7 @@ export default function SetupGuidePage() {
     try {
       const challenge = `pf_test_${Date.now()}`;
       const res = await fetch(
-        `/api/webhooks/meta?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(
+        `/api/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(
           verifyToken
         )}&hub.challenge=${challenge}`
       );
@@ -120,27 +145,34 @@ export default function SetupGuidePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          recipient: testPhoneNumber.trim(),
-          type: 'text',
-          content: { text: testMessageText },
+          to: testPhoneNumber.trim(),
+          messageType: 'text',
+          text: testMessageText,
         }),
       });
       const data = await res.json();
-      setTestSuccess({
-        success: true,
-        recipient: testPhoneNumber,
-        messageId: data.messageId || `wamid.HBgL${Date.now()}`,
-        status: 'delivered',
-        note: 'WhatsApp message dispatched successfully to ' + testPhoneNumber,
-      });
+      if (data.success) {
+        setTestSuccess({
+          success: true,
+          recipient: testPhoneNumber,
+          messageId: data.message?.metaMessageId || `wamid.${Date.now()}`,
+          status: 'delivered',
+          note: 'WhatsApp message dispatched successfully to ' + testPhoneNumber,
+        });
+      } else {
+        setTestSuccess({
+          success: false,
+          recipient: testPhoneNumber,
+          error: data.error || 'Meta Cloud API rejected dispatch.',
+          note: data.error || 'Verify your Phone Number ID and Access Token in Settings.',
+        });
+      }
     } catch (err: any) {
-      // Demo fallback if network offline
       setTestSuccess({
-        success: true,
+        success: false,
         recipient: testPhoneNumber,
-        messageId: `wamid.HBgL${Date.now()}`,
-        status: 'delivered',
-        note: 'Simulated WhatsApp message dispatched successfully to ' + testPhoneNumber,
+        error: err.message,
+        note: 'Failed to communicate with local API: ' + err.message,
       });
     } finally {
       setIsSending(false);
