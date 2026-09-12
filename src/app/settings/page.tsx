@@ -26,21 +26,22 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getStoredAdminCredentials, saveAdminCredentials } from '@/lib/auth-admin';
+import { getMetaCredentials, saveMetaCredentials } from '@/lib/meta';
 import Link from 'next/link';
 
 export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
-  const [token, setToken] = useState('EAAG_SAMPLE_TOKEN_REPLACE_WITH_REAL_META_GRAPH_API_USER_TOKEN');
-  const [phoneId, setPhoneId] = useState('109823485764321');
-  const [wabaId, setWabaId] = useState('102938475610293');
-  const [verifyToken, setVerifyToken] = useState('apex_luxury_secret_token_2025');
+  const [token, setToken] = useState('');
+  const [phoneId, setPhoneId] = useState('');
+  const [wabaId, setWabaId] = useState('');
+  const [verifyToken, setVerifyToken] = useState('passion_fruit_verify_token_2025');
   const [isSaved, setIsSaved] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [webhookTestResult, setWebhookTestResult] = useState<any>(null);
 
   // Super Admin Credentials state
-  const [adminUser, setAdminUser] = useState('admin');
-  const [adminPass, setAdminPass] = useState('passionfruit2025');
+  const [adminUser, setAdminUser] = useState('User 1');
+  const [adminPass, setAdminPass] = useState('0725');
   const [adminSaved, setAdminSaved] = useState(false);
 
   // Subdomain state
@@ -51,11 +52,17 @@ export default function SettingsPage() {
     const creds = getStoredAdminCredentials();
     if (creds.username) setAdminUser(creds.username);
     if (creds.password) setAdminPass(creds.password);
+
+    const metaCreds = getMetaCredentials();
+    if (metaCreds.accessToken) setToken(metaCreds.accessToken);
+    if (metaCreds.phoneNumberId) setPhoneId(metaCreds.phoneNumberId);
+    if (metaCreds.wabaId) setWabaId(metaCreds.wabaId);
+    if (metaCreds.verifyToken) setVerifyToken(metaCreds.verifyToken);
   }, []);
 
   const webhookUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/api/webhooks/meta`
-    : 'https://whatsapp-auto-saas.vercel.app/api/webhooks/meta';
+    ? `${window.location.origin}/api/webhook/whatsapp`
+    : 'https://whatsapp-auto-saas.vercel.app/api/webhook/whatsapp';
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(webhookUrl);
@@ -65,6 +72,12 @@ export default function SettingsPage() {
 
   const handleSaveMeta = (e: React.FormEvent) => {
     e.preventDefault();
+    saveMetaCredentials({
+      accessToken: token.trim(),
+      phoneNumberId: phoneId.trim(),
+      wabaId: wabaId.trim(),
+      verifyToken: verifyToken.trim(),
+    });
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000);
   };
@@ -92,7 +105,7 @@ export default function SettingsPage() {
     try {
       const challenge = `test_challenge_${Date.now()}`;
       const res = await fetch(
-        `/api/webhooks/meta?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(
+        `/api/webhook/whatsapp?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(
           verifyToken
         )}&hub.challenge=${challenge}`
       );
@@ -117,7 +130,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] pl-64 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-60 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="Settings & Admin Security"

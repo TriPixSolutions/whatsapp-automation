@@ -58,106 +58,26 @@ interface ChatContact {
 }
 
 export function LiveTeamInbox() {
-  const [contacts, setContacts] = useState<ChatContact[]>([
-    {
-      id: 'c1',
-      name: 'Julian Vance',
-      phone: '+971 50 123 4567',
-      lastMessage: 'Show me',
-      time: '2m ago',
-      unread: 1,
-      tags: ['vip', 'teaser_list', 'ctwa-instagram'],
-      status: 'active',
-      assignedAgent: 'Sarah Jenkins',
-      adSource: 'Instagram Ad #4021 (Summer Drop)',
-    },
-    {
-      id: 'c2',
-      name: 'Lady Eleanor Sterling',
-      phone: '+44 7700 900123',
-      lastMessage: 'Something big is coming soon...',
-      time: '25m ago',
-      unread: 0,
-      tags: ['vip', 'teaser_list', 'haute-horlogerie'],
-      status: 'pending',
-      assignedAgent: 'Alex Mercer',
-      adSource: 'Meta Ad #1098 (VIP Exclusive)',
-    },
-    {
-      id: 'c3',
-      name: 'Marcus Castile',
-      phone: '+1 415 555 2671',
-      lastMessage: 'Can I see the specifications?',
-      time: '1h ago',
-      unread: 0,
-      tags: ['vip', 'luxury-villas'],
-      status: 'resolved',
-      assignedAgent: 'Passion Fruit AI Bot',
-      adSource: 'Direct WhatsApp Link',
-    },
-  ]);
-
-  const [activeContactId, setActiveContactId] = useState<string>('c1');
+  const [contacts, setContacts] = useState<ChatContact[]>([]);
+  const [activeContactId, setActiveContactId] = useState<string>('');
   const [messageInput, setMessageInput] = useState('');
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>({});
 
-  const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>({
-    c1: [
-      {
-        id: 'm1',
-        sender: 'agent',
-        text: 'Something big is coming soon. Are you ready?',
-        time: '12:00 PM',
-        status: 'delivered',
-      },
-      {
-        id: 'm2',
-        sender: 'user',
-        text: 'Show me',
-        time: '12:02 PM',
-        status: 'read',
-      },
-      {
-        id: 'm3',
-        sender: 'agent',
-        text: 'Discover our confidential collection. Select an option below:',
-        time: '12:02 PM',
-        status: 'delivered',
-        buttons: ['Product Specs', 'Pricing', 'Talk to Agent'],
-      },
-      {
-        id: 'm_note1',
-        sender: 'note',
-        text: 'Client clicked CTWA ad from Instagram. High purchase intent for Middle East villa portfolio.',
-        time: '12:05 PM',
-        isInternalNote: true,
-        authorName: 'Sarah Jenkins',
-      },
-    ],
-    c2: [
-      {
-        id: 'm4',
-        sender: 'agent',
-        text: 'Something big is coming soon. Are you ready?',
-        time: '11:40 AM',
-        status: 'delivered',
-      },
-    ],
-    c3: [
-      {
-        id: 'm5',
-        sender: 'user',
-        text: 'Can I see the specifications?',
-        time: '10:30 AM',
-        status: 'read',
-      },
-    ],
-  });
-
-  const activeContact = contacts.find((c) => c.id === activeContactId) || contacts[0];
-  const activeMessages = chatHistory[activeContactId] || [];
+  const activeContact = contacts.find((c) => c.id === activeContactId) || contacts[0] || {
+    id: '',
+    name: 'No Active Contact',
+    phone: '',
+    lastMessage: '',
+    time: '',
+    unread: 0,
+    tags: [],
+    status: 'pending' as const,
+    assignedAgent: 'Unassigned',
+  };
+  const activeMessages = activeContactId ? (chatHistory[activeContactId] || []) : [];
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -606,8 +526,8 @@ export function LiveTeamInbox() {
               }}
               className="w-full bg-slate-50 border border-[#E5E7EB] rounded-lg p-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#0066FF]"
             >
-              <option value="Sarah Jenkins">Sarah Jenkins (Lead Agent)</option>
-              <option value="Alex Mercer">Alex Mercer (Support)</option>
+              <option value="Agent 1">Agent 1 (Lead Agent)</option>
+              <option value="Agent 2">Agent 2 (Support)</option>
               <option value="Passion Fruit AI Bot">Passion Fruit AI Bot</option>
               <option value="Unassigned">Unassigned</option>
             </select>

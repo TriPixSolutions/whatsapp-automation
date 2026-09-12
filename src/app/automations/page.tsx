@@ -315,10 +315,10 @@ export default function AutomationsPage() {
                         </span>
                       </div>
                       <h4 className="text-xs font-bold text-slate-900 mt-1">
-                        Assign Chat to Sarah Jenkins in Shared Inbox
+                        Assign Chat to Support Agent in Shared Inbox
                       </h4>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Sends confirmation to customer and notifies agent via desktop push notification.
+                        Sends confirmation to customer and notifies on-duty agent in shared workspace.
                       </p>
                     </div>
                   </div>

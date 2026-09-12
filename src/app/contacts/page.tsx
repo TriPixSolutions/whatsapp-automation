@@ -21,38 +21,7 @@ import { cn, formatPhoneNumber } from '@/lib/utils';
 import { Contact } from '@/types';
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>([
-    {
-      id: '00000000-0000-0000-0000-000000000011',
-      workspace_id: '00000000-0000-0000-0000-000000000001',
-      phone_number: '+971501234567',
-      first_name: 'Julian',
-      last_name: 'Vance',
-      tags: ['vip', 'teaser_list', 'private-aviation'],
-      optin_status: true,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: '00000000-0000-0000-0000-000000000012',
-      workspace_id: '00000000-0000-0000-0000-000000000001',
-      phone_number: '+447700900123',
-      first_name: 'Lady Eleanor',
-      last_name: 'Sterling',
-      tags: ['vip', 'teaser_list', 'haute-horlogerie'],
-      optin_status: true,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: '00000000-0000-0000-0000-000000000013',
-      workspace_id: '00000000-0000-0000-0000-000000000001',
-      phone_number: '+14155552671',
-      first_name: 'Marcus',
-      last_name: 'Castile',
-      tags: ['vip', 'teaser_list', 'luxury-villas'],
-      optin_status: true,
-      created_at: new Date().toISOString(),
-    },
-  ]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
 
   const [search, setSearch] = useState('');
   const [selectedTag, setSelectedTag] = useState<string>('all');
@@ -200,53 +169,87 @@ export default function ContactsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-[#555555]">
-              <thead className="bg-slate-50 text-[10px] uppercase text-[#777777] tracking-wider border-b border-[#E5E7EB]">
-                <tr>
-                  <th className="p-4">Contact Name</th>
-                  <th className="p-4">Phone Number</th>
-                  <th className="p-4">Audience Tags</th>
-                  <th className="p-4">Opt-In Status</th>
-                  <th className="p-4 text-right">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E5E7EB] font-sans">
-                {filtered.map((contact) => (
-                  <tr key={contact.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-4 font-semibold text-[#222222]">
-                      {contact.first_name} {contact.last_name || ''}
-                    </td>
-                    <td className="p-4 font-mono text-[#0066FF] font-semibold">
-                      {contact.phone_number}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        {contact.tags.map((tag, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-[10px] font-mono text-[#0066FF] border border-blue-100"
-                          >
-                            <Tag className="w-2.5 h-2.5 opacity-60" />
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Opted In
-                      </span>
-                    </td>
-                    <td className="p-4 text-right text-[#777777] font-mono text-[11px]">
-                      {new Date(contact.created_at).toLocaleDateString()}
-                    </td>
+          {filtered.length === 0 ? (
+            <div className="py-16 px-4 flex flex-col items-center justify-center text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-[#C4B5FD] text-[#7C3AED] flex items-center justify-center">
+                <Users className="w-6 h-6" />
+              </div>
+              <div className="space-y-1 max-w-sm">
+                <h4 className="text-sm font-bold text-[#0D0F2D]">
+                  {search || selectedTag !== 'all' ? 'No matching contacts' : 'No contacts in directory'}
+                </h4>
+                <p className="text-xs text-[#64748B] leading-relaxed">
+                  {search || selectedTag !== 'all'
+                    ? 'Try adjusting your search query or tag filter.'
+                    : 'Import your customer phone directory via CSV or add a customer contact to begin messaging.'}
+                </p>
+              </div>
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  onClick={() => setShowImporter(true)}
+                  className="px-4 py-2 rounded-xl bg-[#F4F6FB] hover:bg-purple-50 border border-[#E2E8F0] hover:border-[#C4B5FD] text-xs font-bold text-[#0D0F2D] hover:text-[#7C3AED] transition-all flex items-center gap-1.5"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#7C3AED]" />
+                  <span>Bulk Import CSV</span>
+                </button>
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="gradient-button text-xs px-4 py-2 rounded-xl font-bold text-white shadow-pf-btn flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add First Contact</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-[#555555]">
+                <thead className="bg-slate-50 text-[10px] uppercase text-[#777777] tracking-wider border-b border-[#E5E7EB]">
+                  <tr>
+                    <th className="p-4">Contact Name</th>
+                    <th className="p-4">Phone Number</th>
+                    <th className="p-4">Audience Tags</th>
+                    <th className="p-4">Opt-In Status</th>
+                    <th className="p-4 text-right">Created</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB] font-sans">
+                  {filtered.map((contact) => (
+                    <tr key={contact.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-4 font-semibold text-[#222222]">
+                        {contact.first_name} {contact.last_name || ''}
+                      </td>
+                      <td className="p-4 font-mono text-[#0066FF] font-semibold">
+                        {contact.phone_number}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          {contact.tags.map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-[10px] font-mono text-[#0066FF] border border-blue-100"
+                            >
+                              <Tag className="w-2.5 h-2.5 opacity-60" />
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Opted In
+                        </span>
+                      </td>
+                      <td className="p-4 text-right text-[#777777] font-mono text-[11px]">
+                        {new Date(contact.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* Add Contact Modal */}
@@ -286,7 +289,7 @@ export default function ContactsPage() {
                       required
                       value={newFirstName}
                       onChange={(e) => setNewFirstName(e.target.value)}
-                      placeholder="Julian"
+                      placeholder="John"
                       className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3 py-2 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                     />
                   </div>
@@ -296,7 +299,7 @@ export default function ContactsPage() {
                       type="text"
                       value={newLastName}
                       onChange={(e) => setNewLastName(e.target.value)}
-                      placeholder="Vance"
+                      placeholder="Doe"
                       className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3 py-2 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                     />
                   </div>

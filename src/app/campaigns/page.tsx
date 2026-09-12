@@ -66,29 +66,15 @@ const META_TEMPLATES = [
 
 export default function CampaignsPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState('teaser_alert');
-  const [campaignName, setCampaignName] = useState('Exclusive Teaser Drop - Fall Collection');
-  const [targetTag, setTargetTag] = useState('teaser_list');
-  const [var1, setVar1] = useState('Julian');
-  const [var2, setVar2] = useState('Grand Complication Watch');
-  const [var3, setVar3] = useState('PF-9824');
+  const [campaignName, setCampaignName] = useState('');
+  const [targetTag, setTargetTag] = useState('all');
+  const [var1, setVar1] = useState('');
+  const [var2, setVar2] = useState('');
+  const [var3, setVar3] = useState('');
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<any>(null);
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([
-    {
-      id: '00000000-0000-0000-0000-000000000021',
-      workspace_id: '00000000-0000-0000-0000-000000000001',
-      campaign_name: 'Exclusive Teaser Drop - Fall Collection',
-      template_name: 'teaser_alert',
-      target_tag: 'teaser_list',
-      status: 'completed',
-      total_recipients: 3,
-      sent_count: 3,
-      failed_count: 0,
-      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
-      completed_at: new Date(Date.now() - 3600000 * 2 + 1500).toISOString(),
-    },
-  ]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
   const activeTemplate = META_TEMPLATES.find((t) => t.id === selectedTemplateId) || META_TEMPLATES[0];
 
@@ -239,7 +225,7 @@ export default function CampaignsPage() {
                         type="text"
                         value={var1}
                         onChange={(e) => setVar1(e.target.value)}
-                        placeholder="Julian"
+                        placeholder="e.g. Alex"
                         className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                       />
                     </div>
@@ -249,7 +235,7 @@ export default function CampaignsPage() {
                         type="text"
                         value={var2}
                         onChange={(e) => setVar2(e.target.value)}
-                        placeholder="Grand Complication"
+                        placeholder="e.g. Watch or Shoes"
                         className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                       />
                     </div>
@@ -259,7 +245,7 @@ export default function CampaignsPage() {
                         type="text"
                         value={var3}
                         onChange={(e) => setVar3(e.target.value)}
-                        placeholder="PF-9824"
+                        placeholder="e.g. ORD-1001"
                         className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                       />
                     </div>
@@ -333,50 +319,60 @@ export default function CampaignsPage() {
             Recent Broadcast Campaigns (campaigns table)
           </h3>
 
-          <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
-            <table className="w-full text-left text-xs text-[#555555]">
-              <thead className="bg-slate-50 text-[10px] uppercase text-[#777777] tracking-wider border-b border-[#E5E7EB]">
-                <tr>
-                  <th className="p-3.5">Campaign Name</th>
-                  <th className="p-3.5">Template</th>
-                  <th className="p-3.5">Target Tag</th>
-                  <th className="p-3.5">Status</th>
-                  <th className="p-3.5">Sent / Total</th>
-                  <th className="p-3.5 text-right">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E5E7EB] font-mono text-[11px]">
-                {campaigns.map((camp) => (
-                  <tr key={camp.id} className="hover:bg-slate-50/50">
-                    <td className="p-3.5 font-sans font-semibold text-[#222222]">{camp.campaign_name}</td>
-                    <td className="p-3.5 text-[#0066FF]">{camp.template_name}</td>
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-[#555555] text-[10px]">
-                        {camp.target_tag}
-                      </span>
-                    </td>
-                    <td className="p-3.5">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] uppercase font-semibold',
-                          camp.status === 'completed'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                        )}
-                      >
-                        <CheckCheck className="w-3 h-3" />
-                        {camp.status}
-                      </span>
-                    </td>
-                    <td className="p-3.5">{camp.sent_count || camp.total_recipients} / {camp.total_recipients}</td>
-                    <td className="p-3.5 text-right text-[#777777] font-sans">
-                      {new Date(camp.created_at).toLocaleDateString()}
-                    </td>
+          {campaigns.length === 0 ? (
+            <div className="py-12 px-4 rounded-xl border border-[#E5E7EB] bg-slate-50 flex flex-col items-center justify-center text-center space-y-2">
+              <Layers className="w-8 h-8 text-slate-400" />
+              <h4 className="text-xs font-bold text-[#222222]">No broadcast campaigns dispatched yet</h4>
+              <p className="text-[11px] text-[#777777] max-w-sm">
+                Compose a Meta template broadcast above and click Dispatch to reach your customers.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+              <table className="w-full text-left text-xs text-[#555555]">
+                <thead className="bg-slate-50 text-[10px] uppercase text-[#777777] tracking-wider border-b border-[#E5E7EB]">
+                  <tr>
+                    <th className="p-3.5">Campaign Name</th>
+                    <th className="p-3.5">Template</th>
+                    <th className="p-3.5">Target Tag</th>
+                    <th className="p-3.5">Status</th>
+                    <th className="p-3.5">Sent / Total</th>
+                    <th className="p-3.5 text-right">Created</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB] font-mono text-[11px]">
+                  {campaigns.map((camp) => (
+                    <tr key={camp.id} className="hover:bg-slate-50/50">
+                      <td className="p-3.5 font-sans font-semibold text-[#222222]">{camp.campaign_name}</td>
+                      <td className="p-3.5 text-[#0066FF]">{camp.template_name}</td>
+                      <td className="p-3.5">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-[#555555] text-[10px]">
+                          {camp.target_tag}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] uppercase font-semibold',
+                            camp.status === 'completed'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 border border-amber-200'
+                          )}
+                        >
+                          <CheckCheck className="w-3 h-3" />
+                          {camp.status}
+                        </span>
+                      </td>
+                      <td className="p-3.5">{camp.sent_count || camp.total_recipients} / {camp.total_recipients}</td>
+                      <td className="p-3.5 text-right text-[#777777] font-sans">
+                        {new Date(camp.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </main>
     </div>
