@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { AIChatWidget } from '@/components/AIChatWidget';
 
 export const metadata: Metadata = {
   title: 'Passion fruit | Clean, Modern, Scalable WhatsApp Business SaaS',
@@ -24,6 +25,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-[#F4F6FB] text-[#0D0F2D] antialiased selection:bg-[#7C3AED] selection:text-white font-sans">
         {children}
+        <AIChatWidget />
       </body>
     </html>
   );
