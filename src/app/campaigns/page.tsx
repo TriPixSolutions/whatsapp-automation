@@ -13,7 +13,10 @@ import {
   CheckCheck,
   AlertCircle,
   Loader2,
-  ExternalLink,
+  ShoppingBag,
+  ShoppingCart,
+  Truck,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Campaign } from '@/types';
@@ -24,27 +27,40 @@ const META_TEMPLATES = [
     name: 'teaser_alert',
     category: 'MARKETING',
     bodyText: 'Something big is coming soon. Are you ready?',
-    header: 'ZapElite Private Showcase',
+    header: 'Passion Fruit Private Showcase',
     footer: 'Official WhatsApp Business Verified',
     ctaButton: 'Discover Collection',
+    type: 'broadcast',
   },
   {
-    id: 'vip_invitation',
-    name: 'vip_invitation',
-    category: 'MARKETING',
-    bodyText: 'You are cordially invited to the private vernissage of our bespoke luxury collection.',
-    header: 'Exclusive Vernissage',
-    footer: 'R.S.V.P. Required',
-    ctaButton: 'Confirm Attendance',
+    id: 'shopify_abandoned_cart',
+    name: 'shopify_abandoned_cart',
+    category: 'E-COMMERCE',
+    bodyText: 'Hi {{1}}! You left your {{2}} in your cart. Complete your purchase now and enjoy 10% off with code PASSION10.',
+    header: 'Complete Your Order',
+    footer: 'Limited Time Offer • 1-Tap WhatsApp Checkout',
+    ctaButton: 'Resume Checkout',
+    type: 'commerce',
   },
   {
-    id: 'private_drop',
-    name: 'private_drop',
-    category: 'MARKETING',
-    bodyText: 'A limited edition release is now available exclusively to tier-1 patrons.',
-    header: 'Private Vault Drop',
-    footer: 'Allocations Limited',
-    ctaButton: 'Enter Vault',
+    id: 'order_confirmation',
+    name: 'order_confirmation',
+    category: 'TRANSACTIONAL',
+    bodyText: 'Thank you for your order {{1}}! Your item {{2}} has been confirmed and dispatched via Express Courier.',
+    header: 'Order Shipped #{{3}}',
+    footer: 'Real-time Tracking Active',
+    ctaButton: 'Track Live Delivery',
+    type: 'transactional',
+  },
+  {
+    id: 'catalog_showcase',
+    name: 'catalog_showcase',
+    category: 'COMMERCE',
+    bodyText: 'Explore our latest Passion Fruit WhatsApp Catalog collection. Tap below to browse products and place your order directly in chat.',
+    header: 'Digital Catalog Lookbook',
+    footer: 'Free Insured Worldwide Delivery',
+    ctaButton: 'View Catalog Items',
+    type: 'commerce',
   },
 ];
 
@@ -52,7 +68,9 @@ export default function CampaignsPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState('teaser_alert');
   const [campaignName, setCampaignName] = useState('Exclusive Teaser Drop - Fall Collection');
   const [targetTag, setTargetTag] = useState('teaser_list');
-  const [variable1, setVariable1] = useState('Fall Collection');
+  const [var1, setVar1] = useState('Julian');
+  const [var2, setVar2] = useState('Grand Complication Watch');
+  const [var3, setVar3] = useState('PF-9824');
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<any>(null);
 
@@ -74,6 +92,13 @@ export default function CampaignsPage() {
 
   const activeTemplate = META_TEMPLATES.find((t) => t.id === selectedTemplateId) || META_TEMPLATES[0];
 
+  const computedPreviewBody = activeTemplate.bodyText
+    .replace('{{1}}', var1 || 'Customer')
+    .replace('{{2}}', var2 || 'Item')
+    .replace('{{3}}', var3 || '1001');
+
+  const computedPreviewHeader = activeTemplate.header.replace('{{3}}', var3 || '1001');
+
   const handleDispatch = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsDispatching(true);
@@ -88,7 +113,7 @@ export default function CampaignsPage() {
           workspaceId: '00000000-0000-0000-0000-000000000001',
           templateName: activeTemplate.name,
           targetTag,
-          variables: { '1': variable1 },
+          variables: { '1': var1, '2': var2, '3': var3 },
         }),
       });
 
@@ -123,8 +148,8 @@ export default function CampaignsPage() {
     <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Meta Template Broadcasts & Marketing Suite"
-        subtitle="Schedule and dispatch high-throughput campaigns via Hostinger BullMQ queue"
+        title="Wati-Powered Broadcast & Commerce Marketing Suite"
+        subtitle="High-converting Meta template broadcasts, Shopify abandoned carts, and WhatsApp catalog messages"
       />
 
       <main className="p-8 space-y-8 flex-1">
@@ -135,16 +160,16 @@ export default function CampaignsPage() {
               <div className="border-b border-[#E5E7EB] pb-4">
                 <h3 className="text-base font-bold text-[#222222] flex items-center gap-2">
                   <Send className="w-4 h-4 text-[#0066FF]" />
-                  Campaign Broadcast Configuration
+                  Broadcast & E-Commerce Campaign Setup
                 </h3>
                 <p className="text-xs text-[#777777] mt-1">
-                  Select an approved Meta Cloud API template and map dynamic audience tags
+                  Deploy Meta Cloud API templates with dynamic variables and automated 50ms pacing
                 </p>
               </div>
 
               <form onSubmit={handleDispatch} className="space-y-5">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-[#222222]">Campaign Title</label>
+                  <label className="text-xs font-semibold text-[#222222]">Campaign Name</label>
                   <input
                     type="text"
                     required
@@ -157,7 +182,7 @@ export default function CampaignsPage() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-[#222222]">
-                      Meta-Approved Template
+                      Meta Template Selection
                     </label>
                     <span className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" /> Meta Approved
@@ -170,7 +195,7 @@ export default function CampaignsPage() {
                   >
                     {META_TEMPLATES.map((tpl) => (
                       <option key={tpl.id} value={tpl.id}>
-                        {tpl.name} ({tpl.category})
+                        {tpl.name} [{tpl.category}]
                       </option>
                     ))}
                   </select>
@@ -178,18 +203,17 @@ export default function CampaignsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#222222]">Target Audience Tag</label>
+                    <label className="text-xs font-semibold text-[#222222]">Target Segment Tag</label>
                     <select
                       value={targetTag}
                       onChange={(e) => setTargetTag(e.target.value)}
                       className="w-full bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
                     >
                       <option value="teaser_list">teaser_list (Test Flow 1)</option>
-                      <option value="vip">vip (All VIP Clients)</option>
-                      <option value="private-aviation">private-aviation</option>
+                      <option value="vip">vip (All High-Value Patrons)</option>
+                      <option value="ctwa-instagram">ctwa-instagram (Ad Leads)</option>
                       <option value="haute-horlogerie">haute-horlogerie</option>
-                      <option value="luxury-villas">luxury-villas</option>
-                      <option value="all">All Opted-In Contacts</option>
+                      <option value="all">All Opted-In Audience</option>
                     </select>
                   </div>
 
@@ -197,24 +221,48 @@ export default function CampaignsPage() {
                     <label className="text-xs font-semibold text-[#222222]">Rate Limiting Pacing</label>
                     <div className="flex items-center gap-2 bg-slate-50 border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 text-xs font-mono text-[#0066FF]">
                       <Clock className="w-3.5 h-3.5" />
-                      <span>50ms / message (20 req/s)</span>
+                      <span>50ms / message (20 msgs/sec)</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-[#E5E7EB] space-y-2">
-                  <span className="text-[11px] uppercase tracking-wider text-[#777777] font-bold">
-                    Template Variable Mapping ({'{{1}}'})
+                {/* Dynamic Variable Mapper (Wati Variable Feature) */}
+                <div className="p-4 rounded-xl bg-slate-50 border border-[#E5E7EB] space-y-3">
+                  <span className="text-[11px] uppercase tracking-wider text-slate-700 font-bold flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-500 fill-current" />
+                    Wati Dynamic Template Variable Substitution
                   </span>
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-[#555555]">Parameter 1: Collection / Drop Name</label>
-                    <input
-                      type="text"
-                      value={variable1}
-                      onChange={(e) => setVariable1(e.target.value)}
-                      placeholder="Fall Collection"
-                      className="w-full bg-white border border-[#E5E7EB] rounded-lg px-3 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[#555555]">{'{{1}}'} Customer Name</label>
+                      <input
+                        type="text"
+                        value={var1}
+                        onChange={(e) => setVar1(e.target.value)}
+                        placeholder="Julian"
+                        className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[#555555]">{'{{2}}'} Item / Category</label>
+                      <input
+                        type="text"
+                        value={var2}
+                        onChange={(e) => setVar2(e.target.value)}
+                        placeholder="Grand Complication"
+                        className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[#555555]">{'{{3}}'} Order ID / Code</label>
+                      <input
+                        type="text"
+                        value={var3}
+                        onChange={(e) => setVar3(e.target.value)}
+                        placeholder="PF-9824"
+                        className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 text-xs text-[#222222] focus:outline-none focus:border-[#0066FF]"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -226,12 +274,12 @@ export default function CampaignsPage() {
                   {isDispatching ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Pushing Job to Hostinger BullMQ Queue...</span>
+                      <span>Pushing to Hostinger BullMQ Queue...</span>
                     </>
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      <span>Dispatch Broadcast Campaign</span>
+                      <span>Dispatch WhatsApp Broadcast</span>
                     </>
                   )}
                 </button>
@@ -267,11 +315,12 @@ export default function CampaignsPage() {
               </span>
             </div>
             <PhoneMockup
-              businessName="ZapElite Concierge"
+              businessName="Passion Fruit Concierge"
               templateName={activeTemplate.name}
-              bodyText={activeTemplate.bodyText}
-              headerText={activeTemplate.header}
+              bodyText={computedPreviewBody}
+              headerText={computedPreviewHeader}
               footerText={activeTemplate.footer}
+              buttons={[{ id: 'btn_cta', title: activeTemplate.ctaButton }]}
               showInboundReply={false}
             />
           </div>

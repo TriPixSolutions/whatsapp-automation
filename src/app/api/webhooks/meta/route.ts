@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
             phoneNumberId: phoneNumberId || process.env.META_PHONE_NUMBER_ID || '109823485764321',
             accessToken,
             to: senderPhone,
-            headerText: payload.header || 'AURA Private Showcase',
+            headerText: payload.header || 'Passion Fruit Private Showcase',
             bodyText: payload.body || 'Select an option below:',
             footerText: payload.footer || 'Confidential • By Private Invitation',
             buttons: payload.buttons || [

@@ -34,7 +34,7 @@ export default function SettingsPage() {
 
   const webhookUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/webhooks/meta`
-    : 'https://whatsapp-automation.vercel.app/api/webhooks/meta';
+    : 'https://whatsapp-auto-saas.vercel.app/api/webhooks/meta';
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(webhookUrl);

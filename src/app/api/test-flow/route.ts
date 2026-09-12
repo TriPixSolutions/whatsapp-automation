@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
         phoneNumberId: process.env.META_PHONE_NUMBER_ID || '109823485764321',
         accessToken: process.env.META_ACCESS_TOKEN || 'EAAG_SAMPLE_TOKEN',
         to: testPhone,
-        headerText: 'AURA Private Showcase',
+        headerText: 'Passion Fruit Private Showcase',
         bodyText: 'Something big is coming soon. Are you ready? Discover our confidential collection below:',
         footerText: 'Confidential • By Private Invitation',
         buttons,
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
         status: 'sent' as const,
         payload: {
           trigger: 'Show me',
-          header: 'AURA Private Showcase',
+          header: 'Passion Fruit Private Showcase',
           body: 'Something big is coming soon. Are you ready? Discover our confidential collection below:',
           buttons: buttons.map((b: any) => b.title),
         },
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
         inboundTrigger: 'Show me',
         senderPhone: testPhone,
         interactiveResponse: {
-          header: 'AURA Private Showcase',
+          header: 'Passion Fruit Private Showcase',
           body: 'Something big is coming soon. Are you ready? Discover our confidential collection below:',
           buttons: ['Product Specs', 'Pricing', 'Talk to Agent'],
           metaMessageId: outboundMetaId,

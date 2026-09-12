@@ -32,7 +32,7 @@ export const mockStore: {
 } = {
   workspace: {
     id: '00000000-0000-0000-0000-000000000001',
-    name: 'AURA Private Luxury Agency',
+    name: 'Passion Fruit Enterprise Agency',
     meta_access_token: process.env.META_ACCESS_TOKEN || 'EAAG_SAMPLE_TOKEN',
     phone_number_id: process.env.META_PHONE_NUMBER_ID || '109823485764321',
     waba_id: process.env.META_WABA_ID || '102938475610293',
@@ -123,7 +123,7 @@ export const mockStore: {
       type: 'interactive' as const,
       status: 'read' as const,
       payload: {
-        header: 'AURA Private Showcase',
+        header: 'Passion Fruit Showcase',
         body: 'Something big is coming soon. Are you ready? Discover our confidential collection below:',
         buttons: ['Product Specs', 'Pricing', 'Talk to Agent'],
       },
@@ -137,7 +137,7 @@ export const mockStore: {
       trigger_keyword: 'Show me',
       action_type: 'buttons' as const,
       action_payload: {
-        header: 'AURA Private Showcase',
+        header: 'Passion Fruit Showcase',
         body: 'Something big is coming soon. Are you ready? Discover our confidential collection below:',
         footer: 'Confidential • By Private Invitation',
         buttons: [

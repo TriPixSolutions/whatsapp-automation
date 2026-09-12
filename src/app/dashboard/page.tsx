@@ -25,6 +25,9 @@ import {
   MessageSquare,
   ShieldCheck,
   CheckCircle2,
+  Megaphone,
+  ArrowUpRight,
+  ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -90,13 +93,43 @@ export default function DashboardPage() {
 
   const capabilities = [
     { name: 'Integrations', icon: Globe, href: '/settings' },
-    { name: 'CRM', icon: Users, href: '/contacts' },
+    { name: 'Audience CRM', icon: Users, href: '/contacts' },
     { name: 'Team Inbox', icon: Inbox, href: '#team-inbox' },
-    { name: 'Analytics', icon: BarChart3, href: '/dashboard' },
+    { name: 'CTWA Ads', icon: Megaphone, href: '#ctwa' },
     { name: 'Bulk Broadcast', icon: Send, href: '/campaigns' },
-    { name: 'Inbox', icon: MessageSquare, href: '#team-inbox' },
-    { name: 'AI Chatbot', icon: Bot, href: '/automations' },
-    { name: 'Automation', icon: Zap, href: '/automations' },
+    { name: 'Live Chat', icon: MessageSquare, href: '#team-inbox' },
+    { name: 'No-Code Bot', icon: Bot, href: '/automations' },
+    { name: 'Wati AI', icon: Sparkles, href: '#team-inbox' },
+  ];
+
+  const ctwaCampaigns = [
+    {
+      name: 'Summer Villa Drop #4021',
+      platform: 'Instagram Reels & Stories',
+      spend: '$640.00',
+      chatsStarted: 462,
+      costPerChat: '$1.38',
+      conversionRate: '24.1%',
+      status: 'active',
+    },
+    {
+      name: 'Haute Horlogerie Private Preview',
+      platform: 'Facebook Feed & Messenger',
+      spend: '$420.00',
+      chatsStarted: 298,
+      costPerChat: '$1.41',
+      conversionRate: '19.8%',
+      status: 'active',
+    },
+    {
+      name: 'VIP Client Concierge Re-engagement',
+      platform: 'Instagram Feed Direct',
+      spend: '$180.00',
+      chatsStarted: 132,
+      costPerChat: '$1.36',
+      conversionRate: '28.5%',
+      status: 'active',
+    },
   ];
 
   const runTestFlow1 = async () => {
@@ -198,19 +231,19 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-[#FAFAFA] pl-64 flex flex-col font-sans">
       <Sidebar />
       <Header
-        title="Executive Performance & Broadcast Console"
-        subtitle="Meta Cloud API v18.0 • Hostinger BullMQ Cluster • Real-time Delivery Ledger"
+        title="Passion Fruit Executive Broadcast & Operations Console"
+        subtitle="Meta Cloud API v18.0 • Wati AI Conversational Copilot • Hostinger BullMQ Pacing"
       />
 
       <main className="p-8 space-y-8 flex-1">
-        {/* 1. Zapelite 8-Capability Launcher */}
+        {/* 1. Passion Fruit 8-Capability Launcher */}
         <section className="p-6 rounded-2xl bg-white border border-[#E5E7EB] shadow-zap-sm">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-[#777777]">
-              ZapElite Core Suites & Quick Access
+              Passion Fruit Core Capability Launchpad
             </span>
             <span className="text-xs font-semibold text-[#0066FF] font-mono">
-              Meta WhatsApp Business Verified
+              Meta WhatsApp Business Cloud Verified
             </span>
           </div>
           <div className="grid grid-cols-4 md:grid-cols-8 gap-3 justify-items-center">
@@ -223,7 +256,7 @@ export default function DashboardPage() {
                   className="flex flex-col items-center gap-2 group cursor-pointer"
                 >
                   <div className="w-12 h-12 bg-slate-50 border-2 border-white p-2.5 rounded-xl transition-all duration-200 group-hover:bg-blue-50 group-hover:shadow-md group-hover:scale-105 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-[#0066FF] group-hover:text-[#00C6FF] transition-colors" />
+                    <Icon className="w-5 h-5 text-[#0066FF] group-hover:text-fuchsia-600 transition-colors" />
                   </div>
                   <p className="font-semibold text-[#555555] group-hover:text-[#222222] text-[11px] text-center transition-colors">
                     {cap.name}
@@ -234,7 +267,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 2. Zapelite KPI Cards */}
+        {/* 2. KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <StatCard
             title="Total Messages Dispatched"
@@ -261,21 +294,81 @@ export default function DashboardPage() {
             accent="purple"
           />
           <StatCard
-            title="Active Qualified Leads"
-            value="432"
-            trend="+27.5%"
-            subtitle="Inquiries this cycle"
-            icon={TrendingUp}
+            title="CTWA Ad Leads Captured"
+            value="892"
+            trend="+32.6%"
+            subtitle="Instagram & FB Click-to-WhatsApp"
+            icon={Megaphone}
             accent="amber"
           />
         </div>
 
-        {/* 3. Zapelite Live Team Inbox */}
+        {/* 3. Live Team Inbox with Wati AI Copilot */}
         <section id="team-inbox" className="space-y-3">
           <LiveTeamInbox />
         </section>
 
-        {/* 4. Test Scenario Lab (Verification Engine) */}
+        {/* 4. Click-to-WhatsApp Ads (CTWA) Meta Ads Tracker (Wati Feature) */}
+        <section id="ctwa" className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-5 shadow-zap-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E5E7EB] pb-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Megaphone className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  Click-to-WhatsApp Ads (CTWA) Meta Lead Tracker
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Track and auto-engage prospects who click your Instagram & Facebook ads directly into WhatsApp.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                Avg Cost / Chat: $1.39
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-[#E5E7EB]">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-50 text-[10px] uppercase text-slate-400 tracking-wider border-b border-[#E5E7EB]">
+                <tr>
+                  <th className="p-3.5">Meta Ad Campaign</th>
+                  <th className="p-3.5">Channel</th>
+                  <th className="p-3.5">Ad Spend</th>
+                  <th className="p-3.5">Chats Started</th>
+                  <th className="p-3.5">Cost / Conversation</th>
+                  <th className="p-3.5">Conversion</th>
+                  <th className="p-3.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#E5E7EB] font-mono text-[11px]">
+                {ctwaCampaigns.map((ad, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="p-3.5 font-sans font-bold text-slate-900">{ad.name}</td>
+                    <td className="p-3.5 font-sans text-purple-700 font-medium">{ad.platform}</td>
+                    <td className="p-3.5">{ad.spend}</td>
+                    <td className="p-3.5 font-bold text-emerald-600">+{ad.chatsStarted}</td>
+                    <td className="p-3.5">{ad.costPerChat}</td>
+                    <td className="p-3.5 font-semibold text-slate-800">{ad.conversionRate}</td>
+                    <td className="p-3.5 text-right">
+                      <Link
+                        href="/automations"
+                        className="text-[10px] font-sans font-semibold text-[#0066FF] hover:underline flex items-center justify-end gap-1"
+                      >
+                        Edit Bot Flow <ArrowUpRight className="w-3 h-3" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* 5. Test Scenario Lab (Verification Engine) */}
         <section id="test-lab" className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-6 shadow-zap-md">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E5E7EB] pb-4">
             <div className="space-y-1">
@@ -323,7 +416,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-50 border border-[#E5E7EB] space-y-1.5">
-                  <span className="text-xs font-bold text-[#00C6FF] uppercase">Test Flow 2</span>
+                  <span className="text-xs font-bold text-fuchsia-600 uppercase">Test Flow 2</span>
                   <p className="text-xs text-[#555555] leading-relaxed">
                     User replies <code className="text-[#222222] font-bold font-mono">&quot;Show me&quot;</code>. Webhook fires Meta Interactive Message with 3 Quick Reply buttons: <span className="text-[#222222] font-semibold">[Product Specs, Pricing, Talk to Agent]</span>.
                   </p>
@@ -357,10 +450,10 @@ export default function DashboardPage() {
                 </span>
               </div>
               <PhoneMockup
-                businessName="ZapElite Concierge"
+                businessName="Passion Fruit Concierge"
                 templateName="teaser_alert"
                 bodyText={mockupState.bodyText}
-                headerText="ZapElite Private Showcase"
+                headerText="Passion Fruit Private Showcase"
                 footerText="Official WhatsApp Business"
                 showInboundReply={mockupState.showInbound}
                 inboundText={mockupState.inboundText}
@@ -370,7 +463,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* 5. Live Message Delivery Ledger Table */}
+        {/* 6. Live Message Delivery Ledger Table */}
         <section className="rounded-2xl bg-white border border-[#E5E7EB] p-6 space-y-5 shadow-zap-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
