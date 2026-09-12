@@ -14,7 +14,11 @@ export async function POST(req: Request) {
     const provider = body.provider || 'email';
 
     if (!email || !email.includes('@')) {
-      return NextResponse.json({ error: 'Valid email is required.' }, { status: 400 });
+      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
+    }
+
+    if (provider === 'email' && (!password || password.length < 4)) {
+      return NextResponse.json({ error: 'Password must be at least 4 characters.' }, { status: 400 });
     }
 
     // Check if user already exists
@@ -22,18 +26,21 @@ export async function POST(req: Request) {
     if (!user) {
       user = UsersDB.create({
         email,
+        password,
         name: name || email.split('@')[0],
         company,
         provider: provider === 'google' ? 'google' : 'email',
         role: 'user',
-        status: 'unrequested',
+        status: 'new_user',
       });
     }
+
+    const redirectTo = user.status === 'approved' ? '/dashboard' : '/onboarding';
 
     const response = NextResponse.json({
       success: true,
       user,
-      redirectTo: user.status === 'approved' ? '/dashboard' : '/welcome',
+      redirectTo,
     });
 
     // Set secure session cookies

@@ -3,16 +3,16 @@
 import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { User, Lock, AlertCircle, CheckCircle2, ArrowRight, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Mail, Lock, AlertCircle, CheckCircle2, ArrowRight, ShieldCheck, RefreshCw } from 'lucide-react';
 import PassionFruitLogo from '@/components/PassionFruitLogo';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTarget = searchParams.get('redirect') || '/dashboard';
+  const redirectTarget = searchParams.get('redirect') || '';
 
-  const [username, setUsername] = useState('User 1');
-  const [password, setPassword] = useState('0725');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -27,50 +27,57 @@ function LoginForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          emailOrUsername: username.trim(),
+          emailOrUsername: emailOrUsername.trim(),
           password: password.trim(),
           provider: 'email',
+          redirect: redirectTarget,
         }),
       });
 
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.success) {
         setSuccess(true);
         setTimeout(() => {
-          router.push(data.redirectTo || redirectTarget);
+          router.push(data.redirectTo || '/onboarding');
           router.refresh();
         }, 400);
       } else {
-        setErrorMsg(data.error || 'Invalid credentials.');
+        setErrorMsg(data.error || 'Invalid email or password.');
         setLoading(false);
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Login failed');
+      setErrorMsg(err.message || 'Login failed. Please try again.');
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'google',
-          email: 'google.auth.user@example.com',
-          name: 'Google User',
+          email: 'google.workspace.user@example.com',
+          name: 'Google Verified User',
+          redirect: redirectTarget,
         }),
       });
       const data = await res.json();
-      if (res.ok) {
-        router.push(data.redirectTo || '/welcome');
+      if (res.ok && data.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          router.push(data.redirectTo || '/onboarding');
+          router.refresh();
+        }, 400);
       } else {
-        setErrorMsg(data.error || 'Google login failed');
+        setErrorMsg(data.error || 'Google authentication failed.');
+        setLoading(false);
       }
     } catch (e: any) {
-      setErrorMsg(e.message);
-    } finally {
+      setErrorMsg(e.message || 'Google sign in error.');
       setLoading(false);
     }
   };
@@ -84,7 +91,7 @@ function LoginForm() {
         </Link>
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 border border-[#C4B5FD] text-[11px] font-bold text-[#7C3AED] uppercase tracking-wider">
           <ShieldCheck className="w-3.5 h-3.5" />
-          Production Console Sign In
+          Enterprise Sign In
         </div>
         <p className="text-xs text-[#64748B] max-w-xs">
           Sign in to access your WhatsApp Automation Console &amp; Shared Team Inbox
@@ -97,8 +104,8 @@ function LoginForm() {
         <button
           type="button"
           onClick={handleGoogleLogin}
-          disabled={loading}
-          className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl text-xs font-bold text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center gap-2.5 shadow-2xs"
+          disabled={loading || success}
+          className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl text-xs font-bold text-slate-700 hover:text-slate-900 transition-all flex items-center justify-center gap-2.5 shadow-2xs cursor-pointer disabled:opacity-50"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24">
             <path
@@ -118,34 +125,16 @@ function LoginForm() {
               d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
             />
           </svg>
-          <span>Continue with Google</span>
+          <span>Sign in with Google</span>
         </button>
 
         <div className="flex items-center gap-3">
           <div className="h-px bg-slate-200 flex-1" />
           <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
-            or email
+            or with email
           </span>
           <div className="h-px bg-slate-200 flex-1" />
         </div>
-
-        {/* Quick Credentials Helper Card */}
-        <button
-          type="button"
-          onClick={() => {
-            setUsername('User 1');
-            setPassword('0725');
-          }}
-          className="w-full p-2.5 rounded-xl bg-purple-50 hover:bg-purple-100/80 border border-purple-200 text-left transition-colors flex items-center justify-between"
-        >
-          <div className="text-xs">
-            <span className="font-bold text-[#7C3AED] block">🔑 Super Admin Quick Access:</span>
-            <span className="text-slate-600 font-mono text-[11px]">User 1 • 0725</span>
-          </div>
-          <span className="text-[10px] font-bold text-[#7C3AED] uppercase bg-white px-2 py-0.5 rounded-md shadow-2xs">
-            Click to fill
-          </span>
-        </button>
 
         {errorMsg && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
@@ -157,23 +146,23 @@ function LoginForm() {
         {success && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>Authorization successful. Entering workspace...</span>
+            <span>Authentication successful. Directing to workspace...</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-[#0D0F2D] block">
-              Username or Email
+              Email Address
             </label>
             <div className="relative">
-              <User className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="User 1 or name@company.com"
+                value={emailOrUsername}
+                onChange={(e) => setEmailOrUsername(e.target.value)}
+                placeholder="name@company.com"
                 className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl border border-[#CBD5E1] bg-slate-50 text-[#0D0F2D] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] transition-all"
               />
             </div>
@@ -190,8 +179,8 @@ function LoginForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••"
-                className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl border border-[#CBD5E1] bg-slate-50 text-[#0D0F2D] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] transition-all font-mono"
+                placeholder="••••••••"
+                className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl border border-[#CBD5E1] bg-slate-50 text-[#0D0F2D] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20 focus:border-[#7C3AED] transition-all"
               />
             </div>
           </div>
@@ -199,7 +188,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading || success}
-            className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] disabled:bg-[#C4B5FD] text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-purple-900/10 flex items-center justify-center gap-2 group"
+            className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] disabled:bg-[#C4B5FD] text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-purple-900/10 flex items-center justify-center gap-2 group cursor-pointer"
           >
             {loading ? (
               <>
@@ -223,7 +212,7 @@ function LoginForm() {
 
       {/* Sign Up Link */}
       <p className="text-center text-xs text-[#64748B]">
-        New to Passion Fruit?{' '}
+        Don&apos;t have an account yet?{' '}
         <Link href="/auth/signup" className="text-[#7C3AED] font-bold hover:underline">
           Create an Account
         </Link>
@@ -235,7 +224,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#F4F6FB] flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
-      <Suspense fallback={<div className="text-xs text-slate-400">Loading auth...</div>}>
+      <Suspense fallback={<div className="text-xs text-slate-400">Loading sign in...</div>}>
         <LoginForm />
       </Suspense>
     </div>

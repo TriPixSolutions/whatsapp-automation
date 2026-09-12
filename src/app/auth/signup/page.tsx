@@ -34,7 +34,7 @@ export default function SignupPage() {
 
       const data = await res.json();
       if (res.ok) {
-        router.push(data.redirectTo || '/welcome');
+        router.push(data.redirectTo || '/onboarding');
       } else {
         setErrorMsg(data.error || 'Registration failed');
       }
@@ -59,7 +59,7 @@ export default function SignupPage() {
         }),
       });
       const data = await res.json();
-      router.push(data.redirectTo || '/welcome');
+      router.push(data.redirectTo || '/onboarding');
     } catch (err: any) {
       setErrorMsg(err.message);
       setLoading(false);

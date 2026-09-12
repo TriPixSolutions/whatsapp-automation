@@ -98,8 +98,8 @@ export default function SettingsPage() {
   const [companyName, setCompanyName] = useState('Passion Fruit Luxury');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
   const [logoUrl, setLogoUrl] = useState('');
-  const [adminUsername, setAdminUsername] = useState('User 1');
-  const [adminPassword, setAdminPassword] = useState('0725');
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
 
   // Channels state
   const [whatsappConnected, setWhatsappConnected] = useState(false);

@@ -111,7 +111,7 @@ export interface Campaign {
 }
 
 export type UserRole = 'super_admin' | 'admin' | 'manager' | 'agent' | 'user';
-export type UserStatus = 'unrequested' | 'pending_approval' | 'approved' | 'rejected';
+export type UserStatus = 'new_user' | 'unrequested' | 'pending_approval' | 'approved' | 'rejected';
 
 export interface UserRecord {
   id: string;

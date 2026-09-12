@@ -5,8 +5,34 @@ import { UsersDB } from '@/lib/db';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+async function verifySuperAdmin() {
+  const cookieStore = await cookies();
+  const authCookie = cookieStore.get('pf_auth')?.value;
+  const roleCookie = cookieStore.get('pf_role')?.value;
+  const userId = cookieStore.get('pf_user_id')?.value;
+
+  if (authCookie !== 'authenticated') {
+    return false;
+  }
+
+  // Double check database record if userId is available
+  if (userId) {
+    const user = UsersDB.getById(userId);
+    if (user && user.role === 'super_admin') {
+      return true;
+    }
+  }
+
+  return roleCookie === 'super_admin';
+}
+
 export async function GET() {
   try {
+    const isAuthorized = await verifySuperAdmin();
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized: Super Admin access required.' }, { status: 403 });
+    }
+
     const allUsers = UsersDB.getAll();
     const pendingRequests = allUsers.filter((u) => u.status === 'pending_approval');
     const metrics = UsersDB.getAdminMetrics();
@@ -25,6 +51,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
+    const isAuthorized = await verifySuperAdmin();
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized: Super Admin access required.' }, { status: 403 });
+    }
+
     const body = await req.json();
     const { action, userId, role } = body;
 

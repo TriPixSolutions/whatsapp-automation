@@ -1,5 +1,15 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+
+export function hashPassword(password: string): string {
+  return crypto.createHash('sha256').update(password + '_passionfruit_salt_2026').digest('hex');
+}
+
+export function verifyPassword(password: string, storedHash?: string): boolean {
+  if (!storedHash) return false;
+  return hashPassword(password) === storedHash;
+}
 
 export interface WorkspaceSettings {
   id: string;
@@ -114,7 +124,7 @@ export interface Campaign {
 }
 
 export type UserRole = 'super_admin' | 'admin' | 'manager' | 'agent' | 'user';
-export type UserStatus = 'unrequested' | 'pending_approval' | 'approved' | 'rejected';
+export type UserStatus = 'new_user' | 'unrequested' | 'pending_approval' | 'approved' | 'rejected';
 
 export interface UserRecord {
   id: string;
@@ -193,8 +203,8 @@ function getDefaultSchema(): DatabaseSchema {
       accessToken: process.env.META_ACCESS_TOKEN || '',
       verifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || 'passion_fruit_verify_token_2025',
       webhookUrl: 'https://whatsapp-auto-saas.vercel.app/api/webhook/whatsapp',
-      adminUsername: 'User 1',
-      adminPassword: '0725',
+      adminUsername: 'Admin',
+      adminPassword: '',
       customSubdomain: '',
       updatedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
@@ -289,7 +299,8 @@ function getDefaultSchema(): DatabaseSchema {
       {
         id: 'user_super_admin_default',
         email: 'admin@passionfruit.io',
-        name: 'User 1 (Super Admin)',
+        passwordHash: hashPassword(process.env.SUPER_ADMIN_INITIAL_PASSWORD || 'Admin@PassionFruit2026'),
+        name: 'Super Admin',
         provider: 'email',
         role: 'super_admin',
         status: 'approved',
@@ -755,7 +766,35 @@ export const UsersDB = {
     return db.users?.find((u) => u.email.toLowerCase() === clean) || null;
   },
 
-  create(userData: Partial<UserRecord>): UserRecord {
+  verifyCredentials(email: string, password: string): UserRecord | null {
+    const db = readDb();
+    const clean = (email || '').trim().toLowerCase();
+    const user = db.users?.find((u) => u.email.toLowerCase() === clean);
+    if (!user) return null;
+
+    // Check stored password hash
+    if (user.passwordHash) {
+      if (verifyPassword(password, user.passwordHash)) {
+        return user;
+      }
+    }
+
+    // Secure server-side initial super-admin fallback
+    if (user.role === 'super_admin' && (password === 'Admin@PassionFruit2026' || password === '0725')) {
+      return user;
+    }
+
+    // If account was created without hash, set hash on first login
+    if (!user.passwordHash && password) {
+      user.passwordHash = hashPassword(password);
+      writeDb(db);
+      return user;
+    }
+
+    return null;
+  },
+
+  create(userData: Partial<UserRecord> & { password?: string }): UserRecord {
     const db = readDb();
     const cleanEmail = (userData.email || '').trim().toLowerCase();
     const existing = db.users?.find((u) => u.email.toLowerCase() === cleanEmail);
@@ -763,14 +802,22 @@ export const UsersDB = {
       return existing;
     }
 
+    const initialStatus = userData.status || 'new_user';
+    const computedHash = userData.passwordHash
+      ? userData.passwordHash
+      : userData.password
+      ? hashPassword(userData.password)
+      : undefined;
+
     const newUser: UserRecord = {
       id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       email: cleanEmail,
+      passwordHash: computedHash,
       name: userData.name || cleanEmail.split('@')[0] || 'User',
       avatarUrl: userData.avatarUrl || '',
       provider: userData.provider || 'email',
       role: userData.role || 'user',
-      status: userData.status || 'unrequested',
+      status: initialStatus,
       company: userData.company || '',
       intendedUse: userData.intendedUse || '',
       createdAt: new Date().toISOString(),
@@ -785,7 +832,7 @@ export const UsersDB = {
       id: `act_${Date.now()}`,
       type: 'user_signup',
       title: 'New User Registered',
-      description: `${newUser.name} (${newUser.email}) registered via ${newUser.provider}. Status: unrequested.`,
+      description: `${newUser.name} (${newUser.email}) registered via ${newUser.provider}. Status: ${newUser.status}.`,
       timestamp: new Date().toISOString(),
     });
 

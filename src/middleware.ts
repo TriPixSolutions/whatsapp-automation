@@ -21,25 +21,32 @@ export function middleware(request: NextRequest) {
 
   const isAuthenticated = authCookie?.value === 'authenticated';
   const role = roleCookie?.value || 'user';
-  // Default legacy sessions to approved for backward compatibility
-  const status = statusCookie?.value || (isAuthenticated && role === 'super_admin' ? 'approved' : 'unrequested');
+  const status = statusCookie?.value || (isAuthenticated && role === 'super_admin' ? 'approved' : 'new_user');
 
-  // 1. Super Admin hidden route guard
+  // 1. Backward compatibility redirects
+  if (pathname === '/welcome' || pathname.startsWith('/welcome/')) {
+    return NextResponse.redirect(new URL('/onboarding', request.url));
+  }
   if (pathname === '/super-admin' || pathname.startsWith('/super-admin/')) {
+    return NextResponse.redirect(new URL('/super-admin-control', request.url));
+  }
+
+  // 2. Isolated Super Admin route guard: /super-admin-control
+  if (pathname === '/super-admin-control' || pathname.startsWith('/super-admin-control/')) {
     if (!isAuthenticated) {
       const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('redirect', pathname);
+      loginUrl.searchParams.set('redirect', '/super-admin-control');
       return NextResponse.redirect(loginUrl);
     }
     if (role !== 'super_admin') {
-      // Non-super-admins are barred from /super-admin
-      return NextResponse.redirect(new URL(status === 'approved' ? '/dashboard' : '/welcome', request.url));
+      // Normal users cannot access this page. Redirect back to dashboard or onboarding.
+      return NextResponse.redirect(new URL(status === 'approved' ? '/dashboard' : '/onboarding', request.url));
     }
     return NextResponse.next();
   }
 
-  // 2. The "Welcome" / "Request Access" route
-  if (pathname === '/welcome') {
+  // 3. The "Onboarding" / "Request Access" route: /onboarding
+  if (pathname === '/onboarding') {
     if (!isAuthenticated) {
       return NextResponse.redirect(new URL('/auth/login', request.url));
     }
@@ -49,7 +56,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. Core Workspace Routes Protection
+  // 4. Core Workspace Routes Protection
   const isWorkspaceRoute = WORKSPACE_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
@@ -60,19 +67,19 @@ export function middleware(request: NextRequest) {
       loginUrl.searchParams.set('redirect', pathname);
       return NextResponse.redirect(loginUrl);
     }
-    // Gated state: if not approved, send to Request Access page
+    // Gated state: if not approved (new_user, pending_approval, rejected), route to onboarding
     if (status !== 'approved') {
-      return NextResponse.redirect(new URL('/welcome', request.url));
+      return NextResponse.redirect(new URL('/onboarding', request.url));
     }
     return NextResponse.next();
   }
 
-  // 4. If already logged in and approved, redirect away from login/signup
+  // 5. If already logged in and viewing login/signup, route accordingly
   if ((pathname === '/auth/login' || pathname === '/auth/signup') && isAuthenticated) {
     if (status === 'approved') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     } else {
-      return NextResponse.redirect(new URL('/welcome', request.url));
+      return NextResponse.redirect(new URL('/onboarding', request.url));
     }
   }
 

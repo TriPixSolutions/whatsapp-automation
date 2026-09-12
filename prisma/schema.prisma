@@ -152,6 +152,7 @@ enum UserRole {
 }
 
 enum UserStatus {
+  new_user
   unrequested
   pending_approval
   approved
@@ -166,7 +167,7 @@ model User {
   avatarUrl     String?
   provider      String      @default("email") // "email" | "google"
   role          UserRole    @default(user)
-  status        UserStatus  @default(unrequested)
+  status        UserStatus  @default(new_user)
   company       String?
   intendedUse   String?
   requestedAt   DateTime?
