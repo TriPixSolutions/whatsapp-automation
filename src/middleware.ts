@@ -43,6 +43,7 @@ const WORKSPACE_PAGES = [
 const WORKSPACE_API_PREFIXES = [
   '/api/messages',
   '/api/campaigns',
+  '/api/catalog',
   '/api/automations',
   '/api/contacts',
   '/api/settings',

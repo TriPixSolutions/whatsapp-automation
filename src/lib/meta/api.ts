@@ -407,4 +407,40 @@ export class MetaWhatsAppClient {
       };
     }
   }
+
+  /**
+   * 6. Send Single Product from Catalog
+   */
+  static async sendSingleProduct(options: import('./catalog').SingleProductOptions) {
+    const { sendSingleProductMessage } = await import('./catalog');
+    return sendSingleProductMessage(options);
+  }
+
+  /**
+   * 7. Send Multi-Product List from Catalog
+   */
+  static async sendMultiProduct(options: import('./catalog').MultiProductOptions) {
+    const { sendMultiProductMessage } = await import('./catalog');
+    return sendMultiProductMessage(options);
+  }
+
+  /**
+   * 8. Send WhatsApp Checkout Order & Payment Response
+   */
+  static async sendCheckout(options: import('./checkout').CheckoutOptions) {
+    const { sendCheckoutResponse } = await import('./checkout');
+    return sendCheckoutResponse(options);
+  }
+
+  /**
+   * 9. Sync Store Products to Meta Commerce Catalog Batch API
+   */
+  static async syncCatalog(options: import('./catalog').CatalogSyncOptions) {
+    const { syncProductsToMetaCatalog } = await import('./catalog');
+    return syncProductsToMetaCatalog(options);
+  }
 }
+
+export * from './catalog';
+export * from './checkout';
+

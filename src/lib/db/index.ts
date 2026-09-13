@@ -25,6 +25,7 @@ export interface WorkspaceSettings {
   appId?: string;
   appSecret?: string;
   adAccountId?: string;
+  catalogId?: string;
   tokenExpiresAt?: string;
   updatedAt: string;
   createdAt: string;

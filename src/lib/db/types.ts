@@ -6,6 +6,8 @@ export interface WorkspaceSettings {
   accessToken: string;
   verifyToken: string;
   webhookUrl: string;
+  catalogId?: string;
+  appSecret?: string;
   adminUsername: string;
   adminPassword: string;
   customSubdomain: string;

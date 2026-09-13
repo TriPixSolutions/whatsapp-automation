@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ContactsDB, CampaignsDB, MessagesDB, SettingsDB } from '@/lib/db';
-import { MetaWhatsAppClient } from '@/lib/meta/api';
+import { ContactsDB, CampaignsDB } from '@/lib/db';
+import { enqueueCampaignJob } from '@/lib/queue/campaignQueue';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +15,7 @@ export async function POST(request: NextRequest) {
       variables = {},
     } = body;
 
-    // 1. Fetch real target contacts from Database
+    // 1. Fetch target contacts from Database
     const targetContacts = ContactsDB.list({
       tag: targetTag === 'all' ? undefined : targetTag,
     });
@@ -27,11 +30,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Fetch Meta API credentials
-    const settings = SettingsDB.get();
-    const { phoneNumberId, accessToken } = settings;
-
-    // 3. Create Campaign record in Database
+    // 2. Create Campaign record with processing state
     const campaign = CampaignsDB.create({
       name: campaignName,
       templateName,
@@ -45,89 +44,20 @@ export async function POST(request: NextRequest) {
       variables,
     });
 
-    let sent = 0;
-    let failed = 0;
-
-    // 4. Iterate through contacts and send official Meta message
-    for (const contact of targetContacts) {
-      const recipientPhone = contact.phoneNumber;
-      let sendResult: any = { success: false };
-
-      if (phoneNumberId && accessToken && !accessToken.includes('SAMPLE_TOKEN')) {
-        // Construct template parameters with dynamic variables if provided
-        const var1 = variables['1'] || contact.firstName || 'Customer';
-        const var2 = variables['2'] || 'Exclusive Item';
-        const var3 = variables['3'] || 'PF-1001';
-
-        const components: any[] = [];
-        if (Object.keys(variables).length > 0) {
-          components.push({
-            type: 'body',
-            parameters: [
-              { type: 'text', text: var1 },
-              { type: 'text', text: var2 },
-              { type: 'text', text: var3 },
-            ],
-          });
-        }
-
-        sendResult = await MetaWhatsAppClient.sendTemplate({
-          phoneNumberId,
-          accessToken,
-          to: recipientPhone,
-          templateName,
-          languageCode: 'en_US',
-          components: components.length > 0 ? components : undefined,
-        });
-      } else {
-        // Local simulation if credentials not yet configured
-        sendResult = {
-          success: true,
-          messageId: `wamid.camp_${Date.now()}_${sent}`,
-          simulated: true,
-        };
-      }
-
-      // Log outbound message to Database
-      const messageId = sendResult.messageId || `wamid.camp_${Date.now()}_${sent}`;
-      MessagesDB.create({
-        metaMessageId: messageId,
-        phoneNumber: recipientPhone,
-        contactId: contact.id,
-        direction: 'outbound',
-        type: 'template',
-        status: sendResult.success ? 'sent' : 'failed',
-        content: `Template: ${templateName}`,
-        payload: {
-          campaignId: campaign.id,
-          templateName,
-          variables,
-        },
-        errorMessage: sendResult.error,
-      });
-
-      if (sendResult.success) {
-        sent++;
-      } else {
-        failed++;
-      }
-    }
-
-    // 5. Update Campaign with final metrics
-    CampaignsDB.update(campaign.id, {
-      status: failed === targetContacts.length ? 'failed' : 'completed',
-      sentCount: sent,
-      failedCount: failed,
-      completedAt: new Date().toISOString(),
+    // 3. Delegate to Vercel-safe chunked background queue
+    const queuedJob = enqueueCampaignJob({
+      campaignId: campaign.id,
+      templateName,
+      contacts: targetContacts,
+      variables,
     });
 
     return NextResponse.json({
       success: true,
       campaignId: campaign.id,
       totalRecipients: targetContacts.length,
-      sentCount: sent,
-      failedCount: failed,
-      message: `Successfully dispatched to ${sent} contacts (${failed} failed).`,
+      status: queuedJob.status,
+      message: `Dispatched ${targetContacts.length} recipients to background messaging queue.`,
     });
   } catch (error: any) {
     console.error('[Campaign Dispatch API Error]:', error);
