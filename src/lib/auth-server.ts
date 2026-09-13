@@ -1,14 +1,18 @@
 import { cookies } from 'next/headers';
 import { UsersDB, UserRecord, UserRole } from '@/lib/db';
 
+export interface AuthUserOptions {
+  allowPending?: boolean;
+}
+
 /**
  * Robust server-side user authorization resolver.
  * Handles:
  * 1. Standard authenticated cookies (pf_auth, pf_user_id, pf_status, pf_role)
  * 2. Super admin session overrides (pf_admin_auth, role === 'super_admin')
- * 3. Ephemeral serverless container rehydration so authenticated users are never falsely rejected with 403 Forbidden.
+ * 3. Real-time database verification so Superadmin approvals take effect immediately without re-login.
  */
-export async function getAuthorizedUser(): Promise<UserRecord | null> {
+export async function getAuthorizedUser(options: AuthUserOptions = {}): Promise<UserRecord | null> {
   try {
     const cookieStore = await cookies();
     const authCookie = cookieStore.get('pf_auth')?.value;
@@ -18,34 +22,25 @@ export async function getAuthorizedUser(): Promise<UserRecord | null> {
     const rawRole = cookieStore.get('pf_role')?.value;
 
     const userId = rawUserId ? decodeURIComponent(rawUserId).trim() : '';
-    const status = rawStatus ? decodeURIComponent(rawStatus).trim() : '';
     const role = rawRole ? decodeURIComponent(rawRole).trim() : '';
 
     const isAuthenticated = authCookie === 'authenticated' || adminAuth === 'true';
     const isSuperAdmin = role === 'super_admin' || adminAuth === 'true';
-    const isApproved = status === 'approved' || isSuperAdmin;
 
     // 1. If completely unauthenticated with no user identifier and not super admin, block
     if (!isAuthenticated && !userId && !isSuperAdmin) {
       return null;
     }
 
-    // 2. Reject explicitly blocked or unapproved users (unless super admin)
-    if (!isSuperAdmin) {
-      if (status === 'rejected' || status === 'new_user' || status === 'pending_approval') {
-        return null;
-      }
-    }
-
-    // 3. Look up user by ID in UsersDB
+    // 2. Look up user by ID in UsersDB first
     let user = userId ? UsersDB.getById(userId) : null;
 
-    // 4. Fallback for Super Admin
+    // 3. Fallback for Super Admin
     if (!user && isSuperAdmin) {
       user = UsersDB.getById('user_super_admin_default');
     }
 
-    // 5. Fallback: Search all users in database
+    // 4. Fallback: Search all users in database
     if (!user) {
       const allUsers = UsersDB.getAll();
       if (isSuperAdmin) {
@@ -55,10 +50,22 @@ export async function getAuthorizedUser(): Promise<UserRecord | null> {
       }
     }
 
-    // 6. Resilient rehydration for Vercel Serverless ephemeral instances:
-    // If user has a valid authenticated session cookie but the serverless instance just cold-started,
-    // re-create the user record so legitimate users are NEVER blocked with a 403 Forbidden!
-    if (!user && (isAuthenticated || isApproved)) {
+    // 5. If user found in database, evaluate authorization against real-time DB state
+    if (user) {
+      if (user.role === 'super_admin') {
+        return user;
+      }
+      if (user.status === 'rejected') {
+        return null;
+      }
+      if (!options.allowPending && user.status !== 'approved') {
+        return null;
+      }
+      return user;
+    }
+
+    // 6. Resilient rehydration for Vercel Serverless ephemeral instances
+    if (!user && (isAuthenticated || isSuperAdmin)) {
       const effectiveId = userId || (isSuperAdmin ? 'user_super_admin_default' : `usr_${Date.now()}`);
       user = {
         id: effectiveId,
@@ -67,7 +74,7 @@ export async function getAuthorizedUser(): Promise<UserRecord | null> {
         avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
         provider: 'email',
         role: (isSuperAdmin ? 'super_admin' : (role as UserRole) || 'user'),
-        status: 'approved',
+        status: isSuperAdmin ? 'approved' : 'pending_approval',
         company: 'Workspace',
         intendedUse: 'E-Commerce & WhatsApp Automation',
         createdAt: new Date().toISOString(),
@@ -78,6 +85,10 @@ export async function getAuthorizedUser(): Promise<UserRecord | null> {
         UsersDB.create(user);
       } catch (e) {
         // ignore duplicate creation error
+      }
+
+      if (!options.allowPending && user.status !== 'approved' && !isSuperAdmin) {
+        return null;
       }
     }
 

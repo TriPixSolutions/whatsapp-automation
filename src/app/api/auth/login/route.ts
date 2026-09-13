@@ -27,7 +27,7 @@ export async function POST(req: Request) {
         });
       }
 
-      const redirectTo = user.status === 'approved' ? '/dashboard' : '/onboarding';
+      const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
       const response = NextResponse.json({ success: true, user, redirectTo });
 
       response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
@@ -61,13 +61,13 @@ export async function POST(req: Request) {
           avatarUrl: body.avatarUrl || undefined,
           provider: 'email',
           role: 'user',
-          status: 'new_user',
+          status: 'pending_approval',
         });
 
         const response = NextResponse.json({
           success: true,
           user: newUser,
-          redirectTo: '/onboarding',
+          redirectTo: '/pending',
         });
 
         response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
@@ -84,19 +84,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Your access request was rejected by an administrator.' }, { status: 403 });
     }
 
-    // Role-based routing:
-    // - Super Admin with approved status can go to super-admin-control or dashboard
-    // - Approved users go directly to /dashboard
-    // - New / Pending users go to /onboarding
-    let redirectTo = '/onboarding';
+    let redirectTo = '/pending';
     if (user.status === 'approved') {
-      if (requestedRedirect && (user.role === 'super_admin' || !requestedRedirect.includes('super-admin'))) {
+      if (user.role === 'super_admin') {
+        redirectTo = requestedRedirect || '/admin';
+      } else if (requestedRedirect && !requestedRedirect.includes('admin') && !requestedRedirect.includes('super-admin')) {
         redirectTo = requestedRedirect;
       } else {
         redirectTo = '/dashboard';
       }
     } else {
-      redirectTo = '/onboarding';
+      redirectTo = '/pending';
     }
 
     const response = NextResponse.json({

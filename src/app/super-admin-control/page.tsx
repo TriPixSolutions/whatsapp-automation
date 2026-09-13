@@ -79,7 +79,7 @@ export default function SuperAdminControlPage() {
       }
 
       if (authData.user.role !== 'super_admin') {
-        router.push(authData.user.status === 'approved' ? '/dashboard' : '/onboarding');
+        router.push(authData.user.status === 'approved' ? '/dashboard' : '/pending');
         return;
       }
 

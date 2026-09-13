@@ -33,11 +33,11 @@ export async function POST(req: Request) {
         company,
         provider: provider === 'google' ? 'google' : 'email',
         role: 'user',
-        status: 'new_user',
+        status: 'pending_approval',
       });
     }
 
-    const redirectTo = user.status === 'approved' ? '/dashboard' : '/onboarding';
+    const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
 
     const response = NextResponse.json({
       success: true,

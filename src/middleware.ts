@@ -19,6 +19,8 @@ const PUBLIC_PAGE_PREFIXES = [
 const PUBLIC_API_PREFIXES = [
   '/api/webhook/whatsapp',
   '/api/webhooks/meta',
+  '/api/webhooks/shopify',
+  '/api/webhooks/woocommerce',
   '/api/meta/data-deletion',
   '/api/health',
   '/api/auth/login',
@@ -47,7 +49,21 @@ const WORKSPACE_API_PREFIXES = [
   '/api/meta/stats',
   '/api/meta/oauth',
   '/api/test-flow',
+  '/api/ecommerce',
 ];
+
+/**
+ * Edge-safe URL redirect constructor that prevents Vercel reverse-proxy protocol mismatches
+ */
+function createEdgeRedirect(path: string, request: NextRequest, redirectParam?: string): NextResponse {
+  const url = request.nextUrl.clone();
+  url.pathname = path;
+  url.search = '';
+  if (redirectParam) {
+    url.searchParams.set('redirect', redirectParam);
+  }
+  return NextResponse.redirect(url);
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -57,14 +73,14 @@ export function middleware(request: NextRequest) {
 
   const isAuthenticated = authCookie?.value === 'authenticated';
   const role = roleCookie?.value || 'user';
-  const status = statusCookie?.value || (isAuthenticated && role === 'super_admin' ? 'approved' : 'new_user');
+  const status = statusCookie?.value || (isAuthenticated && role === 'super_admin' ? 'approved' : 'pending_approval');
 
-  // 1. Backward compatibility redirects
-  if (pathname === '/welcome' || pathname.startsWith('/welcome/')) {
-    return NextResponse.redirect(new URL('/onboarding', request.url));
+  // 1. Backward compatibility & Route Aliasing
+  if (pathname === '/welcome' || pathname.startsWith('/welcome/') || pathname === '/onboarding' || pathname.startsWith('/onboarding/')) {
+    return createEdgeRedirect('/pending', request);
   }
   if (pathname === '/super-admin' || pathname.startsWith('/super-admin/')) {
-    return NextResponse.redirect(new URL('/super-admin-control', request.url));
+    return createEdgeRedirect('/admin', request);
   }
 
   // 2. Allow public APIs unconditionally
@@ -72,8 +88,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3. Super Admin Route Protection (/super-admin-control and /api/super-admin/*)
-  const isSuperAdminRoute = pathname === '/super-admin-control' || pathname.startsWith('/super-admin-control/');
+  // 3. Super Admin Route Protection (/admin, /super-admin-control and /api/super-admin/*)
+  const isSuperAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/super-admin-control' || pathname.startsWith('/super-admin-control/');
   const isSuperAdminApi = pathname.startsWith('/api/super-admin');
 
   if (isSuperAdminRoute || isSuperAdminApi) {
@@ -81,20 +97,30 @@ export function middleware(request: NextRequest) {
       if (isSuperAdminApi) {
         return NextResponse.json({ error: 'Unauthorized: Authentication required.' }, { status: 401 });
       }
-      const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('redirect', '/super-admin-control');
-      return NextResponse.redirect(loginUrl);
+      return createEdgeRedirect('/auth/login', request, '/admin');
     }
     if (role !== 'super_admin') {
       if (isSuperAdminApi) {
         return NextResponse.json({ error: 'Forbidden: Super Admin privileges required.' }, { status: 403 });
       }
-      return NextResponse.redirect(new URL(status === 'approved' ? '/dashboard' : '/onboarding', request.url));
+      return createEdgeRedirect(status === 'approved' ? '/dashboard' : '/pending', request);
     }
     return NextResponse.next();
   }
 
-  // 4. Workspace API Protection (Block all Meta and messaging actions if not approved)
+  // 4. Pending Approval Route (/pending)
+  if (pathname === '/pending') {
+    if (!isAuthenticated) {
+      return createEdgeRedirect('/auth/login', request);
+    }
+    // If user is already approved, route straight to dashboard
+    if (status === 'approved') {
+      return createEdgeRedirect('/dashboard', request);
+    }
+    return NextResponse.next();
+  }
+
+  // 5. Workspace API Protection (Block all Meta and messaging actions if not approved)
   const isWorkspaceApi = WORKSPACE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isWorkspaceApi) {
     if (!isAuthenticated) {
@@ -102,21 +128,9 @@ export function middleware(request: NextRequest) {
     }
     if (status !== 'approved') {
       return NextResponse.json(
-        { error: 'Forbidden: Workspace access and Meta actions require approved status.' },
+        { error: 'Forbidden: Workspace access requires Superadmin approval.' },
         { status: 403 }
       );
-    }
-    return NextResponse.next();
-  }
-
-  // 5. Onboarding Route (/onboarding)
-  if (pathname === '/onboarding') {
-    if (!isAuthenticated) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
-    }
-    // If already approved, route straight to dashboard
-    if (status === 'approved') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
     }
     return NextResponse.next();
   }
@@ -125,23 +139,23 @@ export function middleware(request: NextRequest) {
   const isWorkspacePage = WORKSPACE_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isWorkspacePage) {
     if (!isAuthenticated) {
-      const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(loginUrl);
+      return createEdgeRedirect('/auth/login', request, pathname);
     }
     if (status !== 'approved') {
-      return NextResponse.redirect(new URL('/onboarding', request.url));
+      return createEdgeRedirect('/pending', request);
     }
     return NextResponse.next();
   }
 
   // 7. Auth Pages (/auth/login, /auth/signup) - auto-forward if already authenticated
   if ((pathname === '/auth/login' || pathname === '/auth/signup') && isAuthenticated) {
-    if (status === 'approved') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    } else {
-      return NextResponse.redirect(new URL('/onboarding', request.url));
+    if (role === 'super_admin') {
+      return createEdgeRedirect('/admin', request);
     }
+    if (status === 'approved') {
+      return createEdgeRedirect('/dashboard', request);
+    }
+    return createEdgeRedirect('/pending', request);
   }
 
   return NextResponse.next();

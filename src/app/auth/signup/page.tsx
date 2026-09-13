@@ -50,7 +50,7 @@ export default function SignupPage() {
       if (res.ok) {
         setSuccess(true);
         setTimeout(() => {
-          router.push(data.redirectTo || '/onboarding');
+          router.push(data.redirectTo || '/pending');
           router.refresh();
         }, 300);
       } else {

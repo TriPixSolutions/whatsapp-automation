@@ -75,11 +75,9 @@ export async function GET(request: NextRequest) {
 
     // 4. Set auth cookies (same as email/password login)
     const maxAge = 60 * 60 * 24 * 7; // 7 days
-    const redirectTo = user.status === 'approved' ? '/dashboard' : '/onboarding';
+    const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
 
-    const response = NextResponse.redirect(
-      `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}${redirectTo}`
-    );
+    const response = NextResponse.redirect(new URL(redirectTo, request.url));
 
     response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge, sameSite: 'lax', httpOnly: false });
     response.cookies.set('pf_user_id', user.id, { path: '/', maxAge, sameSite: 'lax', httpOnly: false });

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const user = await getAuthorizedUser();
+    const user = await getAuthorizedUser({ allowPending: true });
 
     if (!user) {
       const cookieStore = await cookies();
@@ -30,15 +30,25 @@ export async function GET() {
 
     const cookieStore = await cookies();
     const statusCookie = cookieStore.get('pf_status')?.value;
+    const roleCookie = cookieStore.get('pf_role')?.value;
 
     const response = NextResponse.json({
       authenticated: true,
       user,
     });
 
-    // Sync cookie if status was updated by Super Admin
+    // Sync status cookie if status was updated by Super Admin
     if (user.status !== statusCookie) {
       response.cookies.set('pf_status', user.status, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7,
+        sameSite: 'lax',
+      });
+    }
+
+    // Sync role cookie if role was updated by Super Admin
+    if (user.role !== roleCookie) {
+      response.cookies.set('pf_role', user.role, {
         path: '/',
         maxAge: 60 * 60 * 24 * 7,
         sameSite: 'lax',
