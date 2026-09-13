@@ -1,36 +1,35 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { UsersDB } from '@/lib/db';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const userId = cookieStore.get('pf_user_id')?.value;
-    const statusCookie = cookieStore.get('pf_status')?.value;
-    const roleCookie = cookieStore.get('pf_role')?.value;
+    const user = await getAuthorizedUser();
 
-    if (!userId) {
-      return NextResponse.json({
-        authenticated: false,
-        user: null,
-      });
-    }
-
-    const user = UsersDB.getById(userId);
     if (!user) {
+      const cookieStore = await cookies();
+      const authCookie = cookieStore.get('pf_auth')?.value;
+      
       const unauthResponse = NextResponse.json({
         authenticated: false,
         user: null,
       });
-      unauthResponse.cookies.set('pf_auth', '', { path: '/', maxAge: 0 });
-      unauthResponse.cookies.set('pf_user_id', '', { path: '/', maxAge: 0 });
-      unauthResponse.cookies.set('pf_status', '', { path: '/', maxAge: 0 });
-      unauthResponse.cookies.set('pf_role', '', { path: '/', maxAge: 0 });
+
+      // Only clear cookies if pf_auth is not set or truly invalid
+      if (!authCookie) {
+        unauthResponse.cookies.set('pf_auth', '', { path: '/', maxAge: 0 });
+        unauthResponse.cookies.set('pf_user_id', '', { path: '/', maxAge: 0 });
+        unauthResponse.cookies.set('pf_status', '', { path: '/', maxAge: 0 });
+        unauthResponse.cookies.set('pf_role', '', { path: '/', maxAge: 0 });
+      }
       return unauthResponse;
     }
+
+    const cookieStore = await cookies();
+    const statusCookie = cookieStore.get('pf_status')?.value;
 
     const response = NextResponse.json({
       authenticated: true,

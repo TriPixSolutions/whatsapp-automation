@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SettingsDB } from '@/lib/db';
+import { maskToken } from '@/lib/crypto';
 
 export async function GET() {
   try {
     const settings = SettingsDB.get();
-    return NextResponse.json(settings);
+    return NextResponse.json({
+      ...settings,
+      accessToken: maskToken(settings.accessToken),
+      rawTokenConfigured: Boolean(settings.accessToken && !settings.accessToken.includes('SAMPLE_TOKEN')),
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

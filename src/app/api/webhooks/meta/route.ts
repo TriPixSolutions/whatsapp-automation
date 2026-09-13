@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient, mockStore, isSupabaseConfigured } from '@/lib/supabase/server';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
+import { verifyMetaSignature } from '@/lib/crypto';
 
 /**
  * GET /api/webhooks/meta
@@ -51,11 +52,29 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/webhooks/meta
- * Ingestion engine for inbound WhatsApp messages and status delivery receipts
+ * Ingestion engine for inbound WhatsApp messages and status delivery receipts with HMAC verification
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    const signatureHeader = request.headers.get('x-hub-signature-256');
+    const appSecret = process.env.META_APP_SECRET;
+
+    if (appSecret && appSecret !== 'your_meta_app_secret') {
+      const isValid = verifyMetaSignature(rawBody, signatureHeader, appSecret);
+      if (!isValid) {
+        console.warn('[Meta Webhook Security] Invalid HMAC-SHA256 signature in /api/webhooks/meta');
+        return NextResponse.json({ error: 'Invalid HMAC signature' }, { status: 401 });
+      }
+    }
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
+    }
+
     console.log('[Meta Webhook POST] Received event payload:', JSON.stringify(body, null, 2));
 
     const entry = body.entry?.[0];

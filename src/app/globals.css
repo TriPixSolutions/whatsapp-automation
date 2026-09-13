@@ -3,15 +3,27 @@
 @tailwind utilities;
 
 :root {
-  --background: #F4F6FB;
-  --foreground: #0D0F2D;
+  --background: #FAFAFC;
+  --foreground: #090A0F;
   --card: #FFFFFF;
-  --card-foreground: #0D0F2D;
-  --border: #E2E8F0;
-  --primary: #0D0F2D;
-  --accent: #7C3AED;
-  --lavender: #C4B5FD;
-  --success: #22C55E;
+  --card-foreground: #090A0F;
+  --border: #E4E7EC;
+  --primary: #090A0F;
+  --accent: #6366F1;
+  --muted: #64748B;
+  --success: #10B981;
+}
+
+.dark {
+  --background: #090A0F;
+  --foreground: #F8FAFC;
+  --card: #0E1017;
+  --card-foreground: #F8FAFC;
+  --border: #1E2333;
+  --primary: #F8FAFC;
+  --accent: #6366F1;
+  --muted: #8E95A5;
+  --success: #10B981;
 }
 
 body {
@@ -19,25 +31,66 @@ body {
   color: var(--foreground);
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
+  letter-spacing: -0.011em;
 }
 
-/* Passion Fruit Official Signature Button */
+/* Silicon Valley Minimalist Glassmorphism */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(228, 231, 236, 0.8);
+}
+
+.dark .glass-panel {
+  background: rgba(14, 16, 23, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(30, 35, 51, 0.8);
+}
+
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid #E4E7EC;
+  box-shadow: 0 1px 3px 0 rgba(9, 10, 15, 0.02), 0 1px 2px -1px rgba(9, 10, 15, 0.02);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: #D1D5DB;
+  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.08), 0 8px 10px -6px rgba(9, 10, 15, 0.03);
+  transform: translateY(-2px);
+}
+
+/* Linear-style Dot Grid Background */
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.22) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .bg-dot-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Signature Silicon Valley High-Contrast Button */
 .gradient-button {
-  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
+  background: #090A0F;
   color: #FFFFFF;
   font-weight: 600;
-  transition: all 0.25s ease-in-out;
-  box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px 0 rgba(9, 10, 15, 0.15);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .gradient-button:hover {
-  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
-  box-shadow: 0 6px 20px 0 rgba(124, 58, 237, 0.5);
+  background: #181B26;
+  box-shadow: 0 4px 16px 0 rgba(99, 102, 241, 0.25);
   transform: translateY(-1px);
 }
 
@@ -45,25 +98,47 @@ body {
   transform: translateY(0);
 }
 
-/* Passion Fruit Midnight Heading */
-.gradient-heading {
-  color: #0D0F2D;
+/* Electric Violet Accent Button */
+.btn-accent {
+  background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 0.75rem;
 }
 
-.gradient-text-purple {
-  background: linear-gradient(to right, #7C3AED, #9333EA);
+.btn-accent:hover {
+  background: linear-gradient(135deg, #4F46E5 0%, #4338CA 100%);
+  box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Gradient Headings */
+.gradient-text {
+  background: linear-gradient(135deg, #090A0F 0%, #4B5563 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-/* Smooth Modern Scrollbar */
+.gradient-text-purple {
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Modern Minimalist Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #F4F6FB;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -72,17 +147,13 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #7C3AED;
+  background: #94A3B8;
 }
 
-/* Custom Card Transitions */
-.zap-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.zap-card:hover {
-  box-shadow: 0 12px 30px -10px rgba(124, 58, 237, 0.12);
-  border-color: #C4B5FD;
+/* Clean Hairline Table Borders */
+.table-sticky-header th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #F8FAFC;
 }

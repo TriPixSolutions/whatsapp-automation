@@ -22,6 +22,10 @@ export interface WorkspaceSettings {
   adminUsername: string;
   adminPassword: string;
   customSubdomain: string;
+  appId?: string;
+  appSecret?: string;
+  adAccountId?: string;
+  tokenExpiresAt?: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -117,6 +121,7 @@ export interface Campaign {
   sentCount: number;
   deliveredCount: number;
   readCount: number;
+  repliedCount?: number;
   failedCount: number;
   variables?: Record<string, string>;
   createdAt: string;
@@ -165,6 +170,31 @@ export interface AdminMetrics {
   recentActivity: ActivityLogItem[];
 }
 
+export interface DataDeletionRecord {
+  id: string;
+  confirmationCode: string;
+  userId?: string;
+  email?: string;
+  status: 'completed' | 'pending';
+  details: string;
+  requestedAt: string;
+  completedAt?: string;
+}
+
+export interface IntegrationRecord {
+  id: string;
+  userId: string;
+  platform: 'shopify' | 'woocommerce';
+  storeName?: string;
+  accessToken?: string;
+  siteUrl?: string;
+  consumerKey?: string;
+  consumerSecret?: string;
+  webhookSecret?: string;
+  connectedAt: string;
+  updatedAt: string;
+}
+
 interface DatabaseSchema {
   settings: WorkspaceSettings;
   contacts: Contact[];
@@ -173,6 +203,8 @@ interface DatabaseSchema {
   campaigns: Campaign[];
   users: UserRecord[];
   activity: ActivityLogItem[];
+  dataDeletionRequests?: DataDeletionRecord[];
+  integrations?: IntegrationRecord[];
 }
 
 // In-memory cache + persistent file storage
@@ -332,6 +364,8 @@ function getDefaultSchema(): DatabaseSchema {
         timestamp: new Date().toISOString(),
       },
     ],
+    dataDeletionRequests: [],
+    integrations: [],
   };
 }
 
@@ -341,6 +375,22 @@ function readDb(): DatabaseSchema {
   }
 
   const filePath = getDbFilePath();
+  const bundledPath = path.join(process.cwd(), 'data', 'db.json');
+
+  // If writable filePath does not exist yet (e.g., on Vercel /tmp), seed it from bundled data/db.json
+  if (filePath !== bundledPath && !fs.existsSync(filePath) && fs.existsSync(bundledPath)) {
+    try {
+      const bundledRaw = fs.readFileSync(bundledPath, 'utf-8');
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, bundledRaw, 'utf-8');
+    } catch (e) {
+      console.warn('[Database] Failed to seed from bundled db.json:', e);
+    }
+  }
+
   try {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8');
@@ -352,11 +402,34 @@ function readDb(): DatabaseSchema {
         settings: { ...defaults.settings, ...(parsed.settings || {}) },
         users: parsed.users && parsed.users.length > 0 ? parsed.users : defaults.users,
         activity: parsed.activity && parsed.activity.length > 0 ? parsed.activity : defaults.activity,
+        dataDeletionRequests: parsed.dataDeletionRequests || [],
+        integrations: parsed.integrations || [],
       };
       return memoryCache!;
     }
   } catch (e) {
     console.warn('[Database] Read failed, initializing defaults:', e);
+  }
+
+  // Also try reading from bundledPath directly if filePath couldn't be read
+  try {
+    if (fs.existsSync(bundledPath)) {
+      const raw = fs.readFileSync(bundledPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      const defaults = getDefaultSchema();
+      memoryCache = {
+        ...defaults,
+        ...parsed,
+        settings: { ...defaults.settings, ...(parsed.settings || {}) },
+        users: parsed.users && parsed.users.length > 0 ? parsed.users : defaults.users,
+        activity: parsed.activity && parsed.activity.length > 0 ? parsed.activity : defaults.activity,
+        dataDeletionRequests: parsed.dataDeletionRequests || [],
+        integrations: parsed.integrations || [],
+      };
+      return memoryCache!;
+    }
+  } catch (e) {
+    console.warn('[Database] Bundled fallback read failed:', e);
   }
 
   const initial = getDefaultSchema();
@@ -382,21 +455,46 @@ function writeDb(data: DatabaseSchema): void {
 // -----------------------------------------------------------------------------
 // REPOSITORY 1: WORKSPACE SETTINGS
 // -----------------------------------------------------------------------------
+import { encryptToken, decryptToken, maskToken } from '@/lib/crypto';
+
 export const SettingsDB = {
   get(): WorkspaceSettings {
+    const db = readDb();
+    const settings = { ...db.settings };
+    if (settings.accessToken) {
+      settings.accessToken = decryptToken(settings.accessToken);
+    }
+    return settings;
+  },
+
+  getRaw(): WorkspaceSettings {
     const db = readDb();
     return db.settings;
   },
 
   update(partial: Partial<WorkspaceSettings>): WorkspaceSettings {
     const db = readDb();
+    const toUpdate = { ...partial };
+
+    // Encrypt sensitive token at rest with AES-256-GCM
+    if (toUpdate.accessToken && !toUpdate.accessToken.includes('•')) {
+      toUpdate.accessToken = encryptToken(toUpdate.accessToken);
+    } else if (toUpdate.accessToken?.includes('•')) {
+      delete toUpdate.accessToken;
+    }
+
     db.settings = {
       ...db.settings,
-      ...partial,
+      ...toUpdate,
       updatedAt: new Date().toISOString(),
     };
     writeDb(db);
-    return db.settings;
+
+    const result = { ...db.settings };
+    if (result.accessToken) {
+      result.accessToken = decryptToken(result.accessToken);
+    }
+    return result;
   },
 };
 
@@ -1026,6 +1124,129 @@ export const UsersDB = {
       totalAutomations,
       recentActivity: (db.activity || []).slice(0, 20),
     };
+  },
+};
+
+// -----------------------------------------------------------------------------
+// REPOSITORY 7: DATA DELETION REQUESTS (Meta App Review Compliance)
+// -----------------------------------------------------------------------------
+export const DataDeletionDB = {
+  list(): DataDeletionRecord[] {
+    const db = readDb();
+    return db.dataDeletionRequests || [];
+  },
+
+  getByCode(confirmationCode: string): DataDeletionRecord | null {
+    const db = readDb();
+    return (db.dataDeletionRequests || []).find((r) => r.confirmationCode === confirmationCode) || null;
+  },
+
+  create(data: { userId?: string; email?: string; details?: string }): DataDeletionRecord {
+    const db = readDb();
+    if (!db.dataDeletionRequests) {
+      db.dataDeletionRequests = [];
+    }
+
+    const confirmationCode = `pf_del_${crypto.randomUUID().replace(/-/g, '')}`;
+    const newRecord: DataDeletionRecord = {
+      id: `del_${Date.now()}`,
+      confirmationCode,
+      userId: data.userId,
+      email: data.email,
+      status: 'completed',
+      details: data.details || 'User account and connected Meta telemetry purged in compliance with Meta Platform Policies.',
+      requestedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+    };
+
+    db.dataDeletionRequests.unshift(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+};
+
+// -----------------------------------------------------------------------------
+// REPOSITORY 8: E-COMMERCE INTEGRATIONS (Shopify & WooCommerce)
+// -----------------------------------------------------------------------------
+export const IntegrationsDB = {
+  getByUser(userId: string): IntegrationRecord[] {
+    const db = readDb();
+    const userIntegrations = (db.integrations || []).filter((i) => i.userId === userId);
+    if (userIntegrations.length > 0) return userIntegrations;
+    // Fallback: return workspace integrations if available
+    return db.integrations || [];
+  },
+
+  get(userId: string, platform: 'shopify' | 'woocommerce'): IntegrationRecord | null {
+    const db = readDb();
+    const specific = (db.integrations || []).find((i) => i.userId === userId && i.platform === platform);
+    if (specific) return specific;
+    // Fallback: return workspace integration if configured by any workspace administrator
+    return (db.integrations || []).find((i) => i.platform === platform) || null;
+  },
+
+  save(record: {
+    userId: string;
+    platform: 'shopify' | 'woocommerce';
+    storeName?: string;
+    accessToken?: string;
+    siteUrl?: string;
+    consumerKey?: string;
+    consumerSecret?: string;
+    webhookSecret?: string;
+  }): IntegrationRecord {
+    const db = readDb();
+    if (!db.integrations) db.integrations = [];
+
+    const existingIndex = db.integrations.findIndex(
+      (i) => i.userId === record.userId && i.platform === record.platform
+    );
+
+    const now = new Date().toISOString();
+    if (existingIndex >= 0) {
+      const existing = db.integrations[existingIndex];
+      const updated: IntegrationRecord = {
+        ...existing,
+        ...record,
+        id: existing.id,
+        connectedAt: existing.connectedAt || now,
+        updatedAt: now,
+      };
+      db.integrations[existingIndex] = updated;
+      writeDb(db);
+      return updated;
+    } else {
+      const newRecord: IntegrationRecord = {
+        id: `intg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: record.userId,
+        platform: record.platform,
+        storeName: record.storeName,
+        accessToken: record.accessToken,
+        siteUrl: record.siteUrl,
+        consumerKey: record.consumerKey,
+        consumerSecret: record.consumerSecret,
+        webhookSecret: record.webhookSecret,
+        connectedAt: now,
+        updatedAt: now,
+      };
+      db.integrations.push(newRecord);
+      writeDb(db);
+      return newRecord;
+    }
+  },
+
+  delete(userId: string, platform: 'shopify' | 'woocommerce'): boolean {
+    const db = readDb();
+    if (!db.integrations) return false;
+    const initialLength = db.integrations.length;
+    db.integrations = db.integrations.filter(
+      (i) => !(i.userId === userId && i.platform === platform)
+    );
+    if (db.integrations.length !== initialLength) {
+      writeDb(db);
+      return true;
+    }
+    return false;
   },
 };
 

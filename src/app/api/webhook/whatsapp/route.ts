@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SettingsDB, ContactsDB, MessagesDB, AutomationsDB } from '@/lib/db';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
+import { verifyMetaSignature } from '@/lib/crypto';
 
 /**
  * GET /api/webhook/whatsapp
@@ -48,18 +49,43 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/webhook/whatsapp
  * The Main Entry Point for Meta Cloud API Webhooks:
- * 1. Parses incoming customer text, button clicks, and list selections
- * 2. Saves contact and inbound message to Database
- * 3. Triggers the Automation Engine to find matching flows and reply automatically
- * 4. Updates message delivery receipts (sent, delivered, read, failed) in real time
+ * 1. Validates HMAC-SHA256 signature (x-hub-signature-256)
+ * 2. Parses incoming customer text, button clicks, and list selections
+ * 3. Saves contact and inbound message to Database
+ * 4. Triggers the Automation Engine to find matching flows and reply automatically
+ * 5. Updates message delivery receipts (sent, delivered, read, failed) in real time
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    const signatureHeader = request.headers.get('x-hub-signature-256');
+
+    const settings = SettingsDB.get();
+    const appSecret = settings.appSecret || process.env.META_APP_SECRET;
+
+    // HMAC-SHA256 Signature Verification
+    if (appSecret && appSecret !== 'your_meta_app_secret') {
+      const isValid = verifyMetaSignature(rawBody, signatureHeader, appSecret);
+      if (!isValid) {
+        console.warn('[Meta Webhook Security] Invalid HMAC-SHA256 signature detected:', {
+          hasHeader: Boolean(signatureHeader),
+        });
+        return NextResponse.json(
+          { error: 'Invalid HMAC-SHA256 signature' },
+          { status: 401 }
+        );
+      }
+    }
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
+    }
 
     if (body.object === 'whatsapp_business_account') {
       const entries = body.entry || [];
-      const settings = SettingsDB.get();
 
       for (const entry of entries) {
         const changes = entry.changes || [];
