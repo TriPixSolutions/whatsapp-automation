@@ -1,125 +1,127 @@
-# AURA — WhatsApp Cloud API Automation SaaS
+# AI WhatsApp Sales & Support Platform
 
-> **Enterprise-grade WhatsApp Automation platform built for luxury brands, high-ticket agencies, and private client lead generation.** Powered by Next.js App Router on Vercel, Supabase (PostgreSQL + Auth), and a Node.js BullMQ + Redis background worker on Hostinger Cloud Server.
-
----
-
-## Key Features
-
-- **Meta WhatsApp Cloud API (v18.0) Integration**: Direct official Cloud API connection for approved message templates and interactive conversational components.
-- **High-Throughput Bulk Dispatch Worker**: Long-running background worker utilizing Redis and BullMQ, strictly throttled to 50ms intervals to conform to Meta rate limits.
-- **Real-Time Webhook Engine (`/api/webhooks/meta`)**: Instant verification handshake (`hub.challenge`), automatic inbound lead capture, and instant automated response routing.
-- **Interactive Conversational Automations**: Rule-based trigger engine (e.g. Inbound `"Show me"` &rarr; Instant 3 Quick Reply Buttons: `[Product Specs, Pricing, Talk to Agent]`).
-- **Luxury Minimalist UI**: Dark obsidian surfaces, champagne gold accents, glassmorphism panels, and realistic WhatsApp smartphone simulator.
-- **Bulk Audience CSV Ingestion**: Fast drag-and-drop CSV importer with E.164 phone normalization and segment tagging.
-- **Interactive Test Lab**: Built-in verification engine allowing full execution and inspection of Test Flow 1 (Outbound Bulk) and Test Flow 2 (Inbound Interactive Automation).
+> **The enterprise-grade commercial platform engineered to capture more leads, close more sales, and deliver instant 24/7 customer support directly inside WhatsApp.** Built for high-growth businesses and modern e-commerce brands with official Meta Cloud API v18.0 integration, autonomous AI sales assistants, and Hostinger Cloud Startup PM2 clustering.
 
 ---
 
-## Tech Stack & Architecture
+## 🌟 Core Business Capabilities
 
-| Layer | Technology | Deployment Target |
-|---|---|---|
-| **Frontend & API Webhooks** | Next.js 15/16 (App Router), React, Tailwind CSS | Vercel |
-| **Background Queue Worker** | Node.js, BullMQ, ioredis, PM2 | Hostinger Cloud Server |
-| **Database & Auth** | Supabase (PostgreSQL, Row Level Security, Auth) | Supabase Cloud |
-| **Message Broker** | Redis Server | Hostinger Cloud Server |
-| **Messaging Infrastructure** | Meta WhatsApp Cloud API (Graph API v18.0) | Meta Platform |
+Businesses buy three things: **More Leads**, **More Sales**, and **Faster Support**.
+
+- **Autonomous AI Sales & Support**: Instant, human-like answers powered by Gemini/OpenAI that qualify leads, recommend catalog items, and resolve customer questions in under 3 seconds.
+- **In-Chat WhatsApp Checkout**: Direct interactive checkout flows (`checkout_*`, `buy_*`) with zero-friction payment links and instant order confirmations.
+- **Shared Multi-Agent Team Inbox**: Real-time live conversation syncing without page reload (2.5s polling), multi-agent assignment, private notes, and official read receipt ticks (`✓`, `✓✓`, blue `✓✓`).
+- **Targeted Broadcast Campaigns**: Paced background queue engine (~60ms spacing) ensuring zero serverless timeouts, zero rate-limit bans, and real-time delivery tracking.
+- **Omnichannel E-Commerce Sync**: Direct catalog and customer webhooks for Shopify, WooCommerce, Google Sheets, and custom CRM systems.
+- **Live Sales & Conversion Analytics**: Dedicated `/analytics` dashboard with multi-step funnel tracking (Inquiries &rarr; AI Qualified &rarr; Catalog Viewed &rarr; Checkout Initiated), revenue attribution, and 1-click CSV audit exports.
 
 ---
 
-## Directory Structure
+## 🚀 Infrastructure & Deployment: Hostinger Cloud Startup
+
+Engineered specifically for **Hostinger Cloud Startup** and modern Linux VPS servers:
+
+- **Standalone Node.js Server**: Built with `output: 'standalone'` in `next.config.ts`, generating `.next/standalone/server.js` with self-contained dependencies and optimal memory footprint.
+- **PM2 Cluster Mode**: Pre-configured [`ecosystem.config.js`](./ecosystem.config.js) to leverage all CPU cores, automatic recovery on crash, and separated error/access logs (`logs/`).
+- **Zero Third-Party Vendor Lock-In**: Fully removed Vercel telemetry and platform dependencies.
+- **Nginx Reverse Proxy & SSL**: Step-by-step setup with Let's Encrypt Certbot provided in [`HOSTINGER_DEPLOYMENT.md`](./HOSTINGER_DEPLOYMENT.md).
+
+---
+
+## 📁 Project Architecture (< 150 Lines / File)
+
+All components strictly follow single-responsibility modular architecture:
 
 ```
 whatsapp-auto-saas/
-├── .env.example                     # Production environment variable template
-├── DEPLOYMENT.md                    # Complete step-by-step production deployment guide
-├── README.md                        # Project documentation
-├── package.json                     # Next.js SaaS web application dependencies
-├── tsconfig.json                    # TypeScript configuration
-├── next.config.ts                   # Next.js configuration (serverExternalPackages)
-├── tailwind.config.ts               # Custom luxury color tokens & gradients
-├── supabase/
-│   ├── schema.sql                   # Supabase SQL DDL schema with RLS & indexes
-│   └── seed.sql                     # Seed test workspace, 3 VIP contacts & automation flow
+├── .env.example                     # Production environment variable reference
+├── HOSTINGER_DEPLOYMENT.md          # Complete Hostinger Cloud Startup setup guide
+├── ecosystem.config.js              # PM2 cluster configuration
+├── package.json                     # Standalone Next.js production dependencies
+├── next.config.ts                   # Standalone Node.js compilation & security headers
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx               # Root layout with fonts and metadata
-│   │   ├── page.tsx                 # Luxury landing page & portal redirect
-│   │   ├── globals.css              # Custom styling & glassmorphism
-│   │   ├── auth/
-│   │   │   ├── login/page.tsx       # Supabase Auth Login (Email + Google OAuth)
-│   │   │   └── signup/page.tsx      # Agency Workspace Registration
-│   │   ├── dashboard/page.tsx       # Analytics & Test Scenario Lab (Flows 1 & 2)
-│   │   ├── contacts/page.tsx        # Audience registry & Bulk CSV Importer
-│   │   ├── campaigns/page.tsx       # Template selector, variable mapping & dispatch
-│   │   ├── automations/page.tsx     # Rule-based interactive button builder
-│   │   ├── settings/page.tsx        # Meta credentials & Webhook URL copy
+│   │   ├── page.tsx                 # Commercial homepage orchestrator (33 lines)
+│   │   ├── solutions/               # Solutions & feature deep-dives
+│   │   ├── pricing/                 # Commercial transparent pricing tiers
+│   │   ├── integrations/            # Shopify, WooCommerce, Meta Cloud matrix
+│   │   ├── about/                   # Infrastructure, security & privacy overview
+│   │   ├── contact/                 # Contact & enterprise discovery form
+│   │   ├── dashboard/               # Live command center with DashboardHero
+│   │   ├── analytics/               # Revenue attribution & conversion funnel
+│   │   ├── inbox/                   # Omnichannel shared team inbox
+│   │   ├── automations/             # 4-node WhatsApp visual flow builder
+│   │   ├── campaigns/               # Broadcast campaign dispatch & logs
+│   │   ├── contacts/                # Opted-in customer CRM & CSV bulk importer
+│   │   ├── settings/                # WABA credentials & security key vault
 │   │   └── api/
-│   │       ├── webhooks/meta/route.ts   # Meta GET verification & POST inbound handler
-│   │       ├── campaigns/dispatch/route.ts # BullMQ queue job pusher
-│   │       ├── contacts/
-│   │       │   ├── route.ts         # Contact queries & manual additions
-│   │       │   └── import/route.ts  # Bulk CSV parser and upsert
-│   │       └── test-flow/route.ts   # Test scenario execution runner
+│   │       ├── ai/chat/             # Gemini/OpenAI streaming assistant
+│   │       ├── webhook/whatsapp/    # Official Meta Cloud API v18.0 webhook
+│   │       ├── catalog/sync/        # Meta Commerce Catalog batch sync
+│   │       └── campaigns/dispatch/  # Async queue broadcast dispatcher
 │   ├── components/
-│   │   ├── Sidebar.tsx              # Minimalist luxury navigation
-│   │   ├── Header.tsx               # Status bar with Meta connection indicator
-│   │   ├── StatCard.tsx             # Glassmorphic KPI card with trend lines
-│   │   ├── PhoneMockup.tsx          # Realistic smartphone interactive preview
-│   │   └── CsvImporter.tsx          # Drag & drop audience CSV uploader
-│   ├── lib/
-│   │   ├── meta/api.ts              # Meta Graph API client (templates, buttons, text)
-│   │   ├── queue/redis.ts           # BullMQ queue producer
-│   │   ├── supabase/
-│   │   │   ├── client.ts            # Browser Supabase client
-│   │   │   └── server.ts            # Server Supabase client & test store
-│   │   └── utils.ts                 # Class merger & phone formatters
-│   └── types/
-│       └── index.ts                 # TypeScript interfaces
-└── worker/
-    ├── package.json                 # Standalone worker dependencies
-    ├── worker.js                    # BullMQ Worker with 50ms pacing & error trapping
-    ├── ecosystem.config.js          # PM2 configuration for Hostinger Cloud Server
-    └── README.md                    # Worker deployment & monitoring guide
+│   │   ├── home/                    # Modular landing page blocks (< 120 lines each)
+│   │   ├── solutions/               # Solutions hero & interactive cards
+│   │   ├── pricing/                 # Pricing hero & comparison tiers
+│   │   ├── integrations/            # Integrations hero & connection grid
+│   │   ├── about/                   # About hero & enterprise security specs
+│   │   ├── contact/                 # Contact hero & validation form
+│   │   ├── dashboard/               # Dashboard hero & performance widgets
+│   │   ├── analytics/               # Analytics hero & funnel visualization
+│   │   ├── settings/                # Settings hero & credential managers
+│   │   ├── sidebar/                 # Modular navigation & profile components
+│   │   ├── PublicNav.tsx            # Sticky header with active path indicators
+│   │   └── PublicFooter.tsx         # Comprehensive legal & platform footer
+│   └── lib/
+│       ├── meta/                    # Official Meta Graph API v18.0 client
+│       ├── webhook/                 # Handshake, checkout, inbound & AI assistant
+│       └── db/                      # In-memory and persistent storage drivers
 ```
 
 ---
 
-## Quick Start (Local Development)
+## ⚡ Quick Start
 
-### 1. Database Setup
-1. Open your Supabase project SQL Editor.
-2. Run `supabase/schema.sql` followed by `supabase/seed.sql`.
-
-### 2. Configure Environment
-Copy `.env.example` to `.env.local`:
+### 1. Configure Environment
 ```bash
 cp .env.example .env.local
 ```
-Fill in your Supabase, Meta, and Redis credentials.
+Add your **Meta Phone Number ID**, **WhatsApp Business Account (WABA) ID**, and **System User Access Token**.
 
-### 3. Run the Next.js SaaS Web App
+### 2. Install & Build Standalone
 ```bash
 npm install
-npm run dev
+npm run build
 ```
-Open [http://localhost:3000](http://localhost:3000) to access the console.
 
-### 4. Run the Background Worker
-In a separate terminal:
+### 3. Run Standalone Node.js Server
 ```bash
-cd worker
-npm install
-npm run dev
+npm run start:standalone
+```
+
+### 4. Run with PM2 in Production
+```bash
+npm run start:pm2
 ```
 
 ---
 
-## Verification & Test Scenarios
+## 🛠️ Verification & Testing
 
-The platform contains a built-in **Interactive Test Scenario Lab** at `/dashboard#test-lab`:
-- **Test Flow 1 (Outbound Bulk)**: Dispatches `teaser_alert` (*"Something big is coming soon. Are you ready?"*) to the 3 seeded VIP contacts, throttles at 50ms, and updates `messages_log` with status `'delivered'`.
-- **Test Flow 2 (Inbound Interactive Automation)**: Simulates an inbound prospect replying `"Show me"` and verifies the webhook engine instantly fires back a Meta Interactive Message with 3 Quick Reply buttons: `[Product Specs, Pricing, Talk to Agent]`.
+Run the automated integration test suite:
+```bash
+node scratch/test_phase3.js
+```
+Verifies:
+1. Meta Webhook `GET` Handshake (`hub.challenge`)
+2. Inbound Message (`POST`) parsing & contact upsert
+3. Interactive WhatsApp Checkout (`checkout_*`, `buy_*`) & payment link generation
+4. Real-time delivery status receipts (`sent`, `delivered`, `read`)
+5. Asynchronous Campaign Queue dispatch & pacing
+6. Meta Commerce Catalog Batch Sync formatting
 
-For full production deployment instructions on Vercel and Hostinger VPS with PM2, consult [DEPLOYMENT.md](./DEPLOYMENT.md).
+---
+
+## 📜 License & Compliance
+
+Complies with the official [Meta WhatsApp Business Policy](https://www.whatsapp.com/legal/business-policy) and [Meta Commerce Terms](https://www.facebook.com/legal/commerce_product_merchant_agreement). Zero consumer chat logs are stored without consent.
