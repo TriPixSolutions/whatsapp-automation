@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import { DashboardStatusBanner } from '@/components/dashboard/DashboardStatusBanner';
 import { DashboardMetrics } from '@/components/dashboard/DashboardMetrics';
+import { DashboardHero } from '@/components/dashboard/DashboardHero';
 import {
   DashboardConversations,
   ConversationItem,
@@ -103,6 +104,11 @@ export default function DashboardPage() {
       />
 
       <main className="p-6 md:p-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
+        <DashboardHero
+          metaConfigured={metaConfigured}
+          activeChats={activeChats}
+        />
+
         <DashboardStatusBanner
           metaConfigured={metaConfigured}
           storesConnected={storesConnected}

@@ -3,9 +3,11 @@ import path from 'path';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Standalone Node.js server output for Hostinger Cloud / VPS / PM2
+  output: 'standalone',
   outputFileTracingRoot: path.join(__dirname),
 
-  // Bundle size & cold start mitigation
+  // Bundle size & cold start optimizations
   experimental: {
     optimizePackageImports: [
       'lucide-react',
@@ -32,14 +34,14 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
-      // 1. Static Next.js Bundles & Chunks (Immutable 1 Year)
+      // 1. Static Assets & Chunks (Immutable 1 Year)
       {
         source: '/_next/static/:path*',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
-      // 2. Next.js Optimized Images (Cached at Edge for 24h, Stale for 7d)
+      // 2. Next.js Optimized Images
       {
         source: '/_next/image/:path*',
         headers: [
@@ -49,19 +51,9 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // 3. Public Static & Marketing Pages (Edge Caching with ISR revalidation)
+      // 3. Dynamic App & API Routes (Strict Cache Bypass)
       {
-        source: '/(about|solutions|products|integrations|privacy-policy|terms-of-service)',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'public, s-maxage=3600, stale-while-revalidate=86400',
-          },
-        ],
-      },
-      // 4. Dynamic Dashboard & Workspace Routes (Bypass Edge & Browser Cache)
-      {
-        source: '/(dashboard|inbox|campaigns|automations|contacts|settings|admin|pending)/:path*',
+        source: '/(dashboard|inbox|campaigns|automations|contacts|settings|admin|pending|api)/:path*',
         headers: [
           {
             key: 'Cache-Control',
@@ -69,22 +61,13 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // 5. Dynamic API Routes (Strict Cache Bypass)
-      {
-        source: '/api/:path*',
-        headers: [
-          {
-            key: 'Cache-Control',
-            value: 'private, no-cache, no-store, max-age=0, must-revalidate',
-          },
-        ],
-      },
-      // 6. Global Security Headers
+      // 4. Global Security Headers
       {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],
       },

@@ -24,9 +24,10 @@ export function PublicFooter() {
             <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">Product</h4>
             <ul className="space-y-2">
               <li><Link href="/solutions" className="hover:text-slate-950 transition-colors">Solutions</Link></li>
-              <li><Link href="/products" className="hover:text-slate-950 transition-colors">Products</Link></li>
+              <li><Link href="/pricing" className="hover:text-slate-950 transition-colors">Pricing</Link></li>
               <li><Link href="/integrations" className="hover:text-slate-950 transition-colors">Integrations</Link></li>
               <li><Link href="/about" className="hover:text-slate-950 transition-colors">About Us</Link></li>
+              <li><Link href="/contact" className="hover:text-slate-950 transition-colors">Contact Sales</Link></li>
             </ul>
           </div>
 
@@ -35,8 +36,8 @@ export function PublicFooter() {
             <ul className="space-y-2">
               <li><Link href="/integrations" className="hover:text-slate-950 transition-colors">Shopify App</Link></li>
               <li><Link href="/integrations" className="hover:text-slate-950 transition-colors">WooCommerce Plugin</Link></li>
-              <li><Link href="/products" className="hover:text-slate-950 transition-colors">Multi-Agent Inbox</Link></li>
-              <li><Link href="/products" className="hover:text-slate-950 transition-colors">Visual Flow Builder</Link></li>
+              <li><Link href="/inbox" className="hover:text-slate-950 transition-colors">Multi-Agent Inbox</Link></li>
+              <li><Link href="/automations" className="hover:text-slate-950 transition-colors">Visual Flow Builder</Link></li>
             </ul>
           </div>
 

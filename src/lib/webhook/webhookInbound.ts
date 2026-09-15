@@ -1,6 +1,7 @@
 import { ContactsDB, MessagesDB, AutomationsDB, SettingsDB } from '@/lib/db';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
 import { handleWhatsAppCheckoutAction } from './webhookCheckoutHandler';
+import { handleAiInboundReply } from './webhookAiAssistant';
 
 export interface MetaMessageObject {
   from: string;
@@ -126,6 +127,9 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
     const matchedFlow = AutomationsDB.findMatch(triggerText);
     if (matchedFlow) {
       await dispatchAutomationReply(fromPhone, contact.id, matchedFlow);
+    } else if (message.type === 'text' && triggerText) {
+      // 3. AI Sales & Support Autonomous Inbound Assistant
+      await handleAiInboundReply(fromPhone, contact.id, triggerText);
     }
   }
 }

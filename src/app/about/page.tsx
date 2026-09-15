@@ -2,23 +2,15 @@
 
 import React from 'react';
 import Link from 'next/link';
-import {
-  ShieldCheck,
-  Zap,
-  Globe,
-  HeartHandshake,
-  CheckCircle2,
-  Sparkles,
-  ArrowRight,
-  Lock,
-} from 'lucide-react';
+import { ShieldCheck, Zap, Globe, Lock, ArrowRight } from 'lucide-react';
 import { PublicNav } from '@/components/PublicNav';
 import { PublicFooter } from '@/components/PublicFooter';
+import { AboutHero } from '@/components/about/AboutHero';
 
 const pillars = [
   {
     title: 'Direct Meta Cloud Infrastructure',
-    desc: 'We connect directly to Meta WhatsApp Graph API v18.0. You own your phone numbers, your business account, and your data with zero third-party per-message markup fees.',
+    desc: 'We connect directly to Meta WhatsApp Graph API v18.0. You own your phone numbers, your business account, and your customer data with zero third-party per-message markup fees.',
     icon: Globe,
   },
   {
@@ -32,7 +24,7 @@ const pillars = [
     icon: Lock,
   },
   {
-    title: 'Engineered for Marketers & Operators',
+    title: 'Engineered for Real Commercial Sales',
     desc: 'Building world-class customer journeys should not require a 6-month engineering backlog. Design bots, manage inboxes, and view order conversions in a unified, intuitive interface.',
     icon: Zap,
   },
@@ -43,32 +35,20 @@ export default function AboutPage() {
     <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       <PublicNav />
 
-      {/* Header */}
-      <section className="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-4">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50/80 border border-indigo-200/80 text-xs font-bold text-indigo-700">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>OUR ARCHITECTURE &amp; VALUES</span>
-        </div>
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight text-slate-950 max-w-4xl mx-auto leading-tight">
-          Modern infrastructure for high-converting customer conversations
-        </h1>
-        <p className="text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-normal">
-          We built Passion Fruit to replace bloated legacy WhatsApp tooling with a sleek, autonomous, developer-grade SaaS platform.
-        </p>
-      </section>
+      <AboutHero />
 
       {/* Corporate Philosophy */}
-      <section className="pb-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full">
-        <div className="glass-card rounded-3xl p-8 sm:p-12 space-y-10">
+      <section className="py-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full">
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-12 space-y-10 shadow-xs">
           <div className="space-y-4 max-w-2xl">
             <h2 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
-              Why We Built Passion Fruit
+              Why We Built This Platform
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
               Traditional WhatsApp business software is notoriously clunky, slow, and expensive. Most legacy platforms impose arbitrary per-message surcharges on top of Meta&apos;s rates while keeping your data locked in opaque databases.
             </p>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed font-normal">
-              Passion Fruit was engineered from the ground up on modern Silicon Valley architecture: Next.js, resilient serverless webhook processing, and direct Meta Cloud API v18.0 connectivity. We give brands complete ownership of their WhatsApp operations with state-of-the-art UI and enterprise-grade security.
+              Our platform was engineered on direct Meta Cloud API v18.0 connectivity, intelligent AI intent routing, and instantaneous e-commerce catalog sync to help you close more sales and delight customers 24/7.
             </p>
           </div>
 
@@ -93,15 +73,15 @@ export default function AboutPage() {
 
       {/* Bottom CTA */}
       <section className="pb-24 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center w-full">
-        <div className="bg-[#090A0F] rounded-3xl p-10 sm:p-14 text-white shadow-2xl space-y-4 border border-zinc-800">
-          <h3 className="text-2xl sm:text-3xl font-black">Experience Passion Fruit</h3>
-          <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
-            Create an account or sign in to your workspace to automate your store in minutes.
+        <div className="bg-slate-900 rounded-3xl p-10 sm:p-14 text-white shadow-2xl space-y-4 border border-slate-800">
+          <h3 className="text-2xl sm:text-3xl font-black">Experience the AI WhatsApp Platform</h3>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+            Create an account or sign in to your workspace to automate your sales operations in minutes.
           </p>
           <div className="pt-2">
             <Link
               href="/auth/signup"
-              className="gradient-button text-xs px-8 py-3.5 rounded-xl font-bold inline-flex items-center gap-2 text-white shadow-lg"
+              className="px-8 py-3.5 rounded-xl font-bold inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg text-xs"
             >
               <span>Get Started Free</span>
               <ArrowRight className="w-4 h-4" />

@@ -9,9 +9,10 @@ import { cn } from '@/lib/utils';
 
 const navLinks = [
   { name: 'Solutions', href: '/solutions' },
-  { name: 'Products', href: '/products' },
+  { name: 'Pricing', href: '/pricing' },
   { name: 'Integrations', href: '/integrations' },
   { name: 'About', href: '/about' },
+  { name: 'Contact', href: '/contact' },
 ];
 
 export function PublicNav() {

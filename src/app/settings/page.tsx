@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
+import { SettingsHero } from '@/components/settings/SettingsHero';
 import {
   Building2,
   Radio,
@@ -246,20 +247,10 @@ export default function SettingsPage() {
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto space-y-6">
-            {/* Page Title & Breadcrumbs */}
-            <div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mb-1">
-                <span>Console</span>
-                <span>/</span>
-                <span className="text-[#7C3AED] font-semibold">Settings Dashboard</span>
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#0D0F2D]">
-                Platform Settings &amp; Configuration
-              </h1>
-              <p className="text-xs text-slate-500 mt-1">
-                Manage your workspace identity, omnichannel Meta integrations, team roles, and API security keys.
-              </p>
-            </div>
+            <SettingsHero
+              whatsappConnected={whatsappConnected}
+              onSave={() => handleSaveAll()}
+            />
 
             {/* Vertical Tabbed Navigation & Content Container */}
             <div className="flex flex-col md:flex-row gap-6 items-start">
