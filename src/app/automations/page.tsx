@@ -1,10 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from '@/components/Sidebar';
-import { Header } from '@/components/Header';
 import { VisualAutomationCanvas } from '@/components/automations/VisualAutomationCanvas';
-import { WorkflowAnalyticsBar } from '@/components/automations/WorkflowAnalyticsBar';
 import { TestWorkflowModal } from '@/components/automations/TestWorkflowModal';
 import { ExecutionLogsModal } from '@/components/automations/ExecutionLogsModal';
 import {
@@ -14,23 +12,14 @@ import {
 } from '@/types/automations';
 import {
   Zap,
-  Play,
-  Save,
-  Check,
   Plus,
-  Activity,
+  ChevronDown,
   Layers,
   Sparkles,
-  ChevronDown,
-  RotateCcw,
-  Sliders,
-  Terminal,
-  Bug,
-  AlertCircle,
-  HelpCircle,
   BarChart3,
   RefreshCw,
   FolderOpen,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -67,7 +56,7 @@ const DEFAULT_VIP_SALES_FUNNEL: WorkflowDefinition = {
       config: {
         text: 'pricing, quote, catalog, buy',
       },
-      position: { x: 80, y: 180 },
+      position: { x: 80, y: 160 },
     },
     {
       id: 'node_welcome',
@@ -77,7 +66,7 @@ const DEFAULT_VIP_SALES_FUNNEL: WorkflowDefinition = {
       config: {
         text: 'Hello! Welcome to our Official WhatsApp Store. Here are our active product pricing and featured collections. How can we assist you today?',
       },
-      position: { x: 380, y: 180 },
+      position: { x: 420, y: 160 },
     },
     {
       id: 'node_buttons',
@@ -92,7 +81,7 @@ const DEFAULT_VIP_SALES_FUNNEL: WorkflowDefinition = {
           { id: 'btn_specialist', title: 'Talk to Sales', type: 'reply' },
         ],
       },
-      position: { x: 680, y: 180 },
+      position: { x: 760, y: 160 },
     },
     {
       id: 'node_carousel',
@@ -114,15 +103,9 @@ const DEFAULT_VIP_SALES_FUNNEL: WorkflowDefinition = {
             description: 'Titanium chassis with sapphire glass. $249',
             buttons: [{ id: 'card_btn_2', title: 'Order Watch' }],
           },
-          {
-            headerImage: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=80',
-            title: 'Aviator Sun Shades',
-            description: 'Polarized UV400 classic gold frame. $79',
-            buttons: [{ id: 'card_btn_3', title: 'Order Shades' }],
-          },
         ],
       },
-      position: { x: 980, y: 180 },
+      position: { x: 1100, y: 160 },
     },
     {
       id: 'node_condition',
@@ -134,58 +117,28 @@ const DEFAULT_VIP_SALES_FUNNEL: WorkflowDefinition = {
         conditionOperator: 'contains',
         conditionValue: 'order',
       },
-      position: { x: 1280, y: 180 },
+      position: { x: 1440, y: 160 },
     },
     {
       id: 'node_crm_qualified',
       type: 'crm_action',
-      title: 'Advance CRM to Qualified Lead',
+      title: 'Advance to Qualified Lead',
       description: 'Labels contact as Qualified Lead in sales pipeline',
       config: {
         stage: 'qualified',
         notes: 'Buyer engaged with product carousel and requested quotation',
       },
-      position: { x: 1580, y: 80 },
+      position: { x: 1780, y: 60 },
     },
     {
-      id: 'node_sheets_sync',
-      type: 'google_sheets',
-      title: 'Log Lead in Google Sheets',
-      description: 'Syncs lead phone, timestamp, and interested product',
+      id: 'node_fallback_support',
+      type: 'whatsapp_message',
+      title: 'Follow-up Concierge',
+      description: 'Provides direct specialist contact channel',
       config: {
-        sheetName: 'WhatsApp Sales Funnel Leads',
-        operation: 'append_row',
+        text: 'No problem! Our sales team is available 24/7 if you have questions about custom sizing or corporate pricing.',
       },
-      position: { x: 1880, y: 80 },
-    },
-    {
-      id: 'node_tag_buyer',
-      type: 'tag_management',
-      title: 'Tag Contact with #vip_buyer',
-      description: 'Applies VIP buyer tag to contact profile in database',
-      config: {
-        action: 'add',
-        tag: 'vip_buyer',
-      },
-      position: { x: 1580, y: 280 },
-    },
-    {
-      id: 'node_wait_reply',
-      type: 'wait_for_reply',
-      title: 'Wait for Customer Response',
-      description: 'Awaiting customer response with 30m timeout',
-      config: {
-        timeoutMinutes: 30,
-      },
-      position: { x: 1880, y: 280 },
-    },
-    {
-      id: 'node_end',
-      type: 'end',
-      title: 'Funnel Completed',
-      description: 'Sales qualification flow concludes successfully',
-      config: {},
-      position: { x: 2180, y: 180 },
+      position: { x: 1780, y: 260 },
     },
   ],
   edges: [
@@ -193,12 +146,8 @@ const DEFAULT_VIP_SALES_FUNNEL: WorkflowDefinition = {
     { id: 'e2', source: 'node_welcome', target: 'node_buttons' },
     { id: 'e3', source: 'node_buttons', target: 'node_carousel' },
     { id: 'e4', source: 'node_carousel', target: 'node_condition' },
-    { id: 'e5_true', source: 'node_condition', sourceHandle: 'true', target: 'node_crm_qualified', label: 'True' },
-    { id: 'e5_false', source: 'node_condition', sourceHandle: 'false', target: 'node_tag_buyer', label: 'False' },
-    { id: 'e6_crm_sheets', source: 'node_crm_qualified', target: 'node_sheets_sync' },
-    { id: 'e7_tag_wait', source: 'node_tag_buyer', target: 'node_wait_reply' },
-    { id: 'e8_sheets_end', source: 'node_sheets_sync', target: 'node_end' },
-    { id: 'e9_wait_end', source: 'node_wait_reply', target: 'node_end' },
+    { id: 'e5_yes', source: 'node_condition', sourceHandle: 'true', target: 'node_crm_qualified', label: 'Yes' },
+    { id: 'e5_no', source: 'node_condition', sourceHandle: 'false', target: 'node_fallback_support', label: 'No' },
   ],
 };
 
@@ -222,7 +171,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
       title: 'Any Inbound Message Trigger',
       description: 'Listens for customer support inquiries',
       config: {},
-      position: { x: 100, y: 180 },
+      position: { x: 100, y: 160 },
     },
     {
       id: 'node_support_menu',
@@ -237,7 +186,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
           { id: 'btn_human', title: 'Speak to Human' },
         ],
       },
-      position: { x: 400, y: 180 },
+      position: { x: 440, y: 160 },
     },
     {
       id: 'node_router',
@@ -252,7 +201,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
           { id: 'human', label: 'Human Agent', conditionValue: 'human' },
         ],
       },
-      position: { x: 720, y: 180 },
+      position: { x: 780, y: 160 },
     },
     {
       id: 'node_tech_action',
@@ -260,7 +209,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
       title: 'Tag Contact: #tech_support',
       description: 'Applies tech support tag to contact',
       config: { action: 'add', tag: 'tech_support' },
-      position: { x: 1040, y: 60 },
+      position: { x: 1120, y: 50 },
     },
     {
       id: 'node_billing_api',
@@ -271,7 +220,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
         apiUrl: 'https://api.example.com/v1/invoices',
         apiMethod: 'GET',
       },
-      position: { x: 1040, y: 180 },
+      position: { x: 1120, y: 160 },
     },
     {
       id: 'node_human_escalate',
@@ -279,7 +228,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
       title: 'Escalate to Live Agent in CRM',
       description: 'Assigns priority agent in team inbox',
       config: { stage: 'negotiation', notes: 'Customer requested human agent escalation' },
-      position: { x: 1040, y: 300 },
+      position: { x: 1120, y: 280 },
     },
     {
       id: 'node_support_end',
@@ -287,7 +236,7 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
       title: 'Triage Concluded',
       description: 'Ticket successfully assigned',
       config: {},
-      position: { x: 1360, y: 180 },
+      position: { x: 1460, y: 160 },
     },
   ],
   edges: [
@@ -303,13 +252,14 @@ const DEFAULT_SUPPORT_ROUTER_FUNNEL: WorkflowDefinition = {
 };
 
 export default function AutomationsPage() {
-  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([DEFAULT_VIP_SALES_FUNNEL, DEFAULT_SUPPORT_ROUTER_FUNNEL]);
+  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([
+    DEFAULT_VIP_SALES_FUNNEL,
+    DEFAULT_SUPPORT_ROUTER_FUNNEL,
+  ]);
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowDefinition>(DEFAULT_VIP_SALES_FUNNEL);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(true);
-  const [debugMode, setDebugMode] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   // Testing & Execution State
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
@@ -317,6 +267,9 @@ export default function AutomationsPage() {
   const [isExecutingTest, setIsExecutingTest] = useState(false);
   const [lastExecution, setLastExecution] = useState<WorkflowExecutionLog | null>(null);
   const [executionTrace, setExecutionTrace] = useState<ExecutionTraceStep[]>([]);
+
+  // Debounced auto-save ref
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // 1. Fetch real workflows on mount
   const fetchWorkflows = useCallback(async () => {
@@ -341,28 +294,44 @@ export default function AutomationsPage() {
     fetchWorkflows();
   }, [fetchWorkflows]);
 
-  // 2. Save current workflow to backend database
-  const handleSaveWorkflow = async () => {
+  // 2. Save workflow to backend database
+  const saveWorkflowToBackend = useCallback(async (wf: WorkflowDefinition) => {
     setIsSaving(true);
     try {
       const res = await fetch('/api/automations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(activeWorkflow),
+        body: JSON.stringify(wf),
       });
 
       if (res.ok) {
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 2500);
+        setLastSavedAt(new Date().toLocaleTimeString());
       }
     } catch (err) {
       console.error('Failed to save workflow', err);
     } finally {
       setIsSaving(false);
     }
-  };
+  }, []);
 
-  // 3. Create new blank workflow
+  // 3. Workflow change handler with auto-save
+  const handleWorkflowChange = useCallback(
+    (updated: WorkflowDefinition) => {
+      setActiveWorkflow(updated);
+      setWorkflows((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
+
+      // Debounce auto-save by 800ms
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      saveTimeoutRef.current = setTimeout(() => {
+        saveWorkflowToBackend(updated);
+      }, 800);
+    },
+    [saveWorkflowToBackend]
+  );
+
+  // 4. Create new blank workflow
   const handleCreateNewWorkflow = () => {
     const newWf: WorkflowDefinition = {
       id: `wf_${Date.now()}`,
@@ -380,7 +349,7 @@ export default function AutomationsPage() {
           title: 'Keyword Trigger',
           description: 'Fires when customer sends matching keyword',
           config: { text: 'start, menu, help' },
-          position: { x: 100, y: 180 },
+          position: { x: 100, y: 160 },
         },
         {
           id: `node_msg_${Date.now() + 1}`,
@@ -388,7 +357,7 @@ export default function AutomationsPage() {
           title: 'Welcome Message',
           description: 'Automated greeting message',
           config: { text: 'Hello! Thank you for contacting us. How may we assist you today?' },
-          position: { x: 420, y: 180 },
+          position: { x: 440, y: 160 },
         },
       ],
       edges: [
@@ -405,9 +374,10 @@ export default function AutomationsPage() {
 
     setWorkflows((prev) => [newWf, ...prev]);
     setActiveWorkflow(newWf);
+    saveWorkflowToBackend(newWf);
   };
 
-  // 4. Run Test Workflow simulation with live node-by-node illumination
+  // 5. Run Test Workflow simulation with live node-by-node illumination
   const handleRunTestWorkflow = async (payload: {
     phoneNumber: string;
     text: string;
@@ -423,7 +393,6 @@ export default function AutomationsPage() {
           phoneNumber: payload.phoneNumber,
           text: payload.text,
           simulationType: payload.simulationType,
-          debugMode,
         }),
       });
 
@@ -438,8 +407,7 @@ export default function AutomationsPage() {
           const steps = execLog.steps || [];
           for (let i = 0; i < steps.length; i++) {
             setExecutionTrace(steps.slice(0, i + 1));
-            // Brief visual illumination delay between nodes
-            await new Promise((r) => setTimeout(r, 400));
+            await new Promise((r) => setTimeout(r, 450));
           }
           setExecutionTrace(steps);
           return execLog;
@@ -455,22 +423,21 @@ export default function AutomationsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#0B0F19] text-white overflow-hidden">
+    <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
       {/* Sidebar Navigation */}
       <Sidebar />
 
-      {/* Main Builder Canvas Area */}
+      {/* Main Studio Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
-        <Header
-          title="Visual Automations Engine"
-          subtitle="Design, simulate, and deploy interactive WhatsApp funnels visually"
-        />
+        {/* Top Control Bar: Workflow Switcher & New Button */}
+        <div className="h-12 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between z-10 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-white tracking-wide">Workflows</span>
+            </div>
 
-        {/* Visual Engine Top Bar */}
-        <div className="bg-gray-950 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between gap-3 z-10">
-          {/* Left: Workflow Selector & Name Editor */}
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Workflow Dropdown */}
+            {/* Workflow Select Menu */}
             <div className="relative">
               <select
                 value={activeWorkflow.id}
@@ -482,7 +449,7 @@ export default function AutomationsPage() {
                     setLastExecution(null);
                   }
                 }}
-                className="bg-gray-900 border border-gray-700/80 rounded-xl pl-3 pr-8 py-1.5 text-xs font-semibold text-white focus:outline-none focus:border-emerald-500/80 appearance-none cursor-pointer"
+                className="bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-lg pl-3 pr-8 py-1 text-xs font-semibold text-white outline-none cursor-pointer"
               >
                 {workflows.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -490,149 +457,34 @@ export default function AutomationsPage() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-gray-400 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-2 text-slate-400 pointer-events-none" />
             </div>
 
-            {/* Editable Workflow Name */}
-            <input
-              type="text"
-              value={activeWorkflow.name}
-              onChange={(e) =>
-                setActiveWorkflow({ ...activeWorkflow, name: e.target.value })
-              }
-              className="bg-transparent border-b border-dashed border-gray-700 hover:border-gray-500 focus:border-emerald-500 text-sm font-bold text-white focus:outline-none px-1 py-0.5 truncate max-w-[260px]"
-            />
-
-            {/* Active Switch */}
             <button
-              onClick={() =>
-                setActiveWorkflow({
-                  ...activeWorkflow,
-                  isActive: !activeWorkflow.isActive,
-                })
-              }
-              className={cn(
-                'text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border transition-all cursor-pointer flex items-center gap-1.5',
-                activeWorkflow.isActive
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : 'bg-gray-900 text-gray-500 border-gray-800'
-              )}
+              onClick={handleCreateNewWorkflow}
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors"
             >
-              <span
-                className={cn(
-                  'w-1.5 h-1.5 rounded-full',
-                  activeWorkflow.isActive ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'
-                )}
-              />
-              {activeWorkflow.isActive ? 'Active 24/7' : 'Paused'}
+              <Plus className="w-3 h-3 text-emerald-400" />
+              <span>New Flow</span>
             </button>
           </div>
 
-          {/* Right: Actions, Debug Mode, Run Test, Execution Logs, Save */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* New Workflow */}
-            <button
-              onClick={handleCreateNewWorkflow}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 rounded-xl text-xs font-semibold transition-all"
-            >
-              <Plus className="w-3.5 h-3.5 text-emerald-400" />
-              <span>New Flow</span>
-            </button>
-
-            {/* Toggle Analytics Bar */}
-            <button
-              onClick={() => setShowAnalytics(!showAnalytics)}
-              className={cn(
-                'p-1.5 border rounded-xl transition-all',
-                showAnalytics
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                  : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'
-              )}
-              title="Toggle Workflow Analytics"
-            >
-              <BarChart3 className="w-4 h-4" />
-            </button>
-
-            {/* Debug Mode Toggle */}
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              className={cn(
-                'flex items-center gap-1.5 px-2.5 py-1.5 border rounded-xl text-xs font-mono transition-all',
-                debugMode
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                  : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'
-              )}
-              title="Toggle Debug Inspector Mode"
-            >
-              <Bug className="w-3.5 h-3.5" />
-              <span>Debug</span>
-            </button>
-
-            {/* Execution Logs Button */}
-            <button
-              onClick={() => setIsLogsModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white border border-gray-800 rounded-xl text-xs font-semibold transition-all"
-            >
-              <Terminal className="w-3.5 h-3.5 text-blue-400" />
-              <span>Logs</span>
-            </button>
-
-            {/* Run Test Workflow Button */}
-            <button
-              onClick={() => setIsTestModalOpen(true)}
-              disabled={isExecutingTest}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/10 transition-all cursor-pointer"
-            >
-              {isExecutingTest ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                  <span>Running Test...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5 fill-current text-emerald-400" />
-                  <span>Run Test</span>
-                </>
-              )}
-            </button>
-
-            {/* Save Workflow Button */}
-            <button
-              onClick={handleSaveWorkflow}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
-            >
-              {isSaving ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : saveSuccess ? (
-                <>
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Saved Live</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Save</span>
-                </>
-              )}
-            </button>
+          <div className="text-[11px] text-slate-400 font-mono flex items-center gap-2">
+            <span>Visual Node Engine v2.0</span>
           </div>
         </div>
 
-        {/* Workflow Analytics Bar (Collapsible) */}
-        {showAnalytics && <WorkflowAnalyticsBar workflow={activeWorkflow} />}
-
-        {/* Main Infinite Node Canvas */}
+        {/* Studio Canvas */}
         <div className="flex-1 relative overflow-hidden">
           <VisualAutomationCanvas
             workflow={activeWorkflow}
-            onChangeWorkflow={setActiveWorkflow}
+            onChangeWorkflow={handleWorkflowChange}
             executionTrace={executionTrace}
             isExecuting={isExecutingTest}
-            debugMode={debugMode}
+            onRunTest={() => setIsTestModalOpen(true)}
+            onOpenLogs={() => setIsLogsModalOpen(true)}
+            isSaving={isSaving}
+            lastSavedAt={lastSavedAt}
           />
         </div>
       </div>

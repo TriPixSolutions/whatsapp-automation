@@ -224,7 +224,10 @@ export const TestCenterStore = {
   // WORKFLOWS
   listWorkflows(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowDefinition[] {
     return Object.values(globalState.workflows).filter(
-      (w) => w.workspaceId === workspaceId
+      (w) =>
+        w.workspaceId === workspaceId ||
+        (w.workspaceId === 'default' && workspaceId === DEFAULT_WORKSPACE_ID) ||
+        (w.workspaceId === DEFAULT_WORKSPACE_ID && workspaceId === 'default')
     );
   },
 

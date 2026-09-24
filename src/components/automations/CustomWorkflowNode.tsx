@@ -28,6 +28,11 @@ import {
   ListFilter,
   Hourglass,
   StopCircle,
+  Bot,
+  BrainCircuit,
+  PhoneForwarded,
+  MapPin,
+  FileCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkflowNode } from '@/types/automations';
@@ -252,6 +257,71 @@ const CATEGORY_STYLES: Record<
     badgeBg: 'bg-orange-500/10 border-orange-500/30',
     tagLabel: 'WEBHOOK',
   },
+  // AI Nodes
+  ai_agent: {
+    icon: Bot,
+    accent: 'text-violet-400',
+    border: 'border-violet-500/40',
+    bg: 'from-violet-950/20 to-gray-900',
+    badge: 'text-violet-400',
+    badgeBg: 'bg-violet-500/10 border-violet-500/30',
+    tagLabel: 'AI AGENT',
+  },
+  ai_sentiment: {
+    icon: BrainCircuit,
+    accent: 'text-violet-400',
+    border: 'border-violet-500/40',
+    bg: 'from-violet-950/20 to-gray-900',
+    badge: 'text-violet-400',
+    badgeBg: 'bg-violet-500/10 border-violet-500/30',
+    tagLabel: 'AI SENTIMENT',
+  },
+  ai_smart_reply: {
+    icon: MessageSquare,
+    accent: 'text-violet-400',
+    border: 'border-violet-500/40',
+    bg: 'from-violet-950/20 to-gray-900',
+    badge: 'text-violet-400',
+    badgeBg: 'bg-violet-500/10 border-violet-500/30',
+    tagLabel: 'AI REPLY',
+  },
+  ai_handoff: {
+    icon: PhoneForwarded,
+    accent: 'text-violet-400',
+    border: 'border-violet-500/40',
+    bg: 'from-violet-950/20 to-gray-900',
+    badge: 'text-violet-400',
+    badgeBg: 'bg-violet-500/10 border-violet-500/30',
+    tagLabel: 'AI HANDOVER',
+  },
+  // WhatsApp Media & Templates
+  message_media: {
+    icon: Layers,
+    accent: 'text-emerald-400',
+    border: 'border-emerald-500/40',
+    bg: 'from-emerald-950/20 to-gray-900',
+    badge: 'text-emerald-400',
+    badgeBg: 'bg-emerald-500/10 border-emerald-500/30',
+    tagLabel: 'MEDIA MESSAGE',
+  },
+  message_template: {
+    icon: FileCode,
+    accent: 'text-emerald-400',
+    border: 'border-emerald-500/40',
+    bg: 'from-emerald-950/20 to-gray-900',
+    badge: 'text-emerald-400',
+    badgeBg: 'bg-emerald-500/10 border-emerald-500/30',
+    tagLabel: 'META TEMPLATE',
+  },
+  whatsapp_list: {
+    icon: ListFilter,
+    accent: 'text-teal-400',
+    border: 'border-teal-500/40',
+    bg: 'from-teal-950/20 to-gray-900',
+    badge: 'text-teal-400',
+    badgeBg: 'bg-teal-500/10 border-teal-500/30',
+    tagLabel: 'SECTION LIST',
+  },
   end: {
     icon: StopCircle,
     accent: 'text-gray-400',
@@ -281,7 +351,7 @@ export const CustomWorkflowNode = memo(function CustomWorkflowNode({
   const node = data as unknown as CustomNodeData;
   const nodeType = (node.type || 'whatsapp_message') as string;
 
-  // Resolve category styling (supporting legacy types too)
+  // Resolve category styling (supporting all 16 node types & legacy aliases)
   const resolvedKey =
     nodeType === 'trigger'
       ? 'trigger_keyword'
@@ -289,14 +359,28 @@ export const CustomWorkflowNode = memo(function CustomWorkflowNode({
       ? 'whatsapp_message'
       : nodeType === 'button'
       ? 'whatsapp_button'
+      : nodeType === 'list'
+      ? 'whatsapp_list'
       : nodeType === 'carousel'
       ? 'whatsapp_carousel'
+      : nodeType === 'flow'
+      ? 'whatsapp_flow'
       : nodeType === 'condition'
       ? 'conditional_logic'
-      : nodeType === 'api'
+      : nodeType === 'ai' || nodeType === 'ai_agent'
+      ? 'ai_agent'
+      : nodeType === 'api' || nodeType === 'api_request'
       ? 'api_node'
       : nodeType === 'webhook'
       ? 'webhook_node'
+      : nodeType === 'tag'
+      ? 'tag_management'
+      : nodeType === 'assign_agent'
+      ? 'crm_action'
+      : nodeType === 'wait'
+      ? 'wait_for_reply'
+      : nodeType === 'branch'
+      ? 'multi_branch'
       : nodeType;
 
   const style = CATEGORY_STYLES[resolvedKey] || DEFAULT_STYLE;

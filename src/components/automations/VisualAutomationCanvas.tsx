@@ -14,29 +14,37 @@ import {
   Node,
   MarkerType,
   BackgroundVariant,
-  Panel,
   ReactFlowProvider,
+  SelectionMode,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { CustomWorkflowNode, CustomNodeData } from './CustomWorkflowNode';
-import { NodePalette, NodePaletteItem } from './NodePalette';
-import { NodeConfigDrawer } from './NodeConfigDrawer';
-import { RightLivePreviewPanel } from './RightLivePreviewPanel';
+import { CustomWorkflowNode } from './CustomWorkflowNode';
+import { LeftWorkflowSidebar, NodePaletteItem } from './LeftWorkflowSidebar';
+import { RightInspectorStudio } from './RightInspectorStudio';
 import {
   WorkflowDefinition,
   WorkflowNode,
   VisualWorkflowEdge,
   ExecutionTraceStep,
 } from '@/types/automations';
+import { autoArrangeDAG, validateWorkflow } from '@/lib/automations/dagLayout';
 import { cn } from '@/lib/utils';
 import {
+  Undo2,
+  Redo2,
+  Copy,
+  Trash2,
+  Grid,
+  Magnet,
+  Maximize2,
+  SlidersHorizontal,
+  Play,
+  CheckCircle2,
+  AlertTriangle,
   ZoomIn,
   ZoomOut,
-  Maximize2,
-  Lock,
-  Unlock,
+  FolderTree,
   Sparkles,
-  Layers,
   Save,
   Check,
 } from 'lucide-react';
@@ -47,6 +55,10 @@ interface VisualAutomationCanvasProps {
   executionTrace?: ExecutionTraceStep[];
   isExecuting?: boolean;
   debugMode?: boolean;
+  onRunTest?: () => void;
+  onOpenLogs?: () => void;
+  isSaving?: boolean;
+  lastSavedAt?: string | null;
 }
 
 const nodeTypes = {
@@ -59,19 +71,63 @@ function VisualCanvasInner({
   executionTrace,
   isExecuting,
   debugMode,
+  onRunTest,
+  onOpenLogs,
+  isSaving,
+  lastSavedAt,
 }: VisualAutomationCanvasProps) {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
 
+  // Studio Docking States
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isPaletteOpen, setIsPaletteOpen] = useState(true);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(true);
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
+
+  // Canvas View Settings
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [gridVariant, setGridVariant] = useState<BackgroundVariant>(BackgroundVariant.Dots);
+
+  // Undo / Redo History Stacks
+  const [historyPast, setHistoryPast] = useState<WorkflowDefinition[]>([]);
+  const [historyFuture, setHistoryFuture] = useState<WorkflowDefinition[]>([]);
+
+  // Clipboard for Copy / Paste
+  const copiedNodeRef = useRef<WorkflowNode | null>(null);
+
+  // Calculate live validation errors
+  const validationErrors = useMemo(() => {
+    return validateWorkflow(workflow);
+  }, [workflow]);
+
+  // Push new state onto history before mutation
+  const pushHistory = useCallback(
+    (current: WorkflowDefinition) => {
+      setHistoryPast((prev) => [...prev.slice(-30), JSON.parse(JSON.stringify(current))]);
+      setHistoryFuture([]);
+    },
+    []
+  );
+
+  const handleUndo = useCallback(() => {
+    if (historyPast.length === 0) return;
+    const previous = historyPast[historyPast.length - 1];
+    setHistoryPast((prev) => prev.slice(0, prev.length - 1));
+    setHistoryFuture((prev) => [JSON.parse(JSON.stringify(workflow)), ...prev]);
+    onChangeWorkflow(previous);
+  }, [historyPast, workflow, onChangeWorkflow]);
+
+  const handleRedo = useCallback(() => {
+    if (historyFuture.length === 0) return;
+    const next = historyFuture[0];
+    setHistoryFuture((prev) => prev.slice(1));
+    setHistoryPast((prev) => [...prev, JSON.parse(JSON.stringify(workflow))]);
+    onChangeWorkflow(next);
+  }, [historyFuture, workflow, onChangeWorkflow]);
 
   // Map WorkflowNodes to ReactFlow Nodes
   const initialNodes: Node[] = useMemo(() => {
     return workflow.nodes.map((n, index) => {
-      // Find execution step for this node if any
       const execStep = executionTrace?.find((s) => s.nodeId === n.id);
       let status: 'idle' | 'running' | 'completed' | 'failed' = 'idle';
       if (execStep) {
@@ -83,7 +139,8 @@ function VisualCanvasInner({
       return {
         id: n.id,
         type: 'customNode',
-        position: n.position || { x: 100 + index * 280, y: 150 },
+        position: n.position || { x: 100 + index * 320, y: 160 },
+        selected: n.id === selectedNodeId,
         data: {
           ...n,
           status,
@@ -92,7 +149,7 @@ function VisualCanvasInner({
           isSelected: n.id === selectedNodeId,
           onSelectNode: (id: string) => {
             setSelectedNodeId(id);
-            setIsConfigOpen(true);
+            setIsRightPanelOpen(true);
           },
           onDeleteNode: (id: string) => handleDeleteNode(id),
           onDuplicateNode: (id: string) => handleDuplicateNode(id),
@@ -104,26 +161,30 @@ function VisualCanvasInner({
   // Map VisualWorkflowEdges to ReactFlow Edges
   const initialEdges: Edge[] = useMemo(() => {
     if (workflow.edges && workflow.edges.length > 0) {
-      return workflow.edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        sourceHandle: e.sourceHandle,
-        targetHandle: e.targetHandle,
-        label: e.label,
-        animated: e.animated || isExecuting,
-        style: {
-          stroke: e.sourceHandle === 'false' ? '#f43f5e' : '#10b981',
-          strokeWidth: 2.5,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: e.sourceHandle === 'false' ? '#f43f5e' : '#10b981',
-        },
-      }));
+      return workflow.edges.map((e) => {
+        const isFalse = e.sourceHandle === 'false' || e.label?.toLowerCase() === 'no';
+        const color = isFalse ? '#f43f5e' : '#10b981';
+        return {
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+          label: e.label,
+          animated: e.animated || isExecuting,
+          style: {
+            stroke: color,
+            strokeWidth: 2.5,
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color,
+          },
+        };
+      });
     }
 
-    // Fallback: derive sequential edges from nextNodeId
+    // Fallback: derive connections from node configuration
     const derived: Edge[] = [];
     workflow.nodes.forEach((n) => {
       if (n.nextNodeId) {
@@ -141,7 +202,7 @@ function VisualCanvasInner({
           source: n.id,
           sourceHandle: 'true',
           target: n.config.trueNextNodeId,
-          label: 'True',
+          label: 'Yes',
           style: { stroke: '#10b981', strokeWidth: 2.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981' },
         });
@@ -152,7 +213,7 @@ function VisualCanvasInner({
           source: n.id,
           sourceHandle: 'false',
           target: n.config.falseNextNodeId,
-          label: 'False',
+          label: 'No',
           style: { stroke: '#f43f5e', strokeWidth: 2.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color: '#f43f5e' },
         });
@@ -164,7 +225,7 @@ function VisualCanvasInner({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Synchronize when external workflow changes
+  // Sync ReactFlow internal state when workflow prop changes
   useEffect(() => {
     setNodes(initialNodes);
   }, [initialNodes, setNodes]);
@@ -173,7 +234,7 @@ function VisualCanvasInner({
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
 
-  // Propagate node position and structural updates to parent workflow
+  // Synchronize changes to parent workflow
   const syncToParentWorkflow = useCallback(
     (newNodes: Node[], newEdges: Edge[]) => {
       const updatedNodes: WorkflowNode[] = newNodes.map((n) => {
@@ -212,15 +273,18 @@ function VisualCanvasInner({
     [workflow, onChangeWorkflow]
   );
 
-  // Connecting nodes using visual connection lines
+  // Connecting nodes with directional arrows
   const onConnect = useCallback(
     (params: Connection) => {
+      pushHistory(workflow);
       setEdges((eds) => {
-        const isFalseBranch = params.sourceHandle === 'false';
-        const color = isFalseBranch ? '#f43f5e' : '#10b981';
+        const isFalse = params.sourceHandle === 'false';
+        const color = isFalse ? '#f43f5e' : '#10b981';
+        const label = isFalse ? 'No' : params.sourceHandle === 'true' ? 'Yes' : undefined;
         const newEdge: Edge = {
           ...params,
           id: `edge_${params.source}_${params.sourceHandle || 'def'}_${params.target}`,
+          label,
           animated: true,
           style: { stroke: color, strokeWidth: 2.5 },
           markerEnd: { type: MarkerType.ArrowClosed, color },
@@ -230,10 +294,10 @@ function VisualCanvasInner({
         return updated;
       });
     },
-    [nodes, setEdges, syncToParentWorkflow]
+    [workflow, nodes, pushHistory, setEdges, syncToParentWorkflow]
   );
 
-  // When node drag stops, sync positions
+  // Node Drag Stop
   const onNodeDragStop = useCallback(
     (_: any, node: Node) => {
       setNodes((nds) => {
@@ -245,7 +309,85 @@ function VisualCanvasInner({
     [edges, setNodes, syncToParentWorkflow]
   );
 
-  // Drag and drop node from NodePalette
+  // Auto Arrange (DAG Layout Algorithm)
+  const handleAutoArrange = useCallback(() => {
+    pushHistory(workflow);
+    const arranged = autoArrangeDAG(workflow, 'LR');
+    onChangeWorkflow({
+      ...workflow,
+      nodes: arranged.nodes,
+      edges: arranged.edges,
+    });
+    setTimeout(() => {
+      if (reactFlowInstance) {
+        reactFlowInstance.fitView({ padding: 0.2, duration: 400 });
+      }
+    }, 50);
+  }, [workflow, pushHistory, onChangeWorkflow, reactFlowInstance]);
+
+  // Duplicate Node
+  const handleDuplicateNode = useCallback(
+    (nodeId: string) => {
+      const source = workflow.nodes.find((n) => n.id === nodeId);
+      if (!source) return;
+      pushHistory(workflow);
+
+      const duplicatedId = `node_${Date.now()}`;
+      const duplicated: WorkflowNode = {
+        ...JSON.parse(JSON.stringify(source)),
+        id: duplicatedId,
+        title: `${source.title} (Copy)`,
+        position: {
+          x: (source.position?.x || 100) + 40,
+          y: (source.position?.y || 160) + 40,
+        },
+      };
+
+      const updatedNodes = [...workflow.nodes, duplicated];
+      onChangeWorkflow({ ...workflow, nodes: updatedNodes });
+      setSelectedNodeId(duplicatedId);
+    },
+    [workflow, pushHistory, onChangeWorkflow]
+  );
+
+  // Delete Node
+  const handleDeleteNode = useCallback(
+    (nodeId: string) => {
+      pushHistory(workflow);
+      const updatedNodes = workflow.nodes.filter((n) => n.id !== nodeId);
+      const updatedEdges = (workflow.edges || []).filter(
+        (e) => e.source !== nodeId && e.target !== nodeId
+      );
+
+      onChangeWorkflow({
+        ...workflow,
+        nodes: updatedNodes,
+        edges: updatedEdges,
+      });
+
+      if (selectedNodeId === nodeId) {
+        setSelectedNodeId(null);
+      }
+    },
+    [workflow, selectedNodeId, pushHistory, onChangeWorkflow]
+  );
+
+  // Copy Node
+  const handleCopyNode = useCallback(() => {
+    if (!selectedNodeId) return;
+    const target = workflow.nodes.find((n) => n.id === selectedNodeId);
+    if (target) {
+      copiedNodeRef.current = target;
+    }
+  }, [selectedNodeId, workflow.nodes]);
+
+  // Paste Node
+  const handlePasteNode = useCallback(() => {
+    if (!copiedNodeRef.current) return;
+    handleDuplicateNode(copiedNodeRef.current.id);
+  }, [handleDuplicateNode]);
+
+  // Drag and drop from Left Panel
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
@@ -254,10 +396,8 @@ function VisualCanvasInner({
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-
-      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
       const rawData = event.dataTransfer.getData('application/reactflow');
-      if (!rawData || !reactFlowBounds || !reactFlowInstance) return;
+      if (!rawData || !reactFlowInstance) return;
 
       const item: NodePaletteItem = JSON.parse(rawData);
       const position = reactFlowInstance.screenToFlowPosition({
@@ -265,6 +405,7 @@ function VisualCanvasInner({
         y: event.clientY,
       });
 
+      pushHistory(workflow);
       const newNodeId = `node_${Date.now()}`;
       const newWorkflowNode: WorkflowNode = {
         id: newNodeId,
@@ -275,190 +416,360 @@ function VisualCanvasInner({
         position,
       };
 
-      const updatedWorkflowNodes = [...workflow.nodes, newWorkflowNode];
       onChangeWorkflow({
         ...workflow,
-        nodes: updatedWorkflowNodes,
+        nodes: [...workflow.nodes, newWorkflowNode],
       });
 
       setSelectedNodeId(newNodeId);
-      setIsConfigOpen(true);
+      setIsRightPanelOpen(true);
     },
-    [reactFlowInstance, workflow, onChangeWorkflow]
+    [reactFlowInstance, workflow, pushHistory, onChangeWorkflow]
   );
 
-  // Add node from Palette click
-  const handleAddNodeFromPalette = (item: NodePaletteItem) => {
-    const newNodeId = `node_${Date.now()}`;
-    const xOffset = 120 + (workflow.nodes.length % 5) * 60;
-    const yOffset = 140 + (workflow.nodes.length % 4) * 80;
+  // Add node from Left Panel single-click
+  const handleAddNodeFromSidebar = useCallback(
+    (item: NodePaletteItem) => {
+      pushHistory(workflow);
+      const newNodeId = `node_${Date.now()}`;
+      const offset = (workflow.nodes.length % 6) * 50;
+      const newWorkflowNode: WorkflowNode = {
+        id: newNodeId,
+        type: item.type,
+        title: item.title,
+        description: item.description,
+        config: item.defaultConfig,
+        position: {
+          x: 180 + offset,
+          y: 160 + offset,
+        },
+      };
 
-    const newWorkflowNode: WorkflowNode = {
-      id: newNodeId,
-      type: item.type,
-      title: item.title,
-      description: item.description,
-      config: item.defaultConfig,
-      position: { x: xOffset, y: yOffset },
+      onChangeWorkflow({
+        ...workflow,
+        nodes: [...workflow.nodes, newWorkflowNode],
+      });
+
+      setSelectedNodeId(newNodeId);
+      setIsRightPanelOpen(true);
+    },
+    [workflow, pushHistory, onChangeWorkflow]
+  );
+
+  // Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const isInput =
+        activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement;
+      if (isInput) return;
+
+      // Copy (Ctrl+C / Cmd+C)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        e.preventDefault();
+        handleCopyNode();
+      }
+      // Paste (Ctrl+V / Cmd+V)
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        e.preventDefault();
+        handlePasteNode();
+      }
+      // Delete / Backspace
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNodeId) {
+          e.preventDefault();
+          handleDeleteNode(selectedNodeId);
+        }
+      }
+      // Undo (Ctrl+Z / Cmd+Z)
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Redo (Ctrl+Y or Cmd+Shift+Z)
+      else if (
+        ((e.ctrlKey || e.metaKey) && e.key === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')
+      ) {
+        e.preventDefault();
+        handleRedo();
+      }
+      // Escape (Deselect)
+      else if (e.key === 'Escape') {
+        setSelectedNodeId(null);
+      }
     };
 
-    const updatedWorkflowNodes = [...workflow.nodes, newWorkflowNode];
-    onChangeWorkflow({
-      ...workflow,
-      nodes: updatedWorkflowNodes,
-    });
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodeId, handleCopyNode, handlePasteNode, handleDeleteNode, handleUndo, handleRedo]);
 
-    setSelectedNodeId(newNodeId);
-    setIsConfigOpen(true);
-  };
-
-  // Node editing from drawer
-  const handleUpdateNode = (updated: WorkflowNode) => {
-    const updatedList = workflow.nodes.map((n) => (n.id === updated.id ? updated : n));
-    onChangeWorkflow({
-      ...workflow,
-      nodes: updatedList,
-    });
-  };
-
-  const handleDeleteNode = (nodeId: string) => {
-    const updatedNodes = workflow.nodes.filter((n) => n.id !== nodeId);
-    const updatedEdges = (workflow.edges || []).filter(
-      (e) => e.source !== nodeId && e.target !== nodeId
-    );
-
-    onChangeWorkflow({
-      ...workflow,
-      nodes: updatedNodes,
-      edges: updatedEdges,
-    });
-
-    if (selectedNodeId === nodeId) {
-      setSelectedNodeId(null);
-      setIsConfigOpen(false);
-    }
-  };
-
-  const handleDuplicateNode = (nodeId: string) => {
-    const original = workflow.nodes.find((n) => n.id === nodeId);
-    if (!original) return;
-
-    const cloneId = `node_${Date.now()}`;
-    const clone: WorkflowNode = {
-      ...original,
-      id: cloneId,
-      title: `${original.title} (Copy)`,
-      position: {
-        x: (original.position?.x || 100) + 40,
-        y: (original.position?.y || 100) + 40,
-      },
-    };
-
-    onChangeWorkflow({
-      ...workflow,
-      nodes: [...workflow.nodes, clone],
-    });
-
-    setSelectedNodeId(cloneId);
-  };
-
-  const selectedNode = workflow.nodes.find((n) => n.id === selectedNodeId) || null;
+  const selectedNode = useMemo(() => {
+    return workflow.nodes.find((n) => n.id === selectedNodeId) || null;
+  }, [workflow.nodes, selectedNodeId]);
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-gray-950 select-none">
-      <div ref={reactFlowWrapper} className="w-full h-full">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDragStop={onNodeDragStop}
-          onInit={setReactFlowInstance}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onPaneClick={() => setSelectedNodeId(null)}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          minZoom={0.2}
-          maxZoom={2.5}
-          proOptions={{ hideAttribution: true }}
-          className="bg-[#0B0F19]"
-        >
-          {/* Infinite Canvas Background Grid */}
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={24}
-            size={1.5}
-            color="#273347"
-            className="opacity-70"
-          />
-
-          {/* Controls: Zoom In, Zoom Out, Fit */}
-          <Controls
-            showInteractive={false}
-            className="!bg-gray-900 !border !border-gray-800 !rounded-xl !p-1 !shadow-2xl [&>button]:!bg-gray-900 [&>button]:!border-gray-800 [&>button]:!text-gray-300 hover:[&>button]:!text-white hover:[&>button]:!bg-gray-800"
-          />
-
-          {/* MiniMap */}
-          <MiniMap
-            nodeColor={(n: any) => {
-              const type = n.data?.type || '';
-              if (type.startsWith('trigger')) return '#f59e0b';
-              if (type.includes('button')) return '#06b6d4';
-              if (type.includes('carousel')) return '#a855f7';
-              if (type.includes('condition')) return '#6366f1';
-              return '#10b981';
-            }}
-            maskColor="rgba(11, 15, 25, 0.85)"
-            className="!bg-gray-950 !border !border-gray-800 !rounded-xl !shadow-2xl overflow-hidden"
-          />
-
-          {/* Top Canvas Controls Panel */}
-          <Panel position="top-center" className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-gray-900/90 border border-gray-800/90 px-3 py-1.5 rounded-xl shadow-2xl backdrop-blur-md text-xs text-gray-300">
-              <span className="font-semibold text-white">{workflow.nodes.length} Nodes</span>
-              <span className="text-gray-600">·</span>
-              <span className="font-mono text-emerald-400">{edges.length} Connections</span>
-              {debugMode && (
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-950 text-white select-none relative">
+      {/* ============================================================== */}
+      {/* STUDIO TOP TOOLBAR */}
+      {/* ============================================================== */}
+      <div className="h-13 bg-slate-900/90 border-b border-slate-800 px-4 flex items-center justify-between z-10 shrink-0">
+        {/* Left: Workflow Metadata & Edit */}
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={workflow.name}
+                onChange={(e) => onChangeWorkflow({ ...workflow, name: e.target.value })}
+                className="bg-transparent text-sm font-bold text-white focus:bg-slate-800 px-1.5 py-0.5 rounded outline-none border border-transparent focus:border-slate-700 transition-colors"
+              />
+              <span
+                className={cn(
+                  'text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase',
+                  workflow.isActive
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-slate-800 text-slate-400'
+                )}
+              >
+                {workflow.isActive ? 'Active' : 'Draft'}
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-400 pl-1.5 flex items-center gap-2">
+              <span>{workflow.nodes.length} Nodes</span>
+              <span>•</span>
+              <span>{(workflow.edges || []).length} Connections</span>
+              {validationErrors.length > 0 && (
                 <>
-                  <span className="text-gray-600">·</span>
-                  <span className="text-amber-400 font-mono text-[10px] bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                    DEBUG ON
+                  <span>•</span>
+                  <span className="text-rose-400 flex items-center gap-1 font-semibold">
+                    <AlertTriangle className="w-3 h-3" />
+                    {validationErrors.length} issues
                   </span>
                 </>
               )}
             </div>
-          </Panel>
-        </ReactFlow>
+          </div>
+        </div>
+
+        {/* Center: Canvas Controls (Undo, Redo, Auto-Arrange, Snap, Grid) */}
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <button
+            onClick={handleUndo}
+            disabled={historyPast.length === 0}
+            title="Undo (Ctrl+Z)"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-800 transition-colors"
+          >
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={historyFuture.length === 0}
+            title="Redo (Ctrl+Y)"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-slate-800 transition-colors"
+          >
+            <Redo2 className="w-4 h-4" />
+          </button>
+          <div className="w-px h-4 bg-slate-800 my-auto mx-1" />
+
+          <button
+            onClick={handleAutoArrange}
+            title="Auto-Arrange Nodes (DAG Layout)"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          >
+            <FolderTree className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Auto Arrange</span>
+          </button>
+
+          <button
+            onClick={() => setSnapToGrid(!snapToGrid)}
+            title="Toggle Snap to Grid"
+            className={cn(
+              'p-1.5 rounded-lg transition-colors',
+              snapToGrid ? 'bg-slate-800 text-emerald-400 font-bold' : 'text-slate-400 hover:text-white'
+            )}
+          >
+            <Magnet className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() =>
+              setGridVariant(
+                gridVariant === BackgroundVariant.Dots
+                  ? BackgroundVariant.Lines
+                  : BackgroundVariant.Dots
+              )
+            }
+            title="Toggle Grid (Dots / Lines)"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <Grid className="w-4 h-4" />
+          </button>
+
+          <div className="w-px h-4 bg-slate-800 my-auto mx-1" />
+
+          {selectedNodeId && (
+            <>
+              <button
+                onClick={handleCopyNode}
+                title="Copy Node (Ctrl+C)"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => handleDeleteNode(selectedNodeId)}
+                title="Delete Selected Node (Del)"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Right: Actions (Run Test, Logs, Save Status) */}
+        <div className="flex items-center gap-2.5">
+          {/* Auto-Save Indicator */}
+          <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
+            {isSaving ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <span>Saving...</span>
+              </>
+            ) : lastSavedAt ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-slate-500">Saved</span>
+              </>
+            ) : null}
+          </div>
+
+          {onOpenLogs && (
+            <button
+              onClick={onOpenLogs}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all"
+            >
+              Logs
+            </button>
+          )}
+
+          {onRunTest && (
+            <button
+              onClick={onRunTest}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Run Test</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Left Collapsible Node Library Palette */}
-      <NodePalette
-        isOpen={isPaletteOpen}
-        onToggle={() => setIsPaletteOpen(!isPaletteOpen)}
-        onAddNode={handleAddNodeFromPalette}
-      />
+      {/* ============================================================== */}
+      {/* 3-COLUMN STUDIO LAYOUT */}
+      {/* ============================================================== */}
+      <div className="flex-1 flex min-h-0 relative overflow-hidden">
+        {/* 1. Left Panel (Node Library & Layer Tree) */}
+        <LeftWorkflowSidebar
+          workflow={workflow}
+          onAddNode={handleAddNodeFromSidebar}
+          onSelectNode={(id) => {
+            setSelectedNodeId(id);
+            if (reactFlowInstance) {
+              const target = workflow.nodes.find((n) => n.id === id);
+              if (target?.position) {
+                reactFlowInstance.setCenter(target.position.x + 120, target.position.y + 60, {
+                  zoom: 1.1,
+                  duration: 400,
+                });
+              }
+            }
+          }}
+          selectedNodeId={selectedNodeId}
+          isOpen={isLeftPanelOpen}
+          onToggle={() => setIsLeftPanelOpen(!isLeftPanelOpen)}
+        />
 
-      {/* Node Configuration Drawer (Active when a node is selected) */}
-      <NodeConfigDrawer
-        node={selectedNode}
-        isOpen={isConfigOpen && selectedNode !== null}
-        onClose={() => setIsConfigOpen(false)}
-        onUpdate={handleUpdateNode}
-        onDelete={handleDeleteNode}
-        onDuplicate={handleDuplicateNode}
-      />
+        {/* 2. Center Canvas */}
+        <div
+          ref={reactFlowWrapper}
+          className="flex-1 h-full relative"
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+        >
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeDragStop={onNodeDragStop}
+            onInit={setReactFlowInstance}
+            nodeTypes={nodeTypes}
+            snapToGrid={snapToGrid}
+            snapGrid={[15, 15]}
+            selectionMode={SelectionMode.Partial}
+            selectNodesOnDrag={false}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            minZoom={0.2}
+            maxZoom={2.0}
+            defaultEdgeOptions={{
+              animated: true,
+              style: { stroke: '#10b981', strokeWidth: 2.5 },
+              markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981' },
+            }}
+          >
+            <Background
+              variant={gridVariant}
+              gap={16}
+              size={1.5}
+              color="rgba(148, 163, 184, 0.15)"
+            />
+            <Controls
+              showInteractive={false}
+              className="!bg-slate-900 !border-slate-800 !rounded-xl !shadow-2xl overflow-hidden [&>button]:!bg-slate-900 [&>button]:!border-slate-800 [&>button]:!text-slate-300 [&>button:hover]:!bg-slate-800 [&>button:hover]:!text-white"
+            />
+            <MiniMap
+              nodeStrokeColor="#10b981"
+              nodeColor="#1e293b"
+              maskColor="rgba(2, 6, 23, 0.75)"
+              className="!bg-slate-950/90 !border !border-slate-800 !rounded-xl !shadow-2xl overflow-hidden"
+            />
+          </ReactFlow>
+        </div>
 
-      {/* Right Side Live WhatsApp Phone Preview */}
-      <RightLivePreviewPanel
-        selectedNode={selectedNode}
-        allNodes={workflow.nodes}
-        executionTrace={executionTrace}
-        isOpen={isPreviewOpen}
-        onToggle={() => setIsPreviewOpen(!isPreviewOpen)}
-      />
+        {/* 3. Right Panel (Node Inspector & Real WhatsApp Mobile Preview) */}
+        <RightInspectorStudio
+          selectedNode={selectedNode}
+          allNodes={workflow.nodes}
+          isOpen={isRightPanelOpen}
+          onClose={() => setIsRightPanelOpen(!isRightPanelOpen)}
+          onUpdateNode={(updated) => {
+            const updatedNodes = workflow.nodes.map((n) => (n.id === updated.id ? updated : n));
+            onChangeWorkflow({
+              ...workflow,
+              nodes: updatedNodes,
+            });
+          }}
+          onDeleteNode={handleDeleteNode}
+          onDuplicateNode={handleDuplicateNode}
+          onSelectNode={(id) => {
+            setSelectedNodeId(id);
+            if (reactFlowInstance) {
+              const target = workflow.nodes.find((n) => n.id === id);
+              if (target?.position) {
+                reactFlowInstance.setCenter(target.position.x + 120, target.position.y + 60, {
+                  zoom: 1.1,
+                  duration: 400,
+                });
+              }
+            }
+          }}
+          validationErrors={validationErrors}
+        />
+      </div>
     </div>
   );
 }

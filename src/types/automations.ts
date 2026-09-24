@@ -90,40 +90,77 @@ export interface VisualWorkflowEdge {
 }
 
 export type VisualNodeType =
-  // Triggers
+  // 16 Core Standards Requested by User
+  | 'trigger'
+  | 'message'
+  | 'delay'
+  | 'condition'
+  | 'button'
+  | 'list'
+  | 'carousel'
+  | 'flow'
+  | 'ai_agent'
+  | 'api_request'
+  | 'webhook'
+  | 'tag'
+  | 'assign_agent'
+  | 'wait'
+  | 'branch'
+  | 'end'
+  // Specific & Aliased Triggers
   | 'trigger_incoming'
   | 'trigger_keyword'
   | 'trigger_button'
   | 'trigger_carousel'
   | 'trigger_list'
   | 'trigger_flow'
-  // WhatsApp Actions
+  // WhatsApp Messages & Actions
   | 'whatsapp_message'
   | 'whatsapp_button'
+  | 'whatsapp_list'
   | 'whatsapp_carousel'
   | 'whatsapp_catalog'
   | 'whatsapp_flow'
-  // Logic & Control
+  | 'message_media'
+  | 'message_template'
+  | 'message_location'
+  // Logic & Routing
   | 'conditional_logic'
   | 'multi_branch'
-  | 'delay'
   | 'wait_for_reply'
-  // CRM & Integrations
+  // AI Nodes
+  | 'ai'
+  | 'ai_sentiment'
+  | 'ai_smart_reply'
+  | 'ai_handoff'
+  // CRM & Contacts
   | 'crm_action'
   | 'lead_management'
   | 'tag_management'
+  | 'crm_note'
+  // External Integrations
   | 'google_sheets'
   | 'api_node'
   | 'webhook_node'
-  | 'end'
-  // Legacy compatibility types
-  | 'trigger'
-  | 'message'
-  | 'button'
-  | 'carousel'
-  | 'condition'
-  | 'webhook'
   | 'api';
+
+export interface NodeValidationError {
+  nodeId: string;
+  field?: string;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+export interface WorkflowTreeNode {
+  id: string;
+  title: string;
+  type: string;
+  depth: number;
+  branchLabel?: string;
+  children: WorkflowTreeNode[];
+  hasError?: boolean;
+  errorMessage?: string;
+}
 
 export interface WorkflowNode {
   id: string;
