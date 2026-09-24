@@ -227,6 +227,39 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
     }
     if (branchHandled) continue;
 
+    // 5b. Advanced Workflow Engine 2.0 (DAG Workflows, Buttons, Carousels, Triggers)
+    let advancedWorkflowHandled = false;
+    try {
+      const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
+      const triggerType = message.type === 'interactive' && interactionPayload?.title
+        ? 'button_click'
+        : 'keyword';
+
+      const advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+        triggerType,
+        { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
+        DEFAULT_WORKSPACE_ID
+      );
+
+      if (advancedMatches.length > 0) {
+        for (const matchedWf of advancedMatches) {
+          await AdvancedWorkflowEngine.executeWorkflow(matchedWf, {
+            workflowId: matchedWf.id,
+            workspaceId: DEFAULT_WORKSPACE_ID,
+            phoneNumber: fromPhone,
+            contactId: contact.id,
+            triggerType,
+            triggerPayload: { text: triggerText, ...interactionPayload },
+            isTestSimulation: false,
+          });
+        }
+        advancedWorkflowHandled = true;
+      }
+    } catch (advErr) {
+      console.warn('[Webhook Inbound] AdvancedWorkflowEngine error:', advErr);
+    }
+    if (advancedWorkflowHandled) continue;
+
     // 6. Automation Flow Trigger Engine (Keyword / Trigger Match)
     const matchedFlow = AutomationsDB.findMatch(triggerText);
     if (matchedFlow) {

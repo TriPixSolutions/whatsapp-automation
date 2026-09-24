@@ -9,6 +9,7 @@ import {
   Send,
   Flame,
   Settings,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +19,7 @@ export function MobileBottomNav() {
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Automations', href: '/automations', icon: Bot },
+    { name: 'Test Center', href: '/test-center', icon: FlaskConical },
     { name: 'Broadcasts', href: '/campaigns', icon: Send },
     { name: 'Priority', href: '/leads', icon: Flame },
     { name: 'Settings', href: '/settings', icon: Settings },

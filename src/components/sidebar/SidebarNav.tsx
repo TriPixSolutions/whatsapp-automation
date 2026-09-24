@@ -9,6 +9,7 @@ import {
   Send,
   Flame,
   Settings,
+  FlaskConical,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,7 @@ export interface NavItem {
 export const navItems: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Automations', href: '/automations', icon: Bot },
+  { name: 'Test Center', href: '/test-center', icon: FlaskConical, badge: 'Live Lab' },
   { name: 'Broadcasts', href: '/campaigns', icon: Send },
   { name: 'Priority Leads', href: '/leads', icon: Flame, badge: 'Intent' },
   { name: 'Settings', href: '/settings', icon: Settings },

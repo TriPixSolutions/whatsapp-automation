@@ -28,6 +28,14 @@ export function handleWebhookStatuses(statuses: MetaStatusObject[]) {
       console.log(`[Meta Webhook] Status update for message ${metaId}: ${statusValue}${errorMsg ? ` (${errorMsg})` : ''}`);
       MessagesDB.updateStatus(metaId, statusValue, errorMsg);
 
+      // Sync to Workflow Test Center delivery tracker
+      try {
+        const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+        TestCenterStore.updateDeliveryStatus(metaId, statusValue, errorMsg);
+      } catch {
+        // non-blocking
+      }
+
       // If customer read the message, update conversation state
       if (statusValue === 'read') {
         const msg = MessagesDB.getByMetaId(metaId);
@@ -38,3 +46,4 @@ export function handleWebhookStatuses(statuses: MetaStatusObject[]) {
     }
   }
 }
+

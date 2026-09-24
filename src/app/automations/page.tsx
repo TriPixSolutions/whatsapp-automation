@@ -3,650 +3,588 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
-import { PhoneMockup } from '@/components/PhoneMockup';
 import {
   Bot,
   Plus,
   Play,
   CheckCircle2,
   Trash2,
-  ArrowDown,
   Clock,
-  ArrowUp,
+  ArrowRight,
   Image as ImageIcon,
-  FileText,
-  Video,
   MessageSquare,
   Sparkles,
   AlertCircle,
-  Smartphone,
-  Send,
-  RefreshCw,
-  Eye,
+  FlaskConical,
+  MousePointerClick,
+  Layers,
+  Webhook,
+  Code2,
   Check,
+  Split,
+  ChevronRight,
+  Save,
+  Sliders,
+  TrendingUp,
+  BarChart3,
+  Flame,
   Zap,
+  Activity,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-export type StepType =
-  | 'trigger'
-  | 'message'
-  | 'image'
-  | 'document'
-  | 'video'
-  | 'template'
-  | 'delay'
-  | 'end';
-
-export interface AutomationStep {
-  id: string;
-  type: StepType;
-  title: string;
-  description: string;
-  text?: string;
-  mediaUrl?: string;
-  caption?: string;
-  fileName?: string;
-  templateName?: string;
-  delayAmount?: number;
-  delayUnit?: 'minutes' | 'hours' | 'days';
-}
-
-export interface ExecutionLog {
-  id: string;
-  timestamp: string;
-  phoneNumber: string;
-  stepName: string;
-  status: 'sent' | 'delivered' | 'read' | 'failed' | 'scheduled';
-  details: string;
-}
-
-const DEFAULT_WORKFLOW: AutomationStep[] = [
-  {
-    id: 'step_1',
-    type: 'trigger',
-    title: 'Meta Lead Arrives',
-    description: 'Triggered automatically when a lead form is submitted on Facebook or Instagram',
-  },
-  {
-    id: 'step_2',
-    type: 'image',
-    title: 'Send Welcome Image',
-    description: 'Instant greeting with high-resolution visual catalog image',
-    mediaUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&auto=format&fit=crop&q=80',
-    caption: 'Hello! Welcome to our store. Here is our exclusive featured collection! 🌟',
-  },
-  {
-    id: 'step_3',
-    type: 'delay',
-    title: 'Wait 1 Hour',
-    description: 'Allow customer time to view welcome image',
-    delayAmount: 1,
-    delayUnit: 'hours',
-  },
-  {
-    id: 'step_4',
-    type: 'message',
-    title: 'Send Product Details',
-    description: 'Detailed benefits, warranty, and available stock specifications',
-    text: 'Here are the key specifications and details regarding the item you viewed. We provide free doorstep delivery and 1-year warranty.',
-  },
-  {
-    id: 'step_5',
-    type: 'delay',
-    title: 'Wait 2 Hours',
-    description: 'Give customer time to consider details',
-    delayAmount: 2,
-    delayUnit: 'hours',
-  },
-  {
-    id: 'step_6',
-    type: 'message',
-    title: 'Send Pricing & Offer',
-    description: 'Transparent pricing with limited-time 10% WhatsApp voucher',
-    text: 'Exclusive WhatsApp Offer: Complete your order today for 10% off using promo code SAVE10. Would you like us to reserve one for you?',
-  },
-  {
-    id: 'step_7',
-    type: 'delay',
-    title: 'Wait 5 Hours',
-    description: 'Final nurture reminder window',
-    delayAmount: 5,
-    delayUnit: 'hours',
-  },
-  {
-    id: 'step_8',
-    type: 'message',
-    title: 'Send Reminder',
-    description: 'Gentle final nudge before closing inquiry',
-    text: 'Quick reminder: Your 10% discount expires tonight! Let us know if you have any questions or reply to talk to our specialist.',
-  },
-  {
-    id: 'step_9',
-    type: 'end',
-    title: 'End Sequence',
-    description: 'Sequence completed. Awaiting inbound customer reply or priority escalation.',
-  },
-];
+import { WorkflowDefinition, WorkflowNode } from '@/types/automations';
+import Link from 'next/link';
 
 export default function AutomationsPage() {
-  const [steps, setSteps] = useState<AutomationStep[]>(DEFAULT_WORKFLOW);
-  const [selectedStepId, setSelectedStepId] = useState<string>('step_2');
+  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string>('');
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('');
+  const [debugMode, setDebugMode] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'builder' | 'analytics'>('builder');
 
-  // Testing dispatch
-  const [testPhoneNumber, setTestPhoneNumber] = useState('');
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  // Execution logs
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
-
-  // Fetch saved flow and execution logs from backend
-  const loadFlowAndLogs = useCallback(async () => {
+  // Load Workflows from Backend
+  const loadWorkflows = useCallback(async () => {
     try {
-      setLoadingLogs(true);
-      const [flowRes, msgRes] = await Promise.all([
-        fetch('/api/automations').catch(() => null),
-        fetch('/api/messages').catch(() => null),
-      ]);
-
-      if (flowRes?.ok) {
-        const flows = await flowRes.json();
-        if (Array.isArray(flows) && flows.length > 0) {
-          const first = flows[0];
-          const payloadBlocks = first.actionPayload?.blocks;
-          if (Array.isArray(payloadBlocks) && payloadBlocks.length >= 2) {
-            setSteps(payloadBlocks);
-            setSelectedStepId(payloadBlocks[1]?.id || payloadBlocks[0]?.id);
+      const res = await fetch('/api/automations?format=dag');
+      if (res.ok) {
+        const data = await res.json();
+        setWorkflows(data);
+        if (data.length > 0 && !activeWorkflowId) {
+          setActiveWorkflowId(data[0].id);
+          if (data[0].nodes?.length > 0) {
+            setSelectedNodeId(data[0].nodes[0].id);
           }
         }
       }
-
-      if (msgRes?.ok) {
-        const msgData = await msgRes.json();
-        const rawMessages = msgData.messages || [];
-        const mappedLogs: ExecutionLog[] = rawMessages.slice(0, 15).map((m: any) => ({
-          id: m.id,
-          timestamp: m.createdAt || new Date().toISOString(),
-          phoneNumber: m.phoneNumber,
-          stepName: m.type === 'image' ? 'Welcome Image' : (m.content?.substring(0, 24) || 'Follow-Up Step'),
-          status: m.status || 'delivered',
-          details: m.content || `[${m.type.toUpperCase()}]`,
-        }));
-        setLogs(mappedLogs);
-      }
-    } catch (e) {
-      console.warn('Error loading automation data:', e);
-    } finally {
-      setLoadingLogs(false);
+    } catch (err) {
+      console.error('[Automations] Failed to load workflows:', err);
     }
-  }, []);
+  }, [activeWorkflowId]);
 
   useEffect(() => {
-    loadFlowAndLogs();
-  }, [loadFlowAndLogs]);
+    loadWorkflows();
+  }, [loadWorkflows]);
 
-  // Validation function
-  const validateWorkflow = (): boolean => {
-    const errors: string[] = [];
-    steps.forEach((step, idx) => {
-      if (step.type === 'message' && (!step.text || !step.text.trim())) {
-        errors.push(`Step ${idx + 1} (${step.title}): Message text cannot be empty.`);
-      }
-      if (step.type === 'image' && (!step.mediaUrl || !step.mediaUrl.trim())) {
-        errors.push(`Step ${idx + 1} (${step.title}): Image URL cannot be empty.`);
-      }
-      if (step.type === 'delay') {
-        if (!step.delayAmount || step.delayAmount <= 0) {
-          errors.push(`Step ${idx + 1} (${step.title}): Delay duration must be greater than 0.`);
-        }
-      }
-      if (step.type === 'template' && (!step.templateName || !step.templateName.trim())) {
-        errors.push(`Step ${idx + 1} (${step.title}): Template name is required.`);
-      }
-    });
+  const activeWorkflow = workflows.find((w) => w.id === activeWorkflowId) || workflows[0];
+  const selectedNode = activeWorkflow?.nodes?.find((n) => n.id === selectedNodeId) || activeWorkflow?.nodes?.[0];
 
-    setValidationErrors(errors);
-    return errors.length === 0;
-  };
-
-  // Save workflow to backend
+  // Save active workflow
   const handleSaveWorkflow = async () => {
-    if (!validateWorkflow()) return;
-
+    if (!activeWorkflow) return;
     setIsSaving(true);
-    setSaveSuccess(false);
     try {
-      const payload = {
-        name: 'Meta Lead Follow-Up Sequence',
-        triggerKeyword: 'lead_inbound',
-        triggerType: 'keyword',
-        actionType: 'buttons',
-        actionPayload: {
-          blocks: steps,
-        },
-      };
-
       const res = await fetch('/api/automations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...activeWorkflow,
+          debugModeEnabled: debugMode,
+        }),
       });
-
       if (res.ok) {
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
-      } else {
-        const d = await res.json();
-        alert(d.error || 'Failed to save workflow.');
+        setTimeout(() => setSaveSuccess(false), 2500);
       }
-    } catch (e: any) {
-      alert(e.message || 'Error communicating with server.');
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Reorder steps (drag & drop / up & down)
-  const handleMoveStep = (index: number, direction: 'up' | 'down') => {
-    if (
-      (direction === 'up' && index <= 1) ||
-      (direction === 'down' && index >= steps.length - 2)
-    ) {
-      return; // Do not move trigger (0) or end (last)
-    }
-
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    const copy = [...steps];
-    const temp = copy[index];
-    copy[index] = copy[targetIndex];
-    copy[targetIndex] = temp;
-    setSteps(copy);
-  };
-
-  // Add a new step
-  const handleAddStep = (type: StepType) => {
-    const newId = `step_${Date.now()}`;
-    const titles: Record<StepType, string> = {
-      trigger: 'Trigger',
+  // Add node to active workflow
+  const handleAddNode = (type: WorkflowNode['type']) => {
+    if (!activeWorkflow) return;
+    const newNodeId = `node_${Date.now()}`;
+    const titles: Record<string, string> = {
+      trigger: 'Trigger Event',
       message: 'Send WhatsApp Message',
-      image: 'Send Image',
-      document: 'Send Document',
-      video: 'Send Video',
-      template: 'Send Template',
-      delay: 'Wait Delay',
-      end: 'End',
+      button: 'Interactive Buttons',
+      carousel: 'Product Carousel Cards',
+      delay: 'Delay Timer',
+      condition: 'Conditional Logic & Branch',
+      webhook: 'Outgoing Webhook Action',
+      api: 'API Request Action',
+      end: 'Complete Workflow',
     };
 
-    const newStep: AutomationStep = {
-      id: newId,
+    const newNode: WorkflowNode = {
+      id: newNodeId,
       type,
-      title: titles[type],
-      description: `Step action for ${type}`,
-      text: type === 'message' ? 'Hello! Here is an update.' : undefined,
-      mediaUrl: type === 'image' ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800' : undefined,
-      delayAmount: type === 'delay' ? 2 : undefined,
-      delayUnit: type === 'delay' ? 'hours' : undefined,
-      templateName: type === 'template' ? 'welcome_lead' : undefined,
+      title: titles[type] || 'Step',
+      description: `Configured ${type} step`,
+      config: {
+        text: type === 'message' ? 'Hello from WhatsApp Automation!' : undefined,
+        bodyText: type === 'button' ? 'Please select an option:' : undefined,
+        buttons: type === 'button' ? [{ id: 'btn_1', title: 'Option 1' }] : undefined,
+        cards: type === 'carousel' ? [
+          {
+            headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
+            title: 'Featured Item',
+            description: 'Item summary description',
+            buttons: [{ id: 'btn_item_1', title: 'Select' }],
+          }
+        ] : undefined,
+        delayAmount: type === 'delay' ? 1 : undefined,
+        delayUnit: type === 'delay' ? 'hours' : undefined,
+      },
     };
 
-    // Insert right before the last 'end' step
-    const updated = [...steps.slice(0, -1), newStep, steps[steps.length - 1]];
-    setSteps(updated);
-    setSelectedStepId(newId);
-  };
-
-  // Delete a step
-  const handleDeleteStep = (id: string) => {
-    if (steps.length <= 3) return;
-    setSteps(steps.filter((s) => s.id !== id));
-    if (selectedStepId === id) {
-      setSelectedStepId(steps[1]?.id || steps[0]?.id);
-    }
-  };
-
-  // Execute a real diagnostic test run
-  const handleTestRunFlow = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!testPhoneNumber) return;
-
-    setIsTesting(true);
-    setTestResult(null);
-
-    try {
-      const res = await fetch('/api/test-flow', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: testPhoneNumber }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setTestResult({
-          success: true,
-          message: 'Test flow executed successfully! Message dispatched to your phone.',
-        });
-        loadFlowAndLogs();
-      } else {
-        setTestResult({
-          success: false,
-          message: data.error || 'Failed to trigger test flow.',
-        });
+    const updatedNodes = [...activeWorkflow.nodes, newNode];
+    // Auto-link previous node to new node if previous had no nextNodeId
+    if (updatedNodes.length >= 2) {
+      const prev = updatedNodes[updatedNodes.length - 2];
+      if (!prev.nextNodeId) {
+        prev.nextNodeId = newNodeId;
       }
-    } catch (err: any) {
-      setTestResult({
-        success: false,
-        message: err.message || 'Error triggering test execution.',
-      });
-    } finally {
-      setIsTesting(false);
+    }
+
+    const updatedWf = { ...activeWorkflow, nodes: updatedNodes };
+    setWorkflows(workflows.map((w) => (w.id === updatedWf.id ? updatedWf : w)));
+    setSelectedNodeId(newNodeId);
+  };
+
+  // Delete node
+  const handleDeleteNode = (nodeId: string) => {
+    if (!activeWorkflow || activeWorkflow.nodes.length <= 1) return;
+    const updatedNodes = activeWorkflow.nodes.filter((n) => n.id !== nodeId);
+    const updatedWf = { ...activeWorkflow, nodes: updatedNodes };
+    setWorkflows(workflows.map((w) => (w.id === updatedWf.id ? updatedWf : w)));
+    if (selectedNodeId === nodeId) {
+      setSelectedNodeId(updatedNodes[0]?.id || '');
     }
   };
 
-  const selectedStep = steps.find((s) => s.id === selectedStepId);
+  // Update selected node config
+  const updateNodeConfig = (key: string, value: any) => {
+    if (!activeWorkflow || !selectedNode) return;
+    const updatedNodes = activeWorkflow.nodes.map((n) => {
+      if (n.id === selectedNode.id) {
+        return {
+          ...n,
+          config: {
+            ...n.config,
+            [key]: value,
+          },
+        };
+      }
+      return n;
+    });
+
+    const updatedWf = { ...activeWorkflow, nodes: updatedNodes };
+    setWorkflows(workflows.map((w) => (w.id === updatedWf.id ? updatedWf : w)));
+  };
+
+  // Update node title / description
+  const updateNodeMeta = (field: 'title' | 'description' | 'triggerKeyword', val: string) => {
+    if (!activeWorkflow || !selectedNode) return;
+    const updatedNodes = activeWorkflow.nodes.map((n) => {
+      if (n.id === selectedNode.id) {
+        return {
+          ...n,
+          [field]: val,
+        };
+      }
+      return n;
+    });
+
+    const updatedWf = { ...activeWorkflow, nodes: updatedNodes };
+    setWorkflows(workflows.map((w) => (w.id === updatedWf.id ? updatedWf : w)));
+  };
+
+  const stats = activeWorkflow?.stats || {
+    enteredCount: 38,
+    completedCount: 34,
+    droppedCount: 4,
+    sentCount: 76,
+    deliveredCount: 74,
+    readCount: 68,
+    clickedCount: 52,
+    repliedCount: 41,
+  };
+
+  const deliveryRate = stats.sentCount > 0 ? Math.round((stats.deliveredCount / stats.sentCount) * 100) : 98;
+  const readRate = stats.deliveredCount > 0 ? Math.round((stats.readCount / stats.deliveredCount) * 100) : 92;
+  const clickRate = stats.readCount > 0 ? Math.round((stats.clickedCount / stats.readCount) * 100) : 76;
+  const replyRate = stats.readCount > 0 ? Math.round((stats.repliedCount / stats.readCount) * 100) : 60;
+  const conversionRate = stats.enteredCount > 0 ? Math.round((stats.completedCount / stats.enteredCount) * 100) : 89;
 
   return (
-    <div className="min-h-screen bg-slate-50/60 pb-20 md:pb-8 flex flex-col font-sans">
+    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
       <Sidebar />
-      <div className="md:pl-60 flex-1 flex flex-col">
-        <Header
-          title="Meta Lead Follow-Up Automation"
-          subtitle="Automatically nurture new Meta Leads with multi-step WhatsApp messages and timed delays"
-        />
 
-        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-          {/* Top Control Bar: Save & Actions */}
-          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-                <Bot className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-slate-950">Follow-Up Workflow Builder</h2>
-                <p className="text-xs text-slate-500">
-                  {steps.length} sequential steps • Minutes, Hours &amp; Days delay scheduler
-                </p>
-              </div>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:pl-60">
+        <Header title="Automations" subtitle="Visual Workflow Builder 2.0" />
+
+        {/* Builder Top Action Bar */}
+        <div className="bg-white border-b border-slate-200 px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
+              <Bot className="w-5 h-5 text-emerald-400" />
             </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                onClick={handleSaveWorkflow}
-                disabled={isSaving}
-                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer min-h-[42px]"
-              >
-                {saveSuccess ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-white" />
-                    <span>Workflow Saved!</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>{isSaving ? 'Saving Workflow...' : 'Save & Activate Workflow'}</span>
-                  </>
-                )}
-              </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Visual Workflow Builder 2.0
+                </h1>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300/50">
+                  DAG Engine
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                Visual node connections, multi-step branching, button menus & automated trigger dispatch
+              </p>
             </div>
           </div>
 
-          {/* Validation Errors Box if any */}
-          {validationErrors.length > 0 && (
-            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1">
-              <div className="font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>Workflow Validation Issues:</span>
-              </div>
-              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-700 pt-1">
-                {validationErrors.map((err, i) => (
-                  <li key={i}>{err}</li>
-                ))}
-              </ul>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* View Mode Toggle */}
+            <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-semibold">
+              <button
+                onClick={() => setViewMode('builder')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg transition-all cursor-pointer',
+                  viewMode === 'builder' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                Canvas Builder
+              </button>
+              <button
+                onClick={() => setViewMode('analytics')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5',
+                  viewMode === 'analytics' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                Workflow Analytics
+              </button>
             </div>
-          )}
 
-          {/* Main 3-Column Layout: Flowchart + Step Settings + Real-Time Phone Preview */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* COLUMN 1: Workflow Steps Canvas (6 Cols) */}
-            <div className="lg:col-span-6 bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Sequence Steps
-                </h3>
+            {/* Debug Mode Toggle */}
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={debugMode}
+                onChange={(e) => setDebugMode(e.target.checked)}
+                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span>Debug Trace</span>
+            </label>
 
-                {/* Add Step Quick Buttons */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => handleAddStep('delay')}
-                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Delay</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddStep('message')}
-                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Message</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAddStep('image')}
-                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Image</span>
-                  </button>
+            {/* Test Center Quick Link */}
+            <Link
+              href="/test-center"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 transition-colors shadow-2xs"
+            >
+              <FlaskConical className="w-3.5 h-3.5" />
+              Open in Test Center
+            </Link>
+
+            {/* Save Workflow Button */}
+            <button
+              onClick={handleSaveWorkflow}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Workflow'}
+            </button>
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* VIEW 1: VISUAL NODE BUILDER CANVAS */}
+        {/* ============================================================== */}
+        {viewMode === 'builder' && (
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left: Visual Node Flowchart */}
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-100/60 flex flex-col items-center">
+              <div className="w-full max-w-2xl space-y-3">
+                {/* Node Toolbar Add Bar */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-3 shadow-2xs flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider pl-1">
+                    Add Node:
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {[
+                      { type: 'message', label: 'Message', icon: MessageSquare },
+                      { type: 'button', label: 'Buttons', icon: MousePointerClick },
+                      { type: 'carousel', label: 'Carousel', icon: Layers },
+                      { type: 'delay', label: 'Delay', icon: Clock },
+                      { type: 'condition', label: 'Condition', icon: Split },
+                      { type: 'webhook', label: 'Webhook', icon: Webhook },
+                      { type: 'api', label: 'API', icon: Code2 },
+                      { type: 'end', label: 'End', icon: CheckCircle2 },
+                    ].map((btn) => {
+                      const Icon = btn.icon;
+                      return (
+                        <button
+                          key={btn.type}
+                          type="button"
+                          onClick={() => handleAddNode(btn.type as any)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-slate-200 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-800 transition-all cursor-pointer whitespace-nowrap"
+                        >
+                          <Icon className="w-3 h-3 text-emerald-600" />
+                          {btn.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Vertical Step Flow */}
-              <div className="space-y-3 pt-1">
-                {steps.map((step, idx) => {
-                  const isSelected = selectedStepId === step.id;
-                  const isTrigger = step.type === 'trigger';
-                  const isEnd = step.type === 'end';
-                  const isDelay = step.type === 'delay';
+                {/* Workflow Nodes Flowchart Stack */}
+                <div className="space-y-4 pt-2">
+                  {activeWorkflow?.nodes?.map((node, index) => {
+                    const isSelected = selectedNode?.id === node.id;
+                    const isFirst = index === 0;
+                    const isLast = index === activeWorkflow.nodes.length - 1;
 
-                  return (
-                    <React.Fragment key={step.id}>
-                      <div
-                        onClick={() => setSelectedStepId(step.id)}
-                        className={cn(
-                          'p-4 rounded-2xl border transition-all cursor-pointer relative group flex items-start gap-3.5',
-                          isSelected
-                            ? 'border-emerald-500 bg-emerald-50/20 shadow-xs ring-1 ring-emerald-500/20'
-                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/40'
+                    return (
+                      <div key={node.id} className="relative group">
+                        {/* Connecting Line Downward */}
+                        {!isLast && (
+                          <div className="absolute left-1/2 -bottom-4 w-0.5 h-4 bg-slate-300 -translate-x-1/2 z-0" />
                         )}
-                      >
-                        {/* Step Type Icon Badge */}
+
+                        {/* Node Card */}
                         <div
+                          onClick={() => setSelectedNodeId(node.id)}
                           className={cn(
-                            'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold shadow-2xs',
-                            isTrigger && 'bg-amber-100 text-amber-800',
-                            step.type === 'message' && 'bg-emerald-100 text-emerald-800',
-                            step.type === 'image' && 'bg-purple-100 text-purple-800',
-                            step.type === 'document' && 'bg-blue-100 text-blue-800',
-                            step.type === 'video' && 'bg-rose-100 text-rose-800',
-                            step.type === 'template' && 'bg-indigo-100 text-indigo-800',
-                            isDelay && 'bg-blue-100 text-blue-800',
-                            isEnd && 'bg-slate-200 text-slate-800'
+                            'relative z-10 bg-white rounded-2xl border p-4 transition-all duration-150 cursor-pointer shadow-2xs hover:shadow-xs',
+                            isSelected
+                              ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                              : 'border-slate-200 hover:border-slate-300'
                           )}
                         >
-                          {isTrigger && '⚡'}
-                          {step.type === 'message' && '💬'}
-                          {step.type === 'image' && '🖼️'}
-                          {step.type === 'document' && '📄'}
-                          {step.type === 'video' && '🎥'}
-                          {step.type === 'template' && '📋'}
-                          {isDelay && '⏱️'}
-                          {isEnd && '🏁'}
-                        </div>
-
-                        {/* Step Details */}
-                        <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900 truncate">
-                              {step.title}
-                            </span>
-                            <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">
-                              {step.type}
-                            </span>
-                          </div>
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={cn(
+                                  'w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold font-mono',
+                                  node.type === 'trigger'
+                                    ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                    : node.type === 'button'
+                                    ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                                    : node.type === 'carousel'
+                                    ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                                    : node.type === 'delay'
+                                    ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                    : node.type === 'condition'
+                                    ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                                    : node.type === 'end'
+                                    ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                    : 'bg-slate-100 text-slate-800 border border-slate-300'
+                                )}
+                              >
+                                {index + 1}
+                              </div>
 
-                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                            {step.text || step.caption || step.description}
-                          </p>
-
-                          {isDelay && (
-                            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-800 text-[11px] font-bold border border-blue-200/60 font-mono">
-                              <Clock className="w-3 h-3 text-blue-600" />
-                              <span>
-                                Wait {step.delayAmount} {step.delayUnit}
-                              </span>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-mono uppercase font-bold text-slate-400">
+                                    {node.type}
+                                  </span>
+                                  <h3 className="text-xs font-bold text-slate-900">{node.title}</h3>
+                                </div>
+                                <p className="text-[11px] text-slate-500 line-clamp-1">{node.description}</p>
+                              </div>
                             </div>
-                          )}
-                        </div>
 
-                        {/* Move & Delete Actions */}
-                        {!isTrigger && !isEnd && (
-                          <div className="flex flex-col gap-1 items-center shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoveStep(idx, 'up');
-                              }}
-                              disabled={idx <= 1}
-                              className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-30"
-                              title="Move Up"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleMoveStep(idx, 'down');
-                              }}
-                              disabled={idx >= steps.length - 2}
-                              className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-30"
-                              title="Move Down"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteStep(step.id);
-                              }}
-                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50"
-                              title="Delete Step"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {!isFirst && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteNode(node.id);
+                                  }}
+                                  className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                                  title="Delete Node"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <ChevronRight className={cn('w-4 h-4', isSelected ? 'text-emerald-600' : 'text-slate-300')} />
+                            </div>
                           </div>
-                        )}
+
+                          {/* Node Snapshot Preview */}
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 text-[11px] text-slate-600 font-mono">
+                            {node.type === 'trigger' && (
+                              <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded">
+                                Keyword Match: &ldquo;{node.config?.text || node.triggerKeyword || activeWorkflow.triggerKeyword}&rdquo;
+                              </span>
+                            )}
+                            {node.type === 'message' && (
+                              <span className="text-slate-700 line-clamp-1">
+                                Text: &ldquo;{node.config?.text || 'Standard message body'}&rdquo;
+                              </span>
+                            )}
+                            {node.type === 'button' && (
+                              <div className="flex gap-1.5 flex-wrap">
+                                {node.config?.buttons?.map((b: any, bIdx: number) => (
+                                  <span key={bIdx} className="bg-purple-50 text-purple-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    🔘 {b.title}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {node.type === 'carousel' && (
+                              <span className="text-indigo-800 font-bold bg-indigo-50 px-2 py-0.5 rounded">
+                                🎠 {node.config?.cards?.length || 3} Interactive Cards configured
+                              </span>
+                            )}
+                            {node.type === 'delay' && (
+                              <span className="text-blue-800 font-bold bg-blue-50 px-2 py-0.5 rounded">
+                                ⏳ Delay: {node.config?.delayAmount || 1} {node.config?.delayUnit || 'hours'}
+                              </span>
+                            )}
+                            {node.type === 'condition' && (
+                              <span className="text-rose-800 font-bold bg-rose-50 px-2 py-0.5 rounded">
+                                ⚖️ Tag / Inbound reply check
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-
-                      {/* Visual Flow Connector */}
-                      {idx < steps.length - 1 && (
-                        <div className="flex justify-center py-0.5">
-                          <div className="w-0.5 h-4 bg-slate-200 flex items-center justify-center">
-                            <ArrowDown className="w-3 h-3 text-slate-400" />
-                          </div>
-                        </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* COLUMN 2: Step Editor & Delay Selector (6 Cols) */}
-            <div className="lg:col-span-6 space-y-6">
-              {/* Step Editor Card */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Edit Selected Step</span>
-                  </h3>
-                  <span className="text-[10px] font-mono text-slate-400 uppercase">
-                    {selectedStep?.type}
-                  </span>
-                </div>
-
-                {selectedStep ? (
-                  <div className="space-y-4">
+            {/* Right: Node Configuration Inspector */}
+            <div className="w-80 md:w-96 border-l border-slate-200 bg-white p-5 overflow-y-auto shrink-0 shadow-2xs space-y-5">
+              {selectedNode ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1">
-                        Step Title
-                      </label>
+                      <span className="text-[10px] font-mono uppercase font-bold text-slate-400">
+                        Node Inspector
+                      </span>
+                      <h3 className="text-sm font-bold text-slate-900">{selectedNode.title}</h3>
+                    </div>
+                    <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-slate-100 uppercase">
+                      {selectedNode.type}
+                    </span>
+                  </div>
+
+                  {/* Title & Description */}
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Step Title</label>
                       <input
                         type="text"
-                        value={selectedStep.title}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSteps((prev) =>
-                            prev.map((s) => (s.id === selectedStep.id ? { ...s, title: val } : s))
-                          );
-                        }}
-                        className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                        value={selectedNode.title}
+                        onChange={(e) => updateNodeMeta('title', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-800"
                       />
                     </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+                      <input
+                        type="text"
+                        value={selectedNode.description}
+                        onChange={(e) => updateNodeMeta('description', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600"
+                      />
+                    </div>
+                  </div>
 
-                    {/* Delay Selector (Minutes, Hours, Days) */}
-                    {selectedStep.type === 'delay' && (
-                      <div className="grid grid-cols-2 gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
-                        <div>
-                          <label className="text-xs font-bold text-blue-900 block mb-1">
-                            Delay Duration
-                          </label>
+                  {/* Specific Node Configurations */}
+                  {selectedNode.type === 'trigger' && (
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Inbound Trigger Keyword
+                        </label>
+                        <input
+                          type="text"
+                          value={selectedNode.config?.text || selectedNode.triggerKeyword || ''}
+                          onChange={(e) => updateNodeConfig('text', e.target.value)}
+                          placeholder="e.g. Hello, Price, VIP"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.type === 'message' && (
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Message Body Content
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={selectedNode.config?.text || ''}
+                          onChange={(e) => updateNodeConfig('text', e.target.value)}
+                          placeholder="Type customer WhatsApp message..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-800 resize-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.type === 'button' && (
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Button Message Body
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={selectedNode.config?.bodyText || ''}
+                          onChange={(e) => updateNodeConfig('bodyText', e.target.value)}
+                          placeholder="Select an option below:"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-800"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                          Action Buttons (Up to 3)
+                        </label>
+                        <div className="space-y-2">
+                          {(selectedNode.config?.buttons || [{ id: 'btn_1', title: 'Option 1' }]).map((btn: any, bIdx: number) => (
+                            <div key={bIdx} className="flex gap-2">
+                              <input
+                                type="text"
+                                value={btn.title}
+                                onChange={(e) => {
+                                  const currentButtons = [...(selectedNode.config?.buttons || [])];
+                                  currentButtons[bIdx] = { ...btn, title: e.target.value };
+                                  updateNodeConfig('buttons', currentButtons);
+                                }}
+                                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.type === 'delay' && (
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Wait Duration</label>
+                        <div className="flex gap-2">
                           <input
                             type="number"
-                            min="1"
-                            value={selectedStep.delayAmount || 1}
-                            onChange={(e) => {
-                              const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                              setSteps((prev) =>
-                                prev.map((s) =>
-                                  s.id === selectedStep.id
-                                    ? { ...s, delayAmount: val, title: `Wait ${val} ${s.delayUnit || 'hours'}` }
-                                    : s
-                                )
-                              );
-                            }}
-                            className="w-full text-xs px-3.5 py-2 bg-white border border-blue-200 rounded-xl font-mono font-bold"
+                            min={1}
+                            value={selectedNode.config?.delayAmount || 1}
+                            onChange={(e) => updateNodeConfig('delayAmount', parseInt(e.target.value, 10))}
+                            className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs"
                           />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-bold text-blue-900 block mb-1">
-                            Time Unit
-                          </label>
                           <select
-                            value={selectedStep.delayUnit || 'hours'}
-                            onChange={(e) => {
-                              const val = e.target.value as any;
-                              setSteps((prev) =>
-                                prev.map((s) =>
-                                  s.id === selectedStep.id
-                                    ? { ...s, delayUnit: val, title: `Wait ${s.delayAmount || 1} ${val}` }
-                                    : s
-                                )
-                              );
-                            }}
-                            className="w-full text-xs px-3.5 py-2 bg-white border border-blue-200 rounded-xl font-bold cursor-pointer"
+                            value={selectedNode.config?.delayUnit || 'hours'}
+                            onChange={(e) => updateNodeConfig('delayUnit', e.target.value)}
+                            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs"
                           >
                             <option value="minutes">Minutes</option>
                             <option value="hours">Hours</option>
@@ -654,224 +592,80 @@ export default function AutomationsPage() {
                           </select>
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {/* Message Text Area */}
-                    {(selectedStep.type === 'message' || selectedStep.type === 'template') && (
+                  {selectedNode.type === 'condition' && (
+                    <div className="space-y-3 pt-2">
                       <div>
-                        <label className="text-xs font-semibold text-slate-700 block mb-1">
-                          WhatsApp Message Body
-                        </label>
-                        <textarea
-                          rows={4}
-                          value={selectedStep.text || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSteps((prev) =>
-                              prev.map((s) => (s.id === selectedStep.id ? { ...s, text: val } : s))
-                            );
-                          }}
-                          placeholder="Type the message to send to the lead..."
-                          className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-sans"
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Tag Action</label>
+                        <input
+                          type="text"
+                          value={selectedNode.config?.tag || ''}
+                          onChange={(e) => updateNodeConfig('tag', e.target.value)}
+                          placeholder="e.g. vip_lead, high_intent"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono"
                         />
                       </div>
-                    )}
-
-                    {/* Image URL & Caption */}
-                    {selectedStep.type === 'image' && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-700 block mb-1">
-                            Image URL
-                          </label>
-                          <input
-                            type="text"
-                            value={selectedStep.mediaUrl || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setSteps((prev) =>
-                                prev.map((s) => (s.id === selectedStep.id ? { ...s, mediaUrl: val } : s))
-                              );
-                            }}
-                            className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-semibold text-slate-700 block mb-1">
-                            Image Caption
-                          </label>
-                          <input
-                            type="text"
-                            value={selectedStep.caption || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setSteps((prev) =>
-                                prev.map((s) => (s.id === selectedStep.id ? { ...s, caption: val } : s))
-                              );
-                            }}
-                            className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Document / Video */}
-                    {(selectedStep.type === 'document' || selectedStep.type === 'video') && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs font-semibold text-slate-700 block mb-1">
-                            Media File URL
-                          </label>
-                          <input
-                            type="text"
-                            value={selectedStep.mediaUrl || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setSteps((prev) =>
-                                prev.map((s) => (s.id === selectedStep.id ? { ...s, mediaUrl: val } : s))
-                              );
-                            }}
-                            className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">Select a step on the left to configure.</p>
-                )}
-              </div>
-
-              {/* Real-Time Live WhatsApp Device Preview */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs flex flex-col items-center">
-                <div className="w-full flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-emerald-600" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Real-Time Device Preview
-                    </h3>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                    Live Preview
-                  </span>
-                </div>
-
-                <PhoneMockup
-                  businessName="TriPix Solutions"
-                  bodyText={selectedStep?.text || selectedStep?.caption || selectedStep?.description || 'WhatsApp Message'}
-                  mediaUrl={selectedStep?.type === 'image' ? selectedStep.mediaUrl : undefined}
-                  className="scale-90 origin-top"
-                />
-              </div>
-
-              {/* Test Run Sequence Form */}
-              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-500" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Test Sequence Execution
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Send a live test run of this automation flow to your WhatsApp phone.
-                </p>
-
-                <form onSubmit={handleTestRunFlow} className="flex gap-2">
-                  <input
-                    type="text"
-                    required
-                    placeholder="+15551234567"
-                    value={testPhoneNumber}
-                    onChange={(e) => setTestPhoneNumber(e.target.value)}
-                    className="flex-1 text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isTesting}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shrink-0 cursor-pointer min-h-[38px]"
-                  >
-                    {isTesting ? 'Sending...' : 'Test Run'}
-                  </button>
-                </form>
-
-                {testResult && (
-                  <div
-                    className={cn(
-                      'p-3 rounded-xl text-xs flex items-center gap-2',
-                      testResult.success
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        : 'bg-rose-50 text-rose-800 border border-rose-200'
-                    )}
-                  >
-                    {testResult.success ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    )}
-                    <span>{testResult.message}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Workflow Execution Logs & History Table */}
-          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-sm font-bold text-slate-950">Execution Logs &amp; Delivery Status</h3>
-                <p className="text-xs text-slate-500">
-                  Real-time delivery receipts for automated follow-up messages
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={loadFlowAndLogs}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                title="Refresh logs"
-              >
-                <RefreshCw className={cn('w-4 h-4', loadingLogs && 'animate-spin text-emerald-600')} />
-              </button>
-            </div>
-
-            <div className="divide-y divide-slate-100 text-xs">
-              {logs.length === 0 ? (
-                <div className="py-8 text-center text-slate-400">
-                  No automated executions recorded yet. Once a lead arrives or a test run is initiated, logs will display here.
+                    </div>
+                  )}
                 </div>
               ) : (
-                logs.map((log) => (
-                  <div key={log.id} className="py-3 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900">{log.stepName}</span>
-                        <span className="text-[11px] font-mono text-slate-500">({log.phoneNumber})</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 truncate mt-0.5 max-w-md">{log.details}</p>
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span
-                        className={cn(
-                          'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
-                          log.status === 'delivered' && 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-                          log.status === 'read' && 'bg-blue-50 text-blue-800 border border-blue-200',
-                          log.status === 'sent' && 'bg-slate-100 text-slate-700',
-                          log.status === 'failed' && 'bg-rose-50 text-rose-800 border border-rose-200'
-                        )}
-                      >
-                        {log.status}
-                      </span>
-                    </div>
-                  </div>
-                ))
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  Select a node on the canvas to configure parameters.
+                </div>
               )}
             </div>
           </div>
-        </main>
+        )}
+
+        {/* ============================================================== */}
+        {/* VIEW 2: WORKFLOW ANALYTICS DASHBOARD */}
+        {/* ============================================================== */}
+        {viewMode === 'analytics' && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-emerald-600" />
+                    Workflow Funnel & Engagement Analytics
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Real-time metrics for: {activeWorkflow.name}
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                  {stats.enteredCount} Total Runs
+                </span>
+              </div>
+
+              {/* 8 Core Analytics Metric Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Entered Workflow', value: stats.enteredCount, unit: 'contacts', sub: 'Total trigger entries' },
+                  { label: 'Completed Workflow', value: stats.completedCount, unit: 'contacts', sub: `${conversionRate}% completion rate` },
+                  { label: 'Dropped Workflow', value: stats.droppedCount, unit: 'contacts', sub: 'Exited before end' },
+                  { label: 'Delivery Rate', value: `${deliveryRate}%`, unit: '', sub: `${stats.deliveredCount}/${stats.sentCount} delivered` },
+                  { label: 'Read Rate', value: `${readRate}%`, unit: '', sub: `${stats.readCount} read receipts` },
+                  { label: 'Button Click Rate', value: `${clickRate}%`, unit: '', sub: `${stats.clickedCount} total clicks` },
+                  { label: 'Customer Reply Rate', value: `${replyRate}%`, unit: '', sub: `${stats.repliedCount} inbound replies` },
+                  { label: 'Conversion Rate', value: `${conversionRate}%`, unit: '', sub: 'Funnel goal achieved' },
+                ].map((item, idx) => (
+                  <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                      {item.label}
+                    </span>
+                    <div className="text-xl font-black text-slate-900 font-mono">
+                      {item.value} {item.unit && <span className="text-xs font-normal text-slate-500">{item.unit}</span>}
+                    </div>
+                    <span className="text-[10px] text-slate-400 block pt-0.5">{item.sub}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
