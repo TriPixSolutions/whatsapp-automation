@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         triggerKeyword: body.triggerKeyword || 'hello',
         triggerMatchPattern: body.triggerMatchPattern || 'contains',
         nodes: body.nodes,
+        edges: body.edges || [],
         isActive: body.isActive !== undefined ? body.isActive : true,
         debugModeEnabled: Boolean(body.debugModeEnabled),
         executionCount: body.executionCount || 0,

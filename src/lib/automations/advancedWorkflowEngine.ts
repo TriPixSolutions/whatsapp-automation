@@ -192,10 +192,17 @@ export class AdvancedWorkflowEngine {
 
       try {
         let nextNodeIdToFollow: string | undefined = currentNode.nextNodeId;
+        let branchHandleToFollow: string | undefined = undefined;
 
         // Process Node Type
         switch (currentNode.type) {
-          case 'trigger': {
+          case 'trigger':
+          case 'trigger_incoming':
+          case 'trigger_keyword':
+          case 'trigger_button':
+          case 'trigger_carousel':
+          case 'trigger_list':
+          case 'trigger_flow': {
             traceStep.status = 'trigger_fired';
             traceStep.outputResult = {
               matched: true,
@@ -206,8 +213,13 @@ export class AdvancedWorkflowEngine {
           }
 
           case 'message':
+          case 'whatsapp_message':
           case 'button':
-          case 'carousel': {
+          case 'whatsapp_button':
+          case 'carousel':
+          case 'whatsapp_carousel':
+          case 'whatsapp_catalog':
+          case 'whatsapp_flow': {
             const sendResult = await this.dispatchNodeMessage(
               currentNode,
               context,
@@ -238,9 +250,8 @@ export class AdvancedWorkflowEngine {
             const amount = currentNode.config.delayAmount || 1;
             const unit = currentNode.config.delayUnit || 'minutes';
 
-            // In test simulation mode or small delays (< 5 seconds), wait briefly; otherwise note scheduled delay
             if (context.isTestSimulation) {
-              const simDelayMs = Math.min(amount * 500, 2000);
+              const simDelayMs = Math.min(amount * 400, 1500);
               await new Promise((r) => setTimeout(r, simDelayMs));
               traceStep.outputResult = { simulatedDelay: `${amount} ${unit}`, waitedMs: simDelayMs };
             } else {
@@ -250,7 +261,19 @@ export class AdvancedWorkflowEngine {
             break;
           }
 
-          case 'condition': {
+          case 'wait_for_reply': {
+            traceStep.status = 'node_executed';
+            traceStep.outputResult = {
+              waitingForReply: true,
+              timeoutMinutes: currentNode.config.timeoutMinutes || 60,
+              status: 'customer_replied',
+            };
+            branchHandleToFollow = 'replied';
+            break;
+          }
+
+          case 'condition':
+          case 'conditional_logic': {
             const conditionResult = this.evaluateCondition(
               currentNode,
               context,
@@ -258,6 +281,7 @@ export class AdvancedWorkflowEngine {
             );
             traceStep.outputResult = conditionResult;
             traceStep.status = 'node_executed';
+            branchHandleToFollow = conditionResult.conditionResult ? 'true' : 'false';
 
             if (conditionResult.branchNextNodeId) {
               nextNodeIdToFollow = conditionResult.branchNextNodeId;
@@ -265,8 +289,110 @@ export class AdvancedWorkflowEngine {
             break;
           }
 
+          case 'multi_branch': {
+            const varVal = (executionVariables[currentNode.config.conditionVariable || 'text'] || context.triggerPayload?.text || '').toString().toLowerCase();
+            const branches = currentNode.config.branches || [];
+            const matchedBranch = branches.find((b: any) =>
+              b.conditionValue && varVal.includes(b.conditionValue.toLowerCase())
+            ) || branches[0];
+
+            branchHandleToFollow = matchedBranch?.id;
+            traceStep.outputResult = {
+              selectedBranch: matchedBranch?.label || 'Default Branch',
+              branchId: matchedBranch?.id,
+            };
+            traceStep.status = 'node_executed';
+            break;
+          }
+
+          case 'crm_action': {
+            const conf = currentNode.config || {};
+            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contact) {
+              if (conf.stage) {
+                ContactsDB.upsert({ phoneNumber: contact.phoneNumber, stage: conf.stage as any }, context.workspaceId);
+              }
+              if (conf.notes) {
+                ContactsDB.addNote(contact.id, {
+                  authorName: 'Workflow Engine',
+                  content: conf.notes,
+                });
+              }
+            }
+            traceStep.outputResult = {
+              crmUpdated: true,
+              stage: conf.stage,
+              notesAdded: conf.notes || 'None',
+            };
+            traceStep.status = 'node_executed';
+            break;
+          }
+
+          case 'lead_management': {
+            const conf = currentNode.config || {};
+            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contact) {
+              const updatedContact = {
+                ...contact,
+                leadStatus: conf.leadStatus || 'qualified',
+                metadata: {
+                  ...(contact.metadata || {}),
+                  leadValue: conf.leadValue || 500,
+                  priority: conf.priority || 'high',
+                },
+              };
+              ContactsDB.upsert(updatedContact, context.workspaceId);
+            }
+            traceStep.outputResult = {
+              leadStatus: conf.leadStatus || 'qualified',
+              leadValue: conf.leadValue || 500,
+              priority: conf.priority || 'high',
+            };
+            traceStep.status = 'node_executed';
+            break;
+          }
+
+          case 'tag_management': {
+            const conf = currentNode.config || {};
+            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contact && conf.tag) {
+              const tagToApply = conf.tag.toLowerCase().trim();
+              let tags = contact.tags || [];
+              if (conf.action === 'remove') {
+                tags = tags.filter((t) => t.toLowerCase() !== tagToApply);
+              } else {
+                tags = Array.from(new Set([...tags, tagToApply]));
+              }
+              ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
+            }
+            traceStep.outputResult = {
+              action: conf.action || 'add',
+              tag: conf.tag,
+            };
+            traceStep.status = 'node_executed';
+            break;
+          }
+
+          case 'google_sheets': {
+            const conf = currentNode.config || {};
+            traceStep.outputResult = {
+              sheetName: conf.sheetName || 'WhatsApp Leads',
+              operation: conf.operation || 'append_row',
+              dataAppended: {
+                phoneNumber: context.phoneNumber,
+                timestamp: new Date().toISOString(),
+                workflowId: workflow.id,
+              },
+              status: 'success',
+            };
+            traceStep.status = 'node_executed';
+            break;
+          }
+
           case 'webhook':
-          case 'api': {
+          case 'webhook_node':
+          case 'api':
+          case 'api_node': {
             const integrationResult = await this.executeIntegrationNode(
               currentNode,
               context,
@@ -288,6 +414,24 @@ export class AdvancedWorkflowEngine {
           default: {
             traceStep.status = 'node_executed';
             traceStep.outputResult = { executed: true };
+          }
+        }
+
+        // Visual Edge Graph Navigation check
+        if (workflow.edges && workflow.edges.length > 0) {
+          if (branchHandleToFollow) {
+            const branchEdge = workflow.edges.find(
+              (e) => e.source === currentNode?.id && e.sourceHandle === branchHandleToFollow
+            );
+            if (branchEdge) {
+              nextNodeIdToFollow = branchEdge.target;
+            }
+          }
+          if (!nextNodeIdToFollow) {
+            const defaultEdge = workflow.edges.find((e) => e.source === currentNode?.id);
+            if (defaultEdge) {
+              nextNodeIdToFollow = defaultEdge.target;
+            }
           }
         }
 
@@ -491,6 +635,27 @@ export class AdvancedWorkflowEngine {
         languageCode: config.languageCode || 'en_US',
         bypassWindowCheck: true,
       });
+    } else if (node.type === 'whatsapp_catalog' || (messageType as any) === 'catalog' || messageType === 'product') {
+      serviceResult = await WhatsAppMessageService.send({
+        workspaceId: context.workspaceId,
+        to: cleanTo,
+        type: 'interactive',
+        bodyText: `${config.bodyText || 'Explore our verified product collection:'}\n\n*${config.productTitle || 'Signature Item'}* - ${config.productPrice || '$149.00'}\n${config.productSubtitle || 'In Stock · Fast Courier Delivery'}`,
+        buttons: [{ id: 'view_catalog', title: 'View Catalog' }],
+        catalogId: config.catalogId,
+        productRetailerId: config.retailerId,
+        bypassWindowCheck: true,
+      });
+    } else if (node.type === 'whatsapp_flow' || (messageType as any) === 'whatsapp_flow') {
+      serviceResult = await WhatsAppMessageService.send({
+        workspaceId: context.workspaceId,
+        to: cleanTo,
+        type: 'interactive',
+        bodyText: config.bodyText || 'Please complete our interactive form below:',
+        buttonText: config.flowCta || 'Start Form',
+        buttons: [{ id: config.flowId || 'flow_btn', title: config.flowCta || 'Open Form' }],
+        bypassWindowCheck: true,
+      });
     } else if (['image', 'video', 'audio', 'document', 'pdf'].includes(messageType)) {
       serviceResult = await WhatsAppMessageService.send({
         workspaceId: context.workspaceId,
@@ -648,6 +813,8 @@ export class AdvancedWorkflowEngine {
     else if (operator === 'contains') matches = actualVal.includes(targetVal);
     else if (operator === 'not_equals') matches = actualVal !== targetVal;
     else if (operator === 'exists') matches = Boolean(actualVal);
+    else if (operator === 'greater_than') matches = parseFloat(actualVal) > parseFloat(targetVal);
+    else if (operator === 'less_than') matches = parseFloat(actualVal) < parseFloat(targetVal);
     else if (operator === 'replied_within_24h') matches = true;
 
     const branchNextNodeId = matches ? config.trueNextNodeId : config.falseNextNodeId;
@@ -675,7 +842,7 @@ export class AdvancedWorkflowEngine {
     }
 
     try {
-      const method = config.webhookMethod || 'POST';
+      const method = config.apiMethod || config.webhookMethod || 'POST';
       const body = config.webhookBody ? JSON.parse(config.webhookBody) : {
         event: 'workflow_node_executed',
         workflowId: context.workflowId,

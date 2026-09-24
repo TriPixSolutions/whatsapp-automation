@@ -79,9 +79,55 @@ export type NodeExecutionStatus =
   | 'failed'
   | 'skipped';
 
+export interface VisualWorkflowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  label?: string;
+  animated?: boolean;
+}
+
+export type VisualNodeType =
+  // Triggers
+  | 'trigger_incoming'
+  | 'trigger_keyword'
+  | 'trigger_button'
+  | 'trigger_carousel'
+  | 'trigger_list'
+  | 'trigger_flow'
+  // WhatsApp Actions
+  | 'whatsapp_message'
+  | 'whatsapp_button'
+  | 'whatsapp_carousel'
+  | 'whatsapp_catalog'
+  | 'whatsapp_flow'
+  // Logic & Control
+  | 'conditional_logic'
+  | 'multi_branch'
+  | 'delay'
+  | 'wait_for_reply'
+  // CRM & Integrations
+  | 'crm_action'
+  | 'lead_management'
+  | 'tag_management'
+  | 'google_sheets'
+  | 'api_node'
+  | 'webhook_node'
+  | 'end'
+  // Legacy compatibility types
+  | 'trigger'
+  | 'message'
+  | 'button'
+  | 'carousel'
+  | 'condition'
+  | 'webhook'
+  | 'api';
+
 export interface WorkflowNode {
   id: string;
-  type: 'trigger' | 'message' | 'button' | 'carousel' | 'delay' | 'condition' | 'webhook' | 'api' | 'end';
+  type: VisualNodeType | string;
   title: string;
   description: string;
   triggerType?: AutomationTriggerType;
@@ -109,6 +155,17 @@ export interface WorkflowNode {
       description: string;
       buttons: { id: string; title: string; url?: string }[];
     }[];
+    // Catalog & Products
+    catalogId?: string;
+    retailerId?: string;
+    productTitle?: string;
+    productPrice?: string;
+    productSubtitle?: string;
+    // WhatsApp Flows
+    flowId?: string;
+    flowTitle?: string;
+    flowCta?: string;
+    flowScreen?: string;
     // Location / Contact / Coupon
     latitude?: number;
     longitude?: number;
@@ -118,27 +175,41 @@ export interface WorkflowNode {
     contactPhone?: string;
     couponCode?: string;
     discountPercentage?: number;
-    // Delays
+    // Delays & Waiting
     delayAmount?: number;
-    delayUnit?: 'minutes' | 'hours' | 'days';
-    // Conditions & Splits
+    delayUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
+    timeoutMinutes?: number;
+    timeoutUnit?: 'minutes' | 'hours' | 'days';
+    // Conditions & Branches
     conditionVariable?: string;
-    conditionOperator?: 'equals' | 'contains' | 'not_equals' | 'exists' | 'replied_within_24h';
+    conditionOperator?: 'equals' | 'contains' | 'not_equals' | 'exists' | 'greater_than' | 'less_than' | 'replied_within_24h';
     conditionValue?: string;
     trueNextNodeId?: string;
     falseNextNodeId?: string;
-    splitRatio?: number; // 0.5 for 50/50 A/B testing
-    // Tagging / Lead Assign
+    splitRatio?: number;
+    branches?: { id: string; label: string; conditionValue?: string }[];
+    // Tagging / Lead Assign / CRM
     tag?: string;
     removeTag?: string;
+    action?: 'add' | 'remove';
     assigneeEmail?: string;
+    stage?: string;
+    notes?: string;
+    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    leadStatus?: 'new' | 'contacted' | 'qualified' | 'disqualified' | 'converted';
+    scoreIncrement?: number;
+    leadValue?: number;
     // External integrations
     webhookUrl?: string;
-    webhookMethod?: 'POST' | 'GET' | 'PUT';
+    webhookMethod?: 'POST' | 'GET' | 'PUT' | 'DELETE';
     webhookHeaders?: Record<string, string>;
     webhookBody?: string;
+    apiUrl?: string;
+    apiMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
     crmEntity?: string;
     sheetName?: string;
+    operation?: 'append_row' | 'update_row' | 'lookup_row';
+    columns?: Record<string, string>;
     taskTitle?: string;
     [key: string]: any;
   };
@@ -155,6 +226,7 @@ export interface WorkflowDefinition {
   triggerKeyword: string;
   triggerMatchPattern?: 'exact' | 'contains' | 'starts_with' | 'regex';
   nodes: WorkflowNode[];
+  edges?: VisualWorkflowEdge[];
   isActive: boolean;
   debugModeEnabled?: boolean;
   executionCount: number;

@@ -245,15 +245,29 @@ export async function handleWebhookInboundMessages(
     let advancedWorkflowHandled = false;
     try {
       const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
-      const triggerType = message.type === 'interactive' && interactionPayload?.title
-        ? 'button_click'
-        : 'keyword';
+      let triggerType: any = 'keyword';
+      if (message.type === 'interactive') {
+        if (message.interactive?.list_reply || (interactionPayload && interactionPayload.description)) {
+          triggerType = 'list_selection';
+        } else {
+          triggerType = 'button_click';
+        }
+      }
 
-      const advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+      let advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
         triggerType,
         { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
         workspaceId
       );
+
+      // Fallback: If no keyword matched for regular text, check for incoming_message triggers
+      if (advancedMatches.length === 0 && triggerType === 'keyword') {
+        advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+          'incoming_message',
+          { text: triggerText, from: fromPhone },
+          workspaceId
+        );
+      }
 
       if (advancedMatches.length > 0) {
         for (const matchedWf of advancedMatches) {

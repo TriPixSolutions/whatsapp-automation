@@ -169,6 +169,13 @@ function seedDefaultWorkflows() {
           position: { x: 1500, y: 150 },
         },
       ],
+      edges: [
+        { id: 'e_trigger_welcome', source: 'node_trigger', target: 'node_welcome_msg', animated: true },
+        { id: 'e_welcome_button', source: 'node_welcome_msg', target: 'node_button_menu' },
+        { id: 'e_button_carousel', source: 'node_button_menu', target: 'node_carousel_showcase' },
+        { id: 'e_carousel_tag', source: 'node_carousel_showcase', target: 'node_condition_tag' },
+        { id: 'e_tag_end', source: 'node_condition_tag', target: 'node_end' },
+      ],
     };
   }
 }
@@ -313,6 +320,9 @@ export const TestCenterStore = {
   getDeliveryReceipts(limit = 100): MessageDeliveryReceipt[] {
     return globalState.deliveryReceipts.slice(0, limit);
   },
+  listDeliveryReceipts(limit = 100): MessageDeliveryReceipt[] {
+    return globalState.deliveryReceipts.slice(0, limit);
+  },
 
   // META API LOGS
   recordMetaLog(log: MetaApiLog): MetaApiLog {
@@ -325,6 +335,9 @@ export const TestCenterStore = {
   },
 
   getMetaLogs(limit = 100): MetaApiLog[] {
+    return globalState.metaLogs.slice(0, limit);
+  },
+  listMetaLogs(limit = 100): MetaApiLog[] {
     return globalState.metaLogs.slice(0, limit);
   },
 
@@ -340,6 +353,12 @@ export const TestCenterStore = {
 
   getWebhookLogs(limit = 100): WebhookLogItem[] {
     return globalState.webhookLogs.slice(0, limit);
+  },
+  listWebhookLogs(limit = 100): WebhookLogItem[] {
+    return globalState.webhookLogs.slice(0, limit);
+  },
+  listExecutionLogs(filters?: { workflowId?: string; phoneNumber?: string; limit?: number }): WorkflowExecutionLog[] {
+    return this.getExecutionLogs(filters);
   },
 
   // BUTTON TESTING LAB
