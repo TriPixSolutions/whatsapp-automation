@@ -6,8 +6,41 @@ const IV_LENGTH = 12; // 96-bit recommended IV for GCM
 const TAG_LENGTH = 16; // 128-bit authentication tag
 
 function getEncryptionKey(): Buffer {
-  const envKey = process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET || 'passion_fruit_production_aes256_key_2026';
+  const envKey =
+    process.env.ENCRYPTION_KEY ||
+    process.env.JWT_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    'production_secure_tripix_aes256_key_32bytes_min';
   return crypto.createHash('sha256').update(envKey).digest();
+}
+
+/**
+ * PBKDF2 Secure Password Hashing (replaces weak raw SHA-256)
+ */
+export function hashPassword(password: string): string {
+  const salt = process.env.ENCRYPTION_KEY ? process.env.ENCRYPTION_KEY.substring(0, 16) : 'tripix_salt_2026';
+  const iterations = 10000;
+  const keylen = 64;
+  const digest = 'sha512';
+  return crypto.pbkdf2Sync(password, salt, iterations, keylen, digest).toString('hex');
+}
+
+/**
+ * Verify password against stored PBKDF2 hash (with backward compatibility for previous sha256 hashes)
+ */
+export function verifyPassword(password: string, storedHash?: string): boolean {
+  if (!storedHash) return false;
+  // 1. Check PBKDF2 hash
+  const pbkdf2Hash = hashPassword(password);
+  if (crypto.timingSafeEqual(Buffer.from(pbkdf2Hash), Buffer.from(storedHash))) {
+    return true;
+  }
+  // 2. Backward compatibility check for previous sha256 hash
+  const legacyHash = crypto.createHash('sha256').update(password + '_passionfruit_salt_2026').digest('hex');
+  if (legacyHash.length === storedHash.length && crypto.timingSafeEqual(Buffer.from(legacyHash), Buffer.from(storedHash))) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -79,7 +112,7 @@ export function maskToken(token: string): string {
   }
   const prefix = decrypted.slice(0, 4);
   const suffix = decrypted.slice(-4);
-  return `${prefix}${'•'.repeat(Math.min(16, decrypted.length - 8))}${suffix}`;
+  return `${prefix}${'•'.repeat(Math.min(16, Math.max(4, decrypted.length - 8)))}${suffix}`;
 }
 
 /**
@@ -89,16 +122,15 @@ export function maskToken(token: string): string {
 export function verifyMetaSignature(
   rawBody: string | Buffer,
   signatureHeader: string | null | undefined,
-  customAppSecret?: string
+  appSecret?: string
 ): boolean {
   if (!signatureHeader) return false;
 
-  const appSecret =
-    customAppSecret ||
-    process.env.META_CLIENT_SECRET ||
-    process.env.META_APP_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    'passion_fruit_meta_secret_2026';
+  const secret = appSecret || process.env.META_APP_SECRET || '';
+  if (!secret) {
+    console.warn('[Crypto] Warning: No appSecret provided to verify Meta signature.');
+    return false;
+  }
 
   try {
     const expectedPrefix = 'sha256=';
@@ -109,7 +141,7 @@ export function verifyMetaSignature(
     const signatureHash = signatureHeader.substring(expectedPrefix.length);
     const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, 'utf8');
 
-    const hmac = crypto.createHmac('sha256', appSecret);
+    const hmac = crypto.createHmac('sha256', secret);
     hmac.update(bodyBuffer);
     const digest = hmac.digest('hex');
 

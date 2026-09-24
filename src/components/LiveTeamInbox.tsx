@@ -65,26 +65,98 @@ export function LiveTeamInbox() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [chatHistory, setChatHistory] = useState<Record<string, ChatMessage[]>>({});
+  const [isSending, setIsSending] = useState(false);
+  const [windowNotice, setWindowNotice] = useState<string | null>(null);
+
+  // Load contacts and messages from live database
+  const loadLiveInbox = React.useCallback(async () => {
+    try {
+      const [contactsRes, msgRes] = await Promise.all([
+        fetch('/api/contacts').catch(() => null),
+        fetch('/api/messages').catch(() => null),
+      ]);
+
+      if (contactsRes?.ok) {
+        const data = await contactsRes.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: ChatContact[] = data.map((c: any) => ({
+            id: c.id,
+            name: `${c.first_name || c.firstName || ''} ${c.last_name || c.lastName || ''}`.trim() || c.phone_number || c.phoneNumber,
+            phone: c.phone_number || c.phoneNumber,
+            lastMessage: 'Tap to view conversation',
+            time: 'Active',
+            unread: 0,
+            tags: c.tags || ['vip'],
+            status: 'active' as const,
+            assignedAgent: 'Agent 1',
+          }));
+
+          setContacts(mapped);
+          if (!activeContactId && mapped.length > 0) {
+            setActiveContactId(mapped[0].id);
+          }
+        }
+      }
+
+      if (msgRes?.ok) {
+        const msgData = await msgRes.json();
+        if (Array.isArray(msgData.messages)) {
+          const grouped: Record<string, ChatMessage[]> = {};
+          for (const m of msgData.messages) {
+            const phone = m.phoneNumber || m.phone_number;
+            if (!grouped[phone]) grouped[phone] = [];
+            grouped[phone].unshift({
+              id: m.id || m.metaMessageId,
+              sender: m.direction === 'inbound' ? 'user' : 'agent',
+              text: m.content || '',
+              time: m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now',
+              status: m.status || 'delivered',
+            });
+          }
+
+          setChatHistory((prev) => {
+            const next = { ...prev };
+            for (const [phone, msgs] of Object.entries(grouped)) {
+              // Map phone to contact ID if matched
+              const match = contacts.find((c) => c.phone === phone);
+              if (match) {
+                next[match.id] = msgs;
+              }
+            }
+            return next;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Inbox Fetch Error]:', e);
+    }
+  }, [activeContactId, contacts]);
+
+  React.useEffect(() => {
+    loadLiveInbox();
+    const interval = setInterval(loadLiveInbox, 6000);
+    return () => clearInterval(interval);
+  }, [loadLiveInbox]);
 
   const activeContact = contacts.find((c) => c.id === activeContactId) || contacts[0] || {
-    id: '',
-    name: 'No Active Contact',
-    phone: '',
-    lastMessage: '',
-    time: '',
+    id: 'placeholder',
+    name: 'Customer Concierge',
+    phone: '+1 (555) 019-2831',
+    lastMessage: 'Ready for live chat',
+    time: 'Now',
     unread: 0,
-    tags: [],
-    status: 'pending' as const,
-    assignedAgent: 'Unassigned',
+    tags: ['vip'],
+    status: 'active' as const,
+    assignedAgent: 'Agent 1',
   };
   const activeMessages = activeContactId ? (chatHistory[activeContactId] || []) : [];
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageInput.trim()) return;
+    if (!messageInput.trim() || isSending) return;
 
     if (isNoteMode) {
-      // Add Private Internal Team Note (Wati Internal Note Feature)
+      // Add Private Internal Team Note
       const newNote: ChatMessage = {
         id: `note_${Date.now()}`,
         sender: 'note',
@@ -98,36 +170,78 @@ export function LiveTeamInbox() {
         [activeContactId]: [...(prev[activeContactId] || []), newNote],
       }));
       setIsNoteMode(false);
-    } else {
-      // Outbound WhatsApp Message
-      const newMsg: ChatMessage = {
-        id: `msg_${Date.now()}`,
-        sender: 'agent',
-        text: messageInput,
-        time: 'Just now',
-        status: 'delivered',
-      };
-
-      setChatHistory((prev) => ({
-        ...prev,
-        [activeContactId]: [...(prev[activeContactId] || []), newMsg],
-      }));
+      setMessageInput('');
+      return;
     }
 
+    const currentText = messageInput;
     setMessageInput('');
+    setIsSending(true);
+    setWindowNotice(null);
+
+    // Optimistic UI update
+    const tempId = `msg_${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      sender: 'agent',
+      text: currentText,
+      time: 'Just now',
+      status: 'sent',
+    };
+
+    setChatHistory((prev) => ({
+      ...prev,
+      [activeContactId]: [...(prev[activeContactId] || []), optimisticMsg],
+    }));
+
+    try {
+      const res = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: activeContact.phone,
+          text: currentText,
+          type: 'text',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.windowClosed || data.errorCode === 131047) {
+          setWindowNotice(
+            '⚠️ 24-Hour Policy Window Closed: Customer has not messaged in >24 hours. Send a Meta Template message instead.'
+          );
+        } else {
+          setWindowNotice(`Send failed: ${data.error || 'Check Meta Cloud credentials'}`);
+        }
+      } else {
+        // Mark delivered
+        setChatHistory((prev) => {
+          const list = prev[activeContactId] || [];
+          return {
+            ...prev,
+            [activeContactId]: list.map((m) => (m.id === tempId ? { ...m, status: 'delivered' } : m)),
+          };
+        });
+      }
+    } catch (err: any) {
+      setWindowNotice(`Network error: ${err.message}`);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   // Wati AI Copilot Summarize Action
   const handleGenerateAiSummary = () => {
     setAiSummary(
-      `📌 Summary for ${activeContact.name}:\n• Source: ${activeContact.adSource || 'Direct Chat'}\n• Intent: Inquired about confidential catalog specs after responding 'Show me'.\n• Recommended Next Action: Send official PDF brochure and quote VIP pricing tier.`
+      `📌 Summary for ${activeContact.name}:\n• Source: ${activeContact.adSource || 'Direct WhatsApp'}\n• Intent: Active conversation regarding catalog product specs.\n• Recommended Next Action: Send product brochure or invite to schedule a consultation.`
     );
   };
 
   // Wati AI Copilot Suggest Reply Action
   const handleApplyAiSuggestion = () => {
     setMessageInput(
-      `Hello ${activeContact.name.split(' ')[0]}! I would be delighted to share the exclusive specs and pricing with you directly. Would you like me to send our confidential PDF brochure right here on WhatsApp?`
+      `Hello ${activeContact.name.split(' ')[0]}! I would be delighted to share the exclusive specs and pricing with you directly. Would you like me to send our confidential product lookbook?`
     );
   };
 
@@ -137,11 +251,11 @@ export function LiveTeamInbox() {
   };
 
   // Send WhatsApp Catalog Product Card
-  const handleSendCatalogProduct = () => {
+  const handleSendCatalogProduct = async () => {
     const productMsg: ChatMessage = {
       id: `prod_${Date.now()}`,
       sender: 'agent',
-      text: 'Here is the featured catalog item you requested from our Private Collection:',
+      text: 'Featured catalog item from our Collection: The Obsidian Grand Complication ($124,000 USD)',
       time: 'Just now',
       status: 'delivered',
       productCard: {
@@ -156,6 +270,20 @@ export function LiveTeamInbox() {
       [activeContactId]: [...(prev[activeContactId] || []), productMsg],
     }));
     setShowCatalogModal(false);
+
+    try {
+      await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient: activeContact.phone,
+          text: 'The Obsidian Grand Complication - Titanium & Sapphire ($124,000 USD)',
+          type: 'text',
+        }),
+      });
+    } catch (err) {
+      console.warn('Catalog dispatch error:', err);
+    }
   };
 
   const sendQuickButtonReply = (title: string) => {
@@ -172,6 +300,7 @@ export function LiveTeamInbox() {
       [activeContactId]: [...(prev[activeContactId] || []), userReply],
     }));
   };
+
 
   return (
     <div className="rounded-2xl bg-white border border-[#E5E7EB] shadow-zap-md overflow-hidden flex flex-col h-[700px]">
@@ -436,6 +565,20 @@ export function LiveTeamInbox() {
               /human-agent
             </button>
           </div>
+
+          {/* 24-Hour Policy Window Alert */}
+          {windowNotice && (
+            <div className="mx-3 my-1.5 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between">
+              <span className="font-medium">{windowNotice}</span>
+              <button
+                type="button"
+                onClick={() => setWindowNotice(null)}
+                className="text-amber-700 hover:text-amber-950 font-bold ml-2"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {/* Message Input Box & Internal Note Switcher */}
           <form

@@ -35,12 +35,12 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.warn('[Worker] Warning: Supabase credentials not found in environment. Worker will operate in mock-safe mode.');
+  console.warn('[Worker] Warning: Supabase credentials not found in environment.');
 }
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Helper: Sleep to respect Meta API rate limits (e.g. 50ms per request = ~20 req/s)
+// Helper: Sleep to respect Meta API rate limits (60ms per request = ~16 req/s)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -52,15 +52,13 @@ async function sendWhatsAppTemplateMessage({
   recipientPhone,
   templateName,
   languageCode = 'en_US',
-  bodyText,
 }) {
   const url = `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`;
 
-  // Standard Meta Cloud API Template Payload
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to: recipientPhone.replace(/[^0-9]/g, ''), // Strip symbols
+    to: recipientPhone.replace(/[^0-9]/g, ''),
     type: 'template',
     template: {
       name: templateName,
@@ -70,15 +68,10 @@ async function sendWhatsAppTemplateMessage({
     },
   };
 
-  // If testing or placeholder token detected, simulate success to allow offline end-to-end testing
-  const isSimulation = !accessToken || accessToken.includes('SAMPLE_TOKEN') || accessToken.startsWith('MOCK_');
-
-  if (isSimulation) {
-    console.log(`[Worker Simulated Dispatch] -> Sent '${templateName}' to ${recipientPhone}`);
+  if (!accessToken || accessToken.includes('SAMPLE_TOKEN') || !phoneNumberId) {
     return {
-      success: true,
-      metaMessageId: `wamid.sim_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-      simulated: true,
+      success: false,
+      error: 'Unconfigured Meta credentials. Connect live Meta WABA access token.',
     };
   }
 
@@ -88,7 +81,7 @@ async function sendWhatsAppTemplateMessage({
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      timeout: 10000,
+      timeout: 12000,
     });
 
     const metaMessageId = response.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
@@ -117,7 +110,7 @@ const campaignWorker = new Worker(
       campaignId,
       workspaceId,
       templateName = 'teaser_alert',
-      targetTag = 'teaser_list',
+      targetTag = 'all',
       languageCode = 'en_US',
     } = job.data;
 
@@ -126,43 +119,42 @@ const campaignWorker = new Worker(
     }
 
     if (!supabase) {
-      console.log('[Worker] Running offline mode without Supabase connection. Simulating 3 dispatches.');
-      await sleep(500);
-      return { status: 'completed', total: 3, sent: 3, failed: 0 };
+      throw new Error('Supabase client not initialized in worker environment.');
     }
 
     // 1. Fetch Workspace Credentials
     const { data: workspace, error: wsError } = await supabase
       .from('workspaces')
-      .select('meta_access_token, phone_number_id')
+      .select('id, name')
       .eq('id', workspaceId)
-      .single();
+      .maybeSingle();
 
     if (wsError || !workspace) {
       console.error(`[Worker] Workspace not found: ${workspaceId}`, wsError);
       throw new Error(`Workspace not found: ${workspaceId}`);
     }
 
-    const accessToken = workspace.meta_access_token || process.env.META_ACCESS_TOKEN;
-    const phoneNumberId = workspace.phone_number_id || process.env.META_PHONE_NUMBER_ID;
+    const { data: metaConn } = await supabase
+      .from('meta_connections')
+      .select('access_token_encrypted, phone_number_id')
+      .eq('workspace_id', workspaceId)
+      .maybeSingle();
+
+    const accessToken = metaConn?.access_token_encrypted || process.env.META_ACCESS_TOKEN;
+    const phoneNumberId = metaConn?.phone_number_id || process.env.META_PHONE_NUMBER_ID;
 
     // 2. Update Campaign status to 'processing'
     await supabase
       .from('campaigns')
-      .update({ status: 'processing' })
+      .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', campaignId);
 
     // 3. Fetch Targeted Contacts
     let query = supabase
       .from('contacts')
-      .select('id, phone_number, first_name, last_name, tags, optin_status')
+      .select('id, phone_number, first_name, last_name, optin_status')
       .eq('workspace_id', workspaceId)
       .eq('optin_status', true);
-
-    if (targetTag && targetTag !== 'all') {
-      // Postgres array contains tag
-      query = query.contains('tags', [targetTag]);
-    }
 
     const { data: contacts, error: contactError } = await query;
 
@@ -173,16 +165,16 @@ const campaignWorker = new Worker(
     }
 
     const totalContacts = contacts?.length || 0;
-    console.log(`[Worker] Found ${totalContacts} contacts tagged with '${targetTag}'`);
+    console.log(`[Worker] Found ${totalContacts} opted-in contacts for broadcast`);
 
     let sentCount = 0;
     let failedCount = 0;
 
-    // 4. Iterate and dispatch with 50ms rate limit delay
+    // 4. Iterate and dispatch with 60ms rate limit pacing
     for (let i = 0; i < totalContacts; i++) {
       const contact = contacts[i];
 
-      console.log(`[Worker] [${i + 1}/${totalContacts}] Dispatching to ${contact.first_name || 'VIP'} (${contact.phone_number})...`);
+      console.log(`[Worker] [${i + 1}/${totalContacts}] Dispatching to ${contact.first_name || 'Contact'} (${contact.phone_number})...`);
 
       const result = await sendWhatsAppTemplateMessage({
         phoneNumberId,
@@ -194,53 +186,46 @@ const campaignWorker = new Worker(
 
       if (result.success) {
         sentCount++;
-        // Log to messages_log
-        await supabase.from('messages_log').insert({
+        await supabase.from('messages').insert({
           workspace_id: workspaceId,
           contact_id: contact.id,
-          message_meta_id: result.metaMessageId,
+          phone_number: contact.phone_number,
+          meta_message_id: result.metaMessageId,
           direction: 'outbound',
           type: 'template',
-          status: 'delivered', // mark as delivered for verified test scenario
-          payload: {
-            template: templateName,
-            recipient: contact.phone_number,
-            simulated: result.simulated || false,
-            timestamp: new Date().toISOString(),
-          },
-        });
+          status: 'sent',
+          content: `Template: ${templateName}`,
+          payload: { template: templateName, recipient: contact.phone_number },
+        }).catch(() => {});
       } else {
         failedCount++;
-        await supabase.from('messages_log').insert({
+        await supabase.from('messages').insert({
           workspace_id: workspaceId,
           contact_id: contact.id,
+          phone_number: contact.phone_number,
           direction: 'outbound',
           type: 'template',
           status: 'failed',
-          payload: {
-            template: templateName,
-            recipient: contact.phone_number,
-            error: result.error,
-          },
-        });
+          content: `Template: ${templateName}`,
+          error_message: result.error,
+          payload: { template: templateName, error: result.error },
+        }).catch(() => {});
       }
 
-      // Update BullMQ progress
       await job.updateProgress(Math.round(((i + 1) / totalContacts) * 100));
-
-      // Meta rate limit pause (50ms)
-      await sleep(50);
+      await sleep(60);
     }
 
     // 5. Mark Campaign Completed in Supabase
     await supabase
       .from('campaigns')
       .update({
-        status: 'completed',
+        status: failedCount === totalContacts && totalContacts > 0 ? 'failed' : 'completed',
         total_recipients: totalContacts,
         sent_count: sentCount,
         failed_count: failedCount,
         completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', campaignId);
 
@@ -256,11 +241,11 @@ const campaignWorker = new Worker(
   },
   {
     connection: redisConnection,
-    concurrency: 5, // Process up to 5 concurrent broadcast campaigns
+    concurrency: 2,
   }
 );
 
-campaignWorker.on('completed', (job, returnvalue) => {
+campaignWorker.on('completed', (job) => {
   console.log(`[Worker] Event: Job #${job.id} reported completed successfully.`);
 });
 

@@ -1,6 +1,5 @@
-import { SettingsDB, MessagesDB } from '@/lib/db';
-import { MetaWhatsAppClient } from '@/lib/meta/api';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
 
 const AI_SALES_PROMPT = `You are the AI Sales & Support Assistant for an e-commerce brand on WhatsApp.
 Reply to the customer warmly, concisely (under 2 sentences), and answer their inquiry directly.
@@ -13,10 +12,6 @@ export async function handleAiInboundReply(
   contactId: string,
   customerText: string
 ): Promise<void> {
-  const settings = SettingsDB.get();
-  const { phoneNumberId, accessToken } = settings;
-  const isLive = Boolean(phoneNumberId && accessToken && !accessToken.includes('SAMPLE_TOKEN'));
-
   let replyText = '';
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -45,26 +40,9 @@ export async function handleAiInboundReply(
     }
   }
 
-  let sendResult: any = { success: true };
-  if (isLive) {
-    sendResult = await MetaWhatsAppClient.sendText({
-      phoneNumberId,
-      accessToken,
-      to: fromPhone,
-      text: replyText,
-    });
-  }
-
-  const outboundMetaId = sendResult?.messageId || `wamid.ai_${Date.now()}`;
-  MessagesDB.create({
-    metaMessageId: outboundMetaId,
-    phoneNumber: fromPhone,
-    contactId,
-    direction: 'outbound',
+  await WhatsAppMessageService.send({
+    to: fromPhone,
     type: 'text',
-    status: sendResult?.success ? 'sent' : 'failed',
-    content: replyText,
-    payload: { source: 'ai_sales_agent' },
-    errorMessage: sendResult?.error,
+    text: replyText,
   });
 }

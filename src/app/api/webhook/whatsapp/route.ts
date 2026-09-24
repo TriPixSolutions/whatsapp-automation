@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SettingsDB } from '@/lib/db';
+import { SettingsDB, WebhookEventsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { verifyMetaSignature } from '@/lib/crypto';
 import { handleWebhookVerification } from '@/lib/webhook/webhookVerification';
 import { handleWebhookInboundMessages } from '@/lib/webhook/webhookInbound';
@@ -19,16 +19,17 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/webhook/whatsapp
  * Meta Cloud API Inbound Webhook:
- * 1. Validates HMAC-SHA256 signature
- * 2. Processes inbound messages, interactive buttons, and in-chat checkout
- * 3. Records message delivery receipts (sent, delivered, read, failed)
+ * 1. Validates HMAC-SHA256 signature (X-Hub-Signature-256)
+ * 2. Deduplicates incoming events by Meta event/message ID
+ * 3. Processes inbound messages, interactive replies, and in-chat checkout
+ * 4. Records message delivery receipts (sent, delivered, read, failed)
  */
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
     const signatureHeader = request.headers.get('x-hub-signature-256');
 
-    const settings = SettingsDB.get();
+    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
     const appSecret = settings.appSecret || process.env.META_APP_SECRET;
 
     if (appSecret && appSecret !== 'your_meta_app_secret') {
@@ -52,12 +53,32 @@ export async function POST(request: NextRequest) {
           const value = change.value;
           if (!value) continue;
 
-          // Process inbound customer messages and interactive replies
+          // Event Deduplication Check
+          const eventIdentifier =
+            value.messages?.[0]?.id ||
+            value.statuses?.[0]?.id ||
+            entry.id ||
+            `evt_${Date.now()}`;
+
+          if (WebhookEventsDB.isDuplicate(eventIdentifier)) {
+            console.log(`[Meta Webhook] Ignoring duplicate event: ${eventIdentifier}`);
+            continue;
+          }
+
+          // Record event in audit log
+          await WebhookEventsDB.record(
+            eventIdentifier,
+            value.messages ? 'inbound_message' : 'status_update',
+            value,
+            DEFAULT_WORKSPACE_ID
+          );
+
+          // 1. Process inbound customer messages and interactive replies
           if (value.messages?.length > 0) {
             await handleWebhookInboundMessages(value.messages, value.contacts);
           }
 
-          // Process message delivery status receipts
+          // 2. Process message delivery status receipts (sent, delivered, read, failed)
           if (value.statuses?.length > 0) {
             handleWebhookStatuses(value.statuses);
           }

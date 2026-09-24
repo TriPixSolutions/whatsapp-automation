@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { UsersDB } from '@/lib/db';
+import { UsersDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { setSessionCookies } from '@/lib/auth/session';
+import { SessionPayload } from '@/lib/auth/jwt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
  * Google OAuth callback handler.
- * Google redirects here with ?code=... after the user consents.
- * We exchange the code for an access token, fetch the user profile,
- * then create/update the user in the JSON DB and set auth cookies.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -54,36 +53,36 @@ export async function GET(request: NextRequest) {
       throw new Error('Failed to fetch Google profile');
     }
 
-    const { email, name, picture, sub: googleId } = profile;
+    const { email, name, picture } = profile;
 
-    // 3. Find or create user in our JSON DB
+    // 3. Find or create user in database
     let user = UsersDB.getByEmail(email);
 
     if (!user) {
-      // Create new user with status 'new_user', using real Google avatar
       user = UsersDB.create({
         email,
         name: name || email.split('@')[0],
         provider: 'google',
         avatarUrl: picture || undefined,
-        status: 'new_user',
-        role: 'user',
+        status: 'approved',
+        role: 'employee',
         company: '',
       });
     }
-    // Existing users: use their stored record as-is (avatar already set at creation)
 
-    // 4. Set auth cookies (same as email/password login)
-    const maxAge = 60 * 60 * 24 * 7; // 7 days
     const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
-
     const response = NextResponse.redirect(new URL(redirectTo, request.url));
 
-    response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge, sameSite: 'lax', httpOnly: false });
-    response.cookies.set('pf_user_id', user.id, { path: '/', maxAge, sameSite: 'lax', httpOnly: false });
-    response.cookies.set('pf_status', user.status, { path: '/', maxAge, sameSite: 'lax', httpOnly: false });
-    response.cookies.set('pf_role', user.role, { path: '/', maxAge, sameSite: 'lax', httpOnly: false });
+    const sessionPayload: SessionPayload = {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+    };
 
+    setSessionCookies(response, sessionPayload);
     return response;
   } catch (err: any) {
     console.error('[Google OAuth Callback Error]', err.message);

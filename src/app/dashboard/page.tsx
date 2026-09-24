@@ -103,7 +103,7 @@ export default function DashboardPage() {
         subtitle="Live WhatsApp Business messaging, contacts, and store catalog"
       />
 
-      <main className="p-6 md:p-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 md:p-8 pb-24 md:pb-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
         <DashboardHero
           metaConfigured={metaConfigured}
           activeChats={activeChats}

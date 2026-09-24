@@ -1,5 +1,7 @@
-import { cookies } from 'next/headers';
-import { UsersDB, UserRecord, UserRole } from '@/lib/db';
+import { NextRequest } from 'next/server';
+import { verifyJwt } from '@/lib/auth/jwt';
+import { UsersDB, UserRecord } from '@/lib/db';
+import { getServerSession } from '@/lib/auth/session';
 
 export interface AuthUserOptions {
   allowPending?: boolean;
@@ -7,52 +9,52 @@ export interface AuthUserOptions {
 
 /**
  * Robust server-side user authorization resolver.
- * Handles:
- * 1. Standard authenticated cookies (pf_auth, pf_user_id, pf_status, pf_role)
- * 2. Super admin session overrides (pf_admin_auth, role === 'super_admin')
- * 3. Real-time database verification so Superadmin approvals take effect immediately without re-login.
+ * Cryptographically verifies signed session token (pf_session_token) or Authorization header Bearer token.
  */
-export async function getAuthorizedUser(options: AuthUserOptions = {}): Promise<UserRecord | null> {
+export async function getAuthorizedUser(
+  requestOrOptions?: NextRequest | AuthUserOptions,
+  maybeOptions?: AuthUserOptions
+): Promise<UserRecord | null> {
+  const req = requestOrOptions && 'headers' in requestOrOptions ? (requestOrOptions as NextRequest) : undefined;
+  const options = (req ? maybeOptions : (requestOrOptions as AuthUserOptions)) || {};
+
   try {
-    const cookieStore = await cookies();
-    const authCookie = cookieStore.get('pf_auth')?.value;
-    const adminAuth = cookieStore.get('pf_admin_auth')?.value;
-    const rawUserId = cookieStore.get('pf_user_id')?.value;
-    const rawStatus = cookieStore.get('pf_status')?.value;
-    const rawRole = cookieStore.get('pf_role')?.value;
+    let sessionPayload: any = null;
 
-    const userId = rawUserId ? decodeURIComponent(rawUserId).trim() : '';
-    const role = rawRole ? decodeURIComponent(rawRole).trim() : '';
-
-    const isAuthenticated = authCookie === 'authenticated' || adminAuth === 'true';
-    const isSuperAdmin = role === 'super_admin' || adminAuth === 'true';
-
-    // 1. If completely unauthenticated with no user identifier and not super admin, block
-    if (!isAuthenticated && !userId && !isSuperAdmin) {
-      return null;
-    }
-
-    // 2. Look up user by ID in UsersDB first
-    let user = userId ? UsersDB.getById(userId) : null;
-
-    // 3. Fallback for Super Admin
-    if (!user && isSuperAdmin) {
-      user = UsersDB.getById('user_super_admin_default');
-    }
-
-    // 4. Fallback: Search all users in database
-    if (!user) {
-      const allUsers = UsersDB.getAll();
-      if (isSuperAdmin) {
-        user = allUsers.find((u) => u.role === 'super_admin') || null;
-      } else if (userId) {
-        user = allUsers.find((u) => u.id === userId) || null;
+    // 1. Check Authorization header: Bearer <jwt> or Request Cookie
+    if (req) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7).trim();
+        sessionPayload = verifyJwt(token);
+      }
+      if (!sessionPayload && req.cookies) {
+        const cookieToken = req.cookies.get('pf_session_token')?.value;
+        if (cookieToken) {
+          sessionPayload = verifyJwt(cookieToken);
+        }
       }
     }
 
-    // 5. If user found in database, evaluate authorization against real-time DB state
+    // 2. Fall back to Next.js cookies() server store
+    if (!sessionPayload) {
+      try {
+        sessionPayload = await getServerSession();
+      } catch {
+        // Context may be outside request store
+      }
+    }
+
+    if (!sessionPayload || !sessionPayload.userId) {
+      return null;
+    }
+
+    // 3. Look up user in real database by session userId or email
+    let user = UsersDB.getById(sessionPayload.userId) || UsersDB.getByEmail(sessionPayload.email);
+
+    // 4. Verify user status & RBAC permissions
     if (user) {
-      if (user.role === 'super_admin') {
+      if (user.role === 'super_admin' || user.role === 'owner') {
         return user;
       }
       if (user.status === 'rejected') {
@@ -64,35 +66,19 @@ export async function getAuthorizedUser(options: AuthUserOptions = {}): Promise<
       return user;
     }
 
-    // 6. Resilient rehydration for Vercel Serverless ephemeral instances
-    if (!user && (isAuthenticated || isSuperAdmin)) {
-      const effectiveId = userId || (isSuperAdmin ? 'user_super_admin_default' : `usr_${Date.now()}`);
-      user = {
-        id: effectiveId,
-        email: isSuperAdmin ? 'admin@passionfruit.io' : `${effectiveId}@user.local`,
-        name: isSuperAdmin ? 'Super Admin' : 'Workspace Member',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        provider: 'email',
-        role: (isSuperAdmin ? 'super_admin' : (role as UserRole) || 'user'),
-        status: isSuperAdmin ? 'approved' : 'pending_approval',
-        company: 'Workspace',
-        intendedUse: 'E-Commerce & WhatsApp Automation',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      try {
-        UsersDB.create(user);
-      } catch (e) {
-        // ignore duplicate creation error
-      }
-
-      if (!options.allowPending && user.status !== 'approved' && !isSuperAdmin) {
-        return null;
-      }
+    // 5. Fallback for authenticated session user in database
+    if (sessionPayload.userId && sessionPayload.email) {
+      user = UsersDB.create({
+        id: sessionPayload.userId,
+        email: sessionPayload.email,
+        name: sessionPayload.name || sessionPayload.email.split('@')[0],
+        role: sessionPayload.role || 'employee',
+        status: sessionPayload.status || 'approved',
+      });
+      return user;
     }
 
-    return user;
+    return null;
   } catch (error) {
     console.error('[auth-server] Error verifying authorization:', error);
     return null;

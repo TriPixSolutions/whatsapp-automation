@@ -1,127 +1,130 @@
-import { CampaignsDB, MessagesDB, SettingsDB, Contact } from '@/lib/db';
-import { MetaWhatsAppClient } from '@/lib/meta/api';
+import { Queue, Worker, Job } from 'bullmq';
+import Redis from 'ioredis';
+import { CampaignsDB, MessagesDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
 
-export interface CampaignQueuePayload {
+const REDIS_URL = process.env.REDIS_URL;
+const QUEUE_NAME = 'whatsapp-campaigns';
+
+let redisClient: Redis | null = null;
+let campaignQueue: Queue | null = null;
+
+function getRedisClient(): Redis | null {
+  if (!REDIS_URL) return null;
+  if (!redisClient) {
+    try {
+      redisClient = new Redis(REDIS_URL, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        lazyConnect: true,
+        connectTimeout: 5000,
+        retryStrategy: (times) => Math.min(times * 200, 3000),
+      });
+      redisClient.on('error', (err) => {
+        console.warn('[BullMQ Redis] Connection notice:', err.message);
+      });
+    } catch (e: any) {
+      console.warn('[BullMQ Redis] Client init warning:', e.message);
+      return null;
+    }
+  }
+  return redisClient;
+}
+
+export function getCampaignQueue(): Queue | null {
+  if (campaignQueue) return campaignQueue;
+  const client = getRedisClient();
+  if (!client) return null;
+
+  try {
+    campaignQueue = new Queue(QUEUE_NAME, {
+      connection: client,
+    });
+    return campaignQueue;
+  } catch (err: any) {
+    console.warn('[BullMQ] Queue creation warning:', err.message);
+    return null;
+  }
+}
+
+export interface EnqueueCampaignOptions {
   campaignId: string;
+  workspaceId?: string;
   templateName: string;
-  contacts: Contact[];
+  targetTag: string;
+  contacts: any[];
   variables?: Record<string, string>;
 }
 
-const CHUNK_SIZE = 25;
-const RATE_LIMIT_DELAY_MS = 60; // Pacing delay to adhere to Meta rate limits
+export async function enqueueCampaignJob(options: EnqueueCampaignOptions) {
+  const queue = getCampaignQueue();
+  const workspaceId = options.workspaceId || DEFAULT_WORKSPACE_ID;
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function processCampaignInBackground(payload: CampaignQueuePayload) {
-  const { campaignId, templateName, contacts, variables = {} } = payload;
-  const settings = SettingsDB.get();
-  const { phoneNumberId, accessToken } = settings;
-  const isLiveMeta = Boolean(phoneNumberId && accessToken && !accessToken.includes('SAMPLE_TOKEN'));
-
-  let sent = 0;
-  let failed = 0;
-
-  for (let i = 0; i < contacts.length; i += CHUNK_SIZE) {
-    const chunk = contacts.slice(i, i + CHUNK_SIZE);
-
-    for (const contact of chunk) {
-      let sendResult: any = { success: false };
-
-      if (isLiveMeta) {
-        const var1 = variables['1'] || contact.firstName || 'Customer';
-        const var2 = variables['2'] || 'Exclusive Item';
-        const var3 = variables['3'] || 'PF-1001';
-
-        const components: any[] = [];
-        if (Object.keys(variables).length > 0) {
-          components.push({
-            type: 'body',
-            parameters: [
-              { type: 'text', text: var1 },
-              { type: 'text', text: var2 },
-              { type: 'text', text: var3 },
-            ],
-          });
+  if (queue) {
+    try {
+      const job = await queue.add(
+        `campaign_${options.campaignId}`,
+        {
+          campaignId: options.campaignId,
+          workspaceId,
+          templateName: options.templateName,
+          targetTag: options.targetTag,
+          contacts: options.contacts,
+          variables: options.variables,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: 100,
+          removeOnFail: 500,
         }
+      );
 
-        try {
-          sendResult = await MetaWhatsAppClient.sendTemplate({
-            phoneNumberId,
-            accessToken,
-            to: contact.phoneNumber,
-            templateName,
-            languageCode: 'en_US',
-            components: components.length > 0 ? components : undefined,
-          });
-        } catch (err: any) {
-          sendResult = { success: false, error: err.message };
-        }
-      } else {
-        sendResult = {
-          success: true,
-          messageId: `wamid.camp_${Date.now()}_${sent}`,
-          simulated: true,
-        };
-      }
-
-      const metaMessageId = sendResult.messageId || `wamid.camp_${Date.now()}_${sent}`;
-      MessagesDB.create({
-        metaMessageId,
-        phoneNumber: contact.phoneNumber,
-        contactId: contact.id,
-        direction: 'outbound',
-        type: 'template',
-        status: sendResult.success ? 'sent' : 'failed',
-        content: `Template: ${templateName}`,
-        payload: { campaignId, templateName, variables },
-        errorMessage: sendResult.error,
-      });
-
-      if (sendResult.success) sent++;
-      else failed++;
-
-      // Meta rate limit pacing
-      await delay(RATE_LIMIT_DELAY_MS);
+      return {
+        success: true,
+        status: 'queued',
+        jobId: job.id,
+        mode: 'bullmq_redis',
+      };
+    } catch (err: any) {
+      console.error('[BullMQ] Failed to enqueue to Redis queue:', err.message);
+      return {
+        success: false,
+        status: 'failed',
+        error: `BullMQ Redis Queue error: ${err.message}. Ensure Redis server is running.`,
+        mode: 'bullmq_redis',
+      };
     }
-
-    // Intermediate database checkpoint
-    CampaignsDB.update(campaignId, {
-      sentCount: sent,
-      failedCount: failed,
-    });
   }
 
-  // Final campaign state update
-  CampaignsDB.update(campaignId, {
-    status: failed === contacts.length ? 'failed' : 'completed',
-    sentCount: sent,
-    failedCount: failed,
-    completedAt: new Date().toISOString(),
-  });
+  return {
+    success: false,
+    status: 'failed',
+    error: 'Redis connection unavailable. Campaigns must run through Redis BullMQ workers only.',
+    mode: 'bullmq_redis',
+  };
 }
 
 /**
- * Non-blocking queue dispatcher safe for Vercel Serverless
+ * Pause, Resume, Stop, Retry management actions
  */
-export function enqueueCampaignJob(payload: CampaignQueuePayload) {
-  // Fire background chunked execution without blocking HTTP response
-  setTimeout(() => {
-    processCampaignInBackground(payload).catch((err) => {
-      console.error('[Campaign Queue Error] Execution failed:', err);
-      CampaignsDB.update(payload.campaignId, {
-        status: 'failed',
-        completedAt: new Date().toISOString(),
-      });
-    });
-  }, 10);
+export async function manageCampaignState(
+  campaignId: string,
+  action: 'pause' | 'resume' | 'stop' | 'retry',
+  workspaceId: string = DEFAULT_WORKSPACE_ID
+) {
+  const campaign = CampaignsDB.getById(campaignId, workspaceId);
+  if (!campaign) return null;
 
-  return {
-    success: true,
-    campaignId: payload.campaignId,
-    totalRecipients: payload.contacts.length,
-    status: 'processing' as const,
-  };
+  if (action === 'pause') {
+    return CampaignsDB.update(campaignId, { status: 'paused' }, workspaceId);
+  } else if (action === 'resume') {
+    return CampaignsDB.update(campaignId, { status: 'processing' }, workspaceId);
+  } else if (action === 'stop') {
+    return CampaignsDB.update(campaignId, { status: 'stopped' }, workspaceId);
+  } else if (action === 'retry') {
+    return CampaignsDB.update(campaignId, { status: 'processing', failedCount: 0 }, workspaceId);
+  }
+
+  return campaign;
 }

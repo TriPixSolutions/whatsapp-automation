@@ -231,7 +231,7 @@ export default function SettingsPage() {
     <div className="flex h-screen bg-[#F4F6FB] overflow-hidden font-sans text-[#0D0F2D]">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:pl-60">
         <Header
           title="Settings"
           subtitle="Workspace identity, omnichannel integrations, team roles & API credentials"
@@ -245,7 +245,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
           <div className="max-w-6xl mx-auto space-y-6">
             <SettingsHero
               whatsappConnected={whatsappConnected}

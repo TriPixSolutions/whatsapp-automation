@@ -1,6 +1,6 @@
 import { SettingsDB, MessagesDB, Contact } from '@/lib/db';
 import { sendCheckoutResponse, generateWhatsAppOrderId } from '@/lib/meta/checkout';
-import { MetaWhatsAppClient } from '@/lib/meta/api';
+import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
 
 /**
  * Intercepts and processes in-chat WhatsApp Checkout and Buy Now interactive triggers
@@ -48,24 +48,10 @@ export async function handleWhatsAppCheckoutAction(
     const orderId = triggerText.replace('pay_confirm_', '');
     const confirmMsg = `🎉 *Payment Received!*\n\nThank you, ${contact.firstName || 'Customer'}! We are preparing order *#${orderId}*. A tracking number will be sent here shortly.`;
 
-    if (phoneNumberId && accessToken && !accessToken.includes('SAMPLE_TOKEN')) {
-      await MetaWhatsAppClient.sendText({
-        phoneNumberId,
-        accessToken,
-        to: fromPhone,
-        text: confirmMsg,
-      });
-    }
-
-    MessagesDB.create({
-      metaMessageId: `wamid.payconf_${Date.now()}`,
-      phoneNumber: fromPhone,
-      contactId: contact.id,
-      direction: 'outbound',
+    await WhatsAppMessageService.send({
+      to: fromPhone,
       type: 'text',
-      status: 'sent',
-      content: confirmMsg,
-      payload: { orderId, status: 'confirmed' },
+      text: confirmMsg,
     });
 
     return true;

@@ -11,7 +11,7 @@ import {
   Send,
   Bot,
   Settings,
-  BookOpen,
+  Smartphone,
   ShoppingBag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,23 +28,23 @@ export const navSections: { label?: string; items: NavItem[] }[] = [
     label: 'Overview',
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'Analytics', href: '/analytics', icon: BarChart3, badge: 'Live' },
-      { name: 'Team Inbox', href: '/inbox', icon: MessageSquare, badge: 'Live' },
+      { name: 'Live Team Inbox', href: '/inbox', icon: MessageSquare, badge: 'Live' },
+      { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     ],
   },
   {
-    label: 'Automation & Sales',
+    label: 'Automation & Growth',
     items: [
-      { name: 'Store Integrations', href: '/dashboard/integrations', icon: ShoppingBag, badge: 'Shopify/Woo' },
-      { name: 'Chatbot Flows', href: '/automations', icon: Bot },
-      { name: 'Broadcasts', href: '/campaigns', icon: Send },
-      { name: 'Customer CRM', href: '/contacts', icon: Users },
+      { name: 'Automations & Flows', href: '/automations', icon: Bot, badge: 'Visual' },
+      { name: 'Priority Leads', href: '/contacts', icon: Users, badge: 'New' },
+      { name: 'Broadcast Campaigns', href: '/campaigns', icon: Send },
+      { name: 'Store Integrations', href: '/dashboard/integrations', icon: ShoppingBag, badge: 'Shopify' },
     ],
   },
   {
-    label: 'Configuration',
+    label: 'WhatsApp Setup',
     items: [
-      { name: 'API Setup Guide', href: '/setup', icon: BookOpen },
+      { name: 'Connect WhatsApp', href: '/setup', icon: Smartphone, badge: 'Meta' },
       { name: 'Settings', href: '/settings', icon: Settings },
     ],
   },

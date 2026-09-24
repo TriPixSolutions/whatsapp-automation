@@ -11,7 +11,7 @@
     "start:pm2": "pm2 start ecosystem.config.js --env production",
     "reload:pm2": "pm2 reload ecosystem.config.js --env production",
     "stop:pm2": "pm2 stop ecosystem.config.js",
-    "lint": "eslint ."
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -5,25 +5,20 @@ import { UsersDB } from '@/lib/db';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function verifySuperAdmin() {
-  const cookieStore = await cookies();
-  const authCookie = cookieStore.get('pf_auth')?.value;
-  const roleCookie = cookieStore.get('pf_role')?.value;
-  const userId = cookieStore.get('pf_user_id')?.value;
+import { getServerSession } from '@/lib/auth/session';
 
-  if (authCookie !== 'authenticated') {
+async function verifySuperAdmin() {
+  const session = await getServerSession();
+  if (!session || !session.userId) {
     return false;
   }
 
-  // Double check database record if userId is available
-  if (userId) {
-    const user = UsersDB.getById(userId);
-    if (user && user.role === 'super_admin') {
-      return true;
-    }
+  const user = UsersDB.getById(session.userId);
+  if (user && (user.role === 'super_admin' || user.role === 'owner')) {
+    return true;
   }
 
-  return roleCookie === 'super_admin';
+  return session.role === 'super_admin' || session.role === 'owner';
 }
 
 export async function GET() {

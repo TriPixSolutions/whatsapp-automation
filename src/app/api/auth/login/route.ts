@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { UsersDB } from '@/lib/db';
+import { UsersDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { setSessionCookies } from '@/lib/auth/session';
+import { SessionPayload } from '@/lib/auth/jwt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,62 +24,36 @@ export async function POST(req: Request) {
           name: body.name || email.split('@')[0],
           avatarUrl: body.avatarUrl || body.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
           provider: 'google',
-          role: 'user',
-          status: 'new_user',
+          role: 'employee',
+          status: 'approved',
         });
       }
 
       const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
-      const response = NextResponse.json({ success: true, user, redirectTo });
+      const sessionPayload: SessionPayload = {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: user.status,
+        workspaceId: DEFAULT_WORKSPACE_ID,
+      };
 
-      response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-      response.cookies.set('pf_user_id', user.id, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-      response.cookies.set('pf_status', user.status, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-      response.cookies.set('pf_role', user.role, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
+      const response = NextResponse.json({ success: true, user, redirectTo });
+      setSessionCookies(response, sessionPayload);
       return response;
     }
 
-    // 2. Email & Password Authentication (Database-driven, zero hardcoded credentials)
-    if (!identifier) {
-      return NextResponse.json({ error: 'Email or username is required.' }, { status: 400 });
+    // 2. Email & Password Authentication
+    if (!identifier || !password) {
+      return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 });
     }
 
     const cleanEmail = identifier.toLowerCase();
     const user = UsersDB.verifyCredentials(cleanEmail, password);
 
     if (!user) {
-      // Check if user exists but wrong password, or if not found at all
-      const existing = UsersDB.getByEmail(cleanEmail);
-      if (existing) {
-        return NextResponse.json({ error: 'Invalid password. Please verify your credentials.' }, { status: 401 });
-      }
-
-      // Auto-register new users upon first sign-in attempt if password provided
-      if (password && password.length >= 4) {
-        const newUser = UsersDB.create({
-          email: cleanEmail.includes('@') ? cleanEmail : `${cleanEmail}@example.com`,
-          name: identifier.split('@')[0],
-          password,
-          avatarUrl: body.avatarUrl || undefined,
-          provider: 'email',
-          role: 'user',
-          status: 'pending_approval',
-        });
-
-        const response = NextResponse.json({
-          success: true,
-          user: newUser,
-          redirectTo: '/pending',
-        });
-
-        response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-        response.cookies.set('pf_user_id', newUser.id, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-        response.cookies.set('pf_status', newUser.status, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-        response.cookies.set('pf_role', newUser.role, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-        return response;
-      }
-
-      return NextResponse.json({ error: 'User not found. Please sign up first.' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid credentials. Please verify your email and password.' }, { status: 401 });
     }
 
     if (user.status === 'rejected') {
@@ -93,9 +69,16 @@ export async function POST(req: Request) {
       } else {
         redirectTo = '/dashboard';
       }
-    } else {
-      redirectTo = '/pending';
     }
+
+    const sessionPayload: SessionPayload = {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+    };
 
     const response = NextResponse.json({
       success: true,
@@ -103,10 +86,7 @@ export async function POST(req: Request) {
       redirectTo,
     });
 
-    response.cookies.set('pf_auth', 'authenticated', { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-    response.cookies.set('pf_user_id', user.id, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-    response.cookies.set('pf_status', user.status, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
-    response.cookies.set('pf_role', user.role, { path: '/', maxAge: 60 * 60 * 24 * 7, sameSite: 'lax' });
+    setSessionCookies(response, sessionPayload);
     return response;
   } catch (error: any) {
     console.error('Login error:', error);

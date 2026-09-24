@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { UsersDB } from '@/lib/db';
+import { UsersDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { setSessionCookies } from '@/lib/auth/session';
+import { SessionPayload } from '@/lib/auth/jwt';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,56 +19,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
     }
 
-    if (provider === 'email' && (!password || password.length < 4)) {
-      return NextResponse.json({ error: 'Password must be at least 4 characters.' }, { status: 400 });
+    if (provider === 'email' && (!password || password.length < 6)) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
     }
 
     // Check if user already exists
     const avatarUrl = (body.avatarUrl || body.picture || '').trim();
     let user = UsersDB.getByEmail(email);
-    if (!user) {
-      user = UsersDB.create({
-        email,
-        password,
-        name: name || email.split('@')[0],
-        avatarUrl: avatarUrl || undefined,
-        company,
-        provider: provider === 'google' ? 'google' : 'email',
-        role: 'user',
-        status: 'pending_approval',
-      });
+
+    if (user) {
+      return NextResponse.json({ error: 'An account with this email already exists. Please sign in.' }, { status: 409 });
     }
 
-    const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
+    user = UsersDB.create({
+      email,
+      password,
+      name: name || email.split('@')[0],
+      avatarUrl: avatarUrl || undefined,
+      company,
+      provider: provider === 'google' ? 'google' : 'email',
+      role: 'owner', // Initial creator is workspace owner
+      status: 'approved',
+    });
+
+    const sessionPayload: SessionPayload = {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      workspaceId: DEFAULT_WORKSPACE_ID,
+    };
 
     const response = NextResponse.json({
       success: true,
       user,
-      redirectTo,
+      redirectTo: '/dashboard',
     });
 
-    // Set secure session cookies
-    response.cookies.set('pf_auth', 'authenticated', {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-      sameSite: 'lax',
-    });
-    response.cookies.set('pf_user_id', user.id, {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-      sameSite: 'lax',
-    });
-    response.cookies.set('pf_status', user.status, {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-      sameSite: 'lax',
-    });
-    response.cookies.set('pf_role', user.role, {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-      sameSite: 'lax',
-    });
-
+    setSessionCookies(response, sessionPayload);
     return response;
   } catch (error: any) {
     console.error('Signup error:', error);

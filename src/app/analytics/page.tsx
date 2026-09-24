@@ -59,7 +59,7 @@ export default function AnalyticsPage() {
         subtitle="Track WhatsApp sales attribution, conversion funnels, and real-time message delivery"
       />
 
-      <main className="p-6 md:p-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
+      <main className="p-4 sm:p-6 md:p-8 pb-24 md:pb-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
         <AnalyticsHero onExport={handleExport} />
         <AnalyticsOverview stats={stats} />
       </main>

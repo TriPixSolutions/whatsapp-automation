@@ -10,7 +10,7 @@ export const isSupabaseConfigured = Boolean(
   !serviceRoleKey.includes('placeholder')
 );
 
-// Cached singleton client across warm Serverless Lambdas to prevent connection pool exhaustion
+// Cached singleton client across warm server instances to prevent connection pool exhaustion
 let cachedAdminClient: SupabaseClient | null = null;
 
 export const getAdminClient = (): SupabaseClient | null => {
@@ -31,7 +31,7 @@ export const getAdminClient = (): SupabaseClient | null => {
   return cachedAdminClient;
 };
 
-// Fallback in-memory store for legacy testing routes
+// Deprecated compatibility reference
 export const mockStore: {
   workspace: any;
   contacts: any[];
@@ -41,11 +41,11 @@ export const mockStore: {
 } = {
   workspace: {
     id: '00000000-0000-0000-0000-000000000001',
-    name: 'Passion Fruit Enterprise Agency',
+    name: 'TriPix Solutions Workspace',
     meta_access_token: process.env.META_ACCESS_TOKEN || '',
     phone_number_id: process.env.META_PHONE_NUMBER_ID || '',
     waba_id: process.env.META_WABA_ID || '',
-    webhook_verify_token: process.env.META_WEBHOOK_VERIFY_TOKEN || 'apex_luxury_secret_token_2025',
+    webhook_verify_token: process.env.META_WEBHOOK_VERIFY_TOKEN || 'tripix_verify_token_2026',
     created_at: new Date().toISOString(),
   },
   contacts: [],

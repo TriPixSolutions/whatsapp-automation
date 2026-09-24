@@ -409,7 +409,109 @@ export class MetaWhatsAppClient {
   }
 
   /**
-   * 6. Send Single Product from Catalog
+   * 6. Send Media Message (Image, Video, Audio, Document)
+   */
+  static async sendMedia(options: {
+    phoneNumberId: string;
+    accessToken: string;
+    to: string;
+    type: 'image' | 'video' | 'audio' | 'document';
+    mediaUrl?: string;
+    mediaId?: string;
+    caption?: string;
+    filename?: string;
+  }): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, type, mediaUrl, mediaId, caption, filename } = options;
+    const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+
+    const mediaObject: any = {};
+    if (mediaId) {
+      mediaObject.id = mediaId;
+    } else if (mediaUrl) {
+      mediaObject.link = mediaUrl;
+    } else {
+      return { success: false, error: 'Either mediaUrl or mediaId must be provided' };
+    }
+
+    if (caption && (type === 'image' || type === 'video' || type === 'document')) {
+      mediaObject.caption = caption;
+    }
+    if (filename && type === 'document') {
+      mediaObject.filename = filename;
+    }
+
+    const payload: any = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipient,
+      type,
+      [type]: mediaObject,
+    };
+
+    try {
+      const res = await axios.post(url, payload, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      });
+
+      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      console.error(`[Meta Client] sendMedia (${type}) error:`, parsed);
+      return {
+        success: false,
+        error: parsed.message,
+        errorCode: parsed.code,
+        errorSubcode: parsed.subcode,
+        details: err.response?.data,
+      };
+    }
+  }
+
+  /**
+   * 7. Upload Media to Meta Cloud API
+   * POST https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/media
+   */
+  static async uploadMedia(options: {
+    phoneNumberId: string;
+    accessToken: string;
+    fileBuffer: Buffer;
+    mimeType: string;
+    filename: string;
+  }): Promise<{ success: boolean; mediaId?: string; error?: string }> {
+    const { phoneNumberId, accessToken, fileBuffer, mimeType, filename } = options;
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/media`;
+
+    try {
+      const formData = new FormData();
+      const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
+      formData.append('file', blob, filename);
+      formData.append('messaging_product', 'whatsapp');
+      formData.append('type', mimeType);
+
+      const res = await axios.post(url, formData, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        timeout: 20000,
+      });
+
+      const mediaId = res.data?.id;
+      return { success: true, mediaId };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      console.error('[Meta Client] uploadMedia error:', parsed);
+      return { success: false, error: parsed.message };
+    }
+  }
+
+  /**
+   * 8. Send Single Product from Catalog
    */
   static async sendSingleProduct(options: import('./catalog').SingleProductOptions) {
     const { sendSingleProductMessage } = await import('./catalog');
@@ -417,7 +519,7 @@ export class MetaWhatsAppClient {
   }
 
   /**
-   * 7. Send Multi-Product List from Catalog
+   * 9. Send Multi-Product List from Catalog
    */
   static async sendMultiProduct(options: import('./catalog').MultiProductOptions) {
     const { sendMultiProductMessage } = await import('./catalog');
@@ -425,7 +527,7 @@ export class MetaWhatsAppClient {
   }
 
   /**
-   * 8. Send WhatsApp Checkout Order & Payment Response
+   * 10. Send WhatsApp Checkout Order & Payment Response
    */
   static async sendCheckout(options: import('./checkout').CheckoutOptions) {
     const { sendCheckoutResponse } = await import('./checkout');
@@ -433,7 +535,7 @@ export class MetaWhatsAppClient {
   }
 
   /**
-   * 9. Sync Store Products to Meta Commerce Catalog Batch API
+   * 11. Sync Store Products to Meta Commerce Catalog Batch API
    */
   static async syncCatalog(options: import('./catalog').CatalogSyncOptions) {
     const { syncProductsToMetaCatalog } = await import('./catalog');
@@ -443,4 +545,5 @@ export class MetaWhatsAppClient {
 
 export * from './catalog';
 export * from './checkout';
+
 

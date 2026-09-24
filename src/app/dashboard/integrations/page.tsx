@@ -621,10 +621,10 @@ export default function DashboardIntegrationsPage() {
   return (
     <div className="min-h-screen bg-[#F4F6FB] flex font-sans text-[#0D0F2D]">
       <Sidebar />
-      <div className="flex-1 ml-60 flex flex-col">
+      <div className="flex-1 ml-0 md:ml-60 flex flex-col">
         <Header title="E-Commerce Integrations" subtitle="Connect your store to trigger automated WhatsApp workflows" />
 
-        <main className="flex-1 p-6 lg:p-8 space-y-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-24 md:pb-8 space-y-8">
           {/* Status Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-slate-500">

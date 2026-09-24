@@ -205,14 +205,14 @@ export default function InboxPage() {
   const activeConv = conversations.find((c) => c.phoneNumber === activePhone);
 
   return (
-    <div className="min-h-screen bg-[#F4F6FB] pl-60 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#F4F6FB] pl-0 md:pl-60 pb-20 md:pb-0 flex flex-col font-sans">
       <Sidebar />
       <Header
         title="Live Shared Team Inbox"
         subtitle="Real-time two-way WhatsApp customer messaging & automated flow replies"
       />
 
-      <main className="p-6 flex-1 flex flex-col h-[calc(100vh-80px)]">
+      <main className="p-3 sm:p-6 flex-1 flex flex-col h-[calc(100vh-80px)]">
         <div className="bg-white rounded-3xl border border-[#E2E8F0] shadow-sm flex-1 flex overflow-hidden">
           {/* 1. LEFT PANE: CONVERSATION DIRECTORY */}
           <div className="w-80 border-r border-[#E2E8F0] flex flex-col bg-white">
