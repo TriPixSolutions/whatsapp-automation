@@ -166,7 +166,7 @@ export interface WorkflowNode {
   id: string;
   type: VisualNodeType | string;
   title: string;
-  description: string;
+  description?: string;
   triggerType?: AutomationTriggerType;
   triggerKeyword?: string;
   messageType?: PlatformMessageType;
