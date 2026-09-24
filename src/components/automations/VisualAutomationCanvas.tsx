@@ -47,11 +47,17 @@ import {
   Sparkles,
   Save,
   Check,
+  Zap,
+  ChevronDown,
+  Plus,
 } from 'lucide-react';
 
 interface VisualAutomationCanvasProps {
   workflow: WorkflowDefinition;
   onChangeWorkflow: (updated: WorkflowDefinition) => void;
+  workflows?: WorkflowDefinition[];
+  onSelectWorkflow?: (workflowId: string) => void;
+  onCreateWorkflow?: () => void;
   executionTrace?: ExecutionTraceStep[];
   isExecuting?: boolean;
   debugMode?: boolean;
@@ -68,6 +74,9 @@ const nodeTypes = {
 function VisualCanvasInner({
   workflow,
   onChangeWorkflow,
+  workflows,
+  onSelectWorkflow,
+  onCreateWorkflow,
   executionTrace,
   isExecuting,
   debugMode,
@@ -513,20 +522,51 @@ function VisualCanvasInner({
       {/* ============================================================== */}
       {/* STUDIO TOP TOOLBAR */}
       {/* ============================================================== */}
-      <div className="h-13 bg-slate-900/90 border-b border-slate-800 px-4 flex items-center justify-between z-10 shrink-0">
-        {/* Left: Workflow Metadata & Edit */}
+      <div className="h-14 bg-slate-900/90 border border-slate-800 rounded-2xl px-4 flex items-center justify-between z-10 shrink-0 mb-3 shadow-lg backdrop-blur-md">
+        {/* Left: Workflow Selector & Name */}
         <div className="flex items-center gap-3">
+          {workflows && workflows.length > 0 && onSelectWorkflow && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-xl">
+                <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <select
+                  value={workflow.id}
+                  onChange={(e) => onSelectWorkflow(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-white outline-none cursor-pointer max-w-[170px] truncate"
+                >
+                  {workflows.map((w) => (
+                    <option key={w.id} value={w.id} className="bg-slate-900 text-white">
+                      {w.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3 h-3 text-slate-400 pointer-events-none" />
+              </div>
+
+              {onCreateWorkflow && (
+                <button
+                  onClick={onCreateWorkflow}
+                  title="Create New Workflow"
+                  className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl transition-colors shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                </button>
+              )}
+              <div className="w-px h-5 bg-slate-800 mx-1 shrink-0" />
+            </div>
+          )}
+
           <div>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={workflow.name}
                 onChange={(e) => onChangeWorkflow({ ...workflow, name: e.target.value })}
-                className="bg-transparent text-sm font-bold text-white focus:bg-slate-800 px-1.5 py-0.5 rounded outline-none border border-transparent focus:border-slate-700 transition-colors"
+                className="bg-transparent text-sm font-bold text-white focus:bg-slate-800 px-1.5 py-0.5 rounded outline-none border border-transparent focus:border-slate-700 transition-colors max-w-[160px] sm:max-w-xs truncate"
               />
               <span
                 className={cn(
-                  'text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase',
+                  'text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase shrink-0',
                   workflow.isActive
                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                     : 'bg-slate-800 text-slate-400'
@@ -669,7 +709,7 @@ function VisualCanvasInner({
       {/* ============================================================== */}
       {/* 3-COLUMN STUDIO LAYOUT */}
       {/* ============================================================== */}
-      <div className="flex-1 flex min-h-0 relative overflow-hidden">
+      <div className="flex-1 flex min-h-0 gap-4 overflow-hidden relative">
         {/* 1. Left Panel (Node Library & Layer Tree) */}
         <LeftWorkflowSidebar
           workflow={workflow}
@@ -694,7 +734,7 @@ function VisualCanvasInner({
         {/* 2. Center Canvas */}
         <div
           ref={reactFlowWrapper}
-          className="flex-1 h-full relative"
+          className="flex-1 h-full rounded-2xl border border-slate-800 bg-slate-950 shadow-inner overflow-hidden relative min-w-[320px]"
           onDragOver={onDragOver}
           onDrop={onDrop}
         >

@@ -69,15 +69,17 @@ export function RightInspectorStudio({
 
   if (!isOpen) {
     return (
-      <div className="absolute top-3 right-3 z-20 flex items-center gap-2">
-        <button
-          onClick={onClose}
-          title="Open Inspector & Live Preview"
-          className="flex items-center gap-2 bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700/80 px-3 py-2 rounded-xl shadow-xl backdrop-blur-md transition-all text-xs font-semibold"
-        >
-          <Sliders className="w-4 h-4 text-emerald-400" />
-          <span>Inspector & Preview</span>
-        </button>
+      <div
+        onClick={onClose}
+        className="w-12 h-full rounded-2xl border border-slate-800 bg-slate-950/90 hover:bg-slate-900 flex flex-col items-center py-4 gap-3 shrink-0 cursor-pointer shadow-lg transition-colors group select-none"
+        title="Open Inspector & Live Simulator"
+      >
+        <div className="p-2 rounded-xl bg-slate-900 group-hover:bg-slate-800 border border-slate-800 text-emerald-400 group-hover:text-emerald-300 transition-colors">
+          <Sliders className="w-4 h-4" />
+        </div>
+        <span className="text-[10px] font-bold text-slate-400 group-hover:text-white uppercase tracking-wider [writing-mode:vertical-lr] rotate-180">
+          Inspector & Simulator
+        </span>
       </div>
     );
   }
@@ -189,14 +191,14 @@ export function RightInspectorStudio({
   ];
 
   return (
-    <aside className="w-96 h-full bg-slate-950/95 border-l border-slate-800 flex flex-col select-none shrink-0 z-20 shadow-2xl backdrop-blur-md">
+    <aside className="w-80 lg:w-96 h-full bg-slate-950/95 border border-slate-800 rounded-2xl flex flex-col select-none shrink-0 z-20 shadow-xl overflow-hidden backdrop-blur-md">
       {/* Top Header & Tab Switcher */}
       <div className="p-3 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/40">
         <div className="flex items-center gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-xs font-medium">
           <button
             onClick={() => setActiveTab('inspector')}
             className={cn(
-              'px-3 py-1.5 rounded-md transition-all font-semibold flex items-center gap-1.5',
+              'px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1.5 text-xs',
               activeTab === 'inspector'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white'
@@ -211,7 +213,7 @@ export function RightInspectorStudio({
           <button
             onClick={() => setActiveTab('preview')}
             className={cn(
-              'px-3 py-1.5 rounded-md transition-all font-semibold flex items-center gap-1.5',
+              'px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1.5 text-xs',
               activeTab === 'preview'
                 ? 'bg-slate-800 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white'
