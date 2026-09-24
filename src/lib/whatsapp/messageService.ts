@@ -6,6 +6,10 @@ export interface SendWhatsAppMessageOptions {
   to: string;
   type: MessageType;
   text?: string;
+  phoneNumberId?: string;
+  accessToken?: string;
+  requireRealDelivery?: boolean;
+  isConnectionTest?: boolean;
   templateName?: string;
   languageCode?: string;
   components?: any[];
@@ -32,6 +36,10 @@ export interface SendMessageResult {
   metaMessageId?: string;
   error?: string;
   errorCode?: number;
+  errorSubcode?: number;
+  details?: any;
+  phoneNumberIdUsed?: string;
+  isSimulated?: boolean;
   windowClosed?: boolean;
   savedMessage?: Message;
 }
@@ -56,7 +64,8 @@ export class WhatsAppMessageService {
   static async send(options: SendWhatsAppMessageOptions): Promise<SendMessageResult> {
     const workspaceId = options.workspaceId || DEFAULT_WORKSPACE_ID;
     const settings = SettingsDB.get(workspaceId);
-    const { phoneNumberId, accessToken } = settings;
+    const phoneNumberId = (options.phoneNumberId || settings.phoneNumberId || '').trim();
+    const accessToken = (options.accessToken || settings.accessToken || '').trim();
 
     const cleanTo = options.to.startsWith('+') ? options.to : `+${options.to.replace(/[^0-9]/g, '')}`;
 
@@ -102,17 +111,47 @@ export class WhatsAppMessageService {
     }
 
     // 3. Check live credentials
+    const isPlaceholder = Boolean(
+      !accessToken ||
+      accessToken.includes('SAMPLE_TOKEN') ||
+      accessToken.includes('AI_GENERATED') ||
+      accessToken.includes('placeholder') ||
+      accessToken.startsWith('MOCK_') ||
+      accessToken.startsWith('TEST_')
+    );
+
     const isLive = Boolean(
       phoneNumberId &&
       accessToken &&
-      !accessToken.includes('SAMPLE_TOKEN') &&
-      !accessToken.includes('AI_GENERATED') &&
-      !accessToken.startsWith('MOCK_') &&
-      !accessToken.startsWith('TEST_') &&
+      !isPlaceholder &&
       process.env.META_SANDBOX !== 'true'
     );
 
+    // If real delivery is strictly required (e.g. Connection Test), NEVER fake or simulate success!
+    if (options.requireRealDelivery || options.isConnectionTest) {
+      if (!phoneNumberId || !accessToken) {
+        const err = 'Real WhatsApp delivery failed: Phone Number ID or Access Token is missing. Enter live credentials in Setup Wizard Step 2 & 3.';
+        console.error('[WhatsApp Message Service]', err);
+        return { success: false, error: err, phoneNumberIdUsed: phoneNumberId, isSimulated: false };
+      }
+      if (isPlaceholder) {
+        const masked = `${accessToken.substring(0, Math.min(8, accessToken.length))}...${accessToken.substring(Math.max(0, accessToken.length - 4))}`;
+        const err = `Real WhatsApp delivery failed: Placeholder or test token detected (${masked}). A live System User Access Token from Meta Business Manager is required.`;
+        console.error('[WhatsApp Message Service]', err);
+        return { success: false, error: err, phoneNumberIdUsed: phoneNumberId, isSimulated: false };
+      }
+    }
+
     if (!isLive) {
+      if (options.requireRealDelivery || options.isConnectionTest) {
+        return {
+          success: false,
+          error: 'Real WhatsApp delivery failed: Active credentials are not live. Sandbox simulation is disabled for connection tests.',
+          phoneNumberIdUsed: phoneNumberId,
+          isSimulated: false,
+        };
+      }
+
       // Unconfigured or sandbox credentials
       const simulatedId = `wamid.local_${Date.now()}`;
       console.log(`[WhatsApp Sandbox] Simulated send (${options.type}) to ${cleanTo}`);
@@ -138,6 +177,8 @@ export class WhatsAppMessageService {
         success: true,
         messageId: simulatedId,
         metaMessageId: simulatedId,
+        phoneNumberIdUsed: phoneNumberId,
+        isSimulated: true,
         savedMessage,
       };
     }
@@ -251,7 +292,7 @@ export class WhatsAppMessageService {
     }
 
     // 5. Save outbound message record
-    const metaMessageId = metaResult.messageId || metaResult.metaMessageId || `wamid.${Date.now()}`;
+    const metaMessageId = metaResult.messageId || metaResult.metaMessageId;
     const outboundContent =
       options.text ||
       options.bodyText ||
@@ -259,7 +300,7 @@ export class WhatsAppMessageService {
 
     const savedMessage = MessagesDB.create(
       {
-        metaMessageId,
+        metaMessageId: metaMessageId || `wamid.failed_${Date.now()}`,
         phoneNumber: cleanTo,
         contactId: contact.id,
         direction: 'outbound',
@@ -283,6 +324,10 @@ export class WhatsAppMessageService {
       metaMessageId,
       error: metaResult.error,
       errorCode: metaResult.errorCode,
+      errorSubcode: metaResult.errorSubcode,
+      details: metaResult.details,
+      phoneNumberIdUsed: phoneNumberId,
+      isSimulated: false,
       savedMessage,
     };
   }

@@ -36,6 +36,10 @@ export async function POST(request: NextRequest) {
       to: toPhone,
       type: messageType,
       text: messageText,
+      phoneNumberId: body.phoneNumberId,
+      accessToken: body.accessToken,
+      requireRealDelivery: Boolean(body.requireRealDelivery || body.isConnectionTest),
+      isConnectionTest: Boolean(body.isConnectionTest),
       templateName: body.templateName,
       languageCode: body.languageCode,
       components: body.components,
@@ -62,6 +66,8 @@ export async function POST(request: NextRequest) {
         type: messageType,
         error: result.error,
         errorCode: result.errorCode,
+        details: result.details,
+        phoneNumberIdUsed: result.phoneNumberIdUsed,
         windowClosed: result.windowClosed,
       });
       return NextResponse.json(
@@ -69,6 +75,10 @@ export async function POST(request: NextRequest) {
           success: false,
           error: result.error,
           errorCode: result.errorCode,
+          errorSubcode: result.errorSubcode,
+          details: result.details,
+          phoneNumberIdUsed: result.phoneNumberIdUsed,
+          isSimulated: result.isSimulated || false,
           windowClosed: result.windowClosed,
           message: result.savedMessage,
         },
@@ -76,11 +86,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Send Message API] Dispatch succeeded for ${toPhone}. Meta ID: ${result.metaMessageId}`);
+    console.log(`[Send Message API] Dispatch succeeded for ${toPhone}. Meta ID: ${result.metaMessageId} (Phone ID: ${result.phoneNumberIdUsed})`);
 
     return NextResponse.json({
       success: true,
       messageId: result.metaMessageId,
+      phoneNumberIdUsed: result.phoneNumberIdUsed,
+      details: result.details,
+      isSimulated: result.isSimulated || false,
       message: result.savedMessage,
     });
   } catch (err: any) {

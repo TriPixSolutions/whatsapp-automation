@@ -45,6 +45,18 @@ export default function WhatsAppConnectionWizardPage() {
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
   const [testError, setTestError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    messageId?: string;
+    phoneNumberIdUsed?: string;
+    error?: string;
+    errorCode?: number;
+    errorSubcode?: number;
+    details?: any;
+    isSimulated?: boolean;
+    rawPayload?: any;
+  } | null>(null);
+  const [showDebugDetails, setShowDebugDetails] = useState(false);
 
   // Validation & Error states
   const [stepError, setStepError] = useState<string | null>(null);
@@ -156,32 +168,79 @@ export default function WhatsAppConnectionWizardPage() {
   // STEP 5 SEND TEST MESSAGE
   const handleSendTestMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!testPhoneNumber.trim()) return;
+    if (!testPhoneNumber.trim()) {
+      setTestError('Please enter a recipient WhatsApp phone number with country code (e.g. +15551234567).');
+      return;
+    }
 
     setIsSendingTest(true);
     setTestError(null);
     setTestSuccess(false);
+    setTestResult(null);
 
     try {
+      const payload: any = {
+        to: testPhoneNumber.trim(),
+        type: 'text',
+        text: 'WhatsApp connection successful. Test message from TriPix SaaS.',
+        bypassWindowCheck: true,
+        requireRealDelivery: true,
+        isConnectionTest: true,
+      };
+
+      if (phoneNumberId.trim()) {
+        payload.phoneNumberId = phoneNumberId.trim();
+      }
+      if (accessToken.trim()) {
+        payload.accessToken = accessToken.trim();
+      }
+
+      console.log('[Setup Wizard] Dispatching real test message request:', {
+        to: payload.to,
+        phoneNumberId: payload.phoneNumberId || '(from saved settings)',
+        hasAccessToken: Boolean(payload.accessToken),
+      });
+
       const res = await fetch('/api/messages/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: testPhoneNumber.trim(),
-          type: 'text',
-          text: 'WhatsApp connection successful. Test message from TriPix SaaS.',
-          bypassWindowCheck: true,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
-      if (res.ok && data.success) {
+      console.log('[Setup Wizard] Test message response from API:', data);
+
+      setTestResult({
+        ...data,
+        rawPayload: payload,
+      });
+
+      // Strict verification: messageId MUST exist, start with wamid., and NOT be a local simulation
+      const isGenuineMetaDelivery = Boolean(
+        res.ok &&
+        data.success &&
+        data.messageId &&
+        typeof data.messageId === 'string' &&
+        data.messageId.startsWith('wamid.') &&
+        !data.messageId.startsWith('wamid.local_') &&
+        !data.isSimulated
+      );
+
+      if (isGenuineMetaDelivery) {
         setTestSuccess(true);
       } else {
-        setTestError(data.error || 'Failed to send test message. Check your phone number format with country code.');
+        const errorMsg =
+          data.error ||
+          (data.isSimulated
+            ? 'Real delivery failed: Sandbox simulation was returned instead of a live Meta Cloud API message.'
+            : 'Meta Cloud API rejected the message or did not return a valid wamid message ID.');
+        setTestError(errorMsg);
+        setTestSuccess(false);
       }
     } catch (err: any) {
-      setTestError(err.message || 'Network error sending test message.');
+      console.error('[Setup Wizard] Network or client error:', err);
+      setTestError(err.message || 'Network error sending test message to WhatsApp API.');
+      setTestSuccess(false);
     } finally {
       setIsSendingTest(false);
     }
@@ -574,6 +633,45 @@ export default function WhatsAppConnectionWizardPage() {
                 </div>
               </div>
 
+              {/* Active Meta Connection Credentials Review */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    Target Meta Account Configuration
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentStep(2)}
+                    className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                  >
+                    Edit Credentials
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 bg-white rounded-xl border border-slate-200/80">
+                    <span className="text-[11px] text-slate-500 font-medium block">Phone Number ID</span>
+                    <span className="font-mono font-bold text-slate-900 truncate block mt-0.5">
+                      {phoneNumberId || <span className="text-amber-600 italic">Not set (Step 2 required)</span>}
+                    </span>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border border-slate-200/80">
+                    <span className="text-[11px] text-slate-500 font-medium block">System User Access Token</span>
+                    <span className="font-mono text-slate-900 truncate block mt-0.5">
+                      {accessToken ? (
+                        <span className="text-emerald-700 font-medium flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          Configured ({accessToken.substring(0, 6)}...{accessToken.slice(-4)})
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 italic">Using backend saved token</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <form onSubmit={handleSendTestMessage} className="space-y-4">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
@@ -587,35 +685,125 @@ export default function WhatsAppConnectionWizardPage() {
                     onChange={(e) => setTestPhoneNumber(e.target.value)}
                     className="w-full text-xs px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono"
                   />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Works with Meta Developer sandbox test recipient numbers or live production numbers. Ensure international country code is included.
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Enter the phone number with country code. For Meta Developer sandbox accounts, this number must be in your <strong>Allowed Test Recipients</strong> list in Meta App Dashboard &gt; WhatsApp &gt; API Setup.
                   </p>
+                </div>
+
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+                  <span className="font-semibold block text-slate-800">Message payload to be dispatched:</span>
+                  <p className="italic text-slate-700 font-mono text-[11px] bg-white p-2.5 rounded-lg border border-slate-200">
+                    &quot;WhatsApp connection successful. Test message from TriPix SaaS.&quot;
+                  </p>
+                  <span className="text-[10px] text-slate-400 block">
+                    Direct Cloud API text message &bull; Zero dependency on templates &bull; Real Meta delivery enforced
+                  </span>
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSendingTest}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs min-h-[42px]"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs min-h-[42px]"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{isSendingTest ? 'Sending to WhatsApp...' : 'Send Test WhatsApp Message'}</span>
+                  <Send className={cn('w-3.5 h-3.5', isSendingTest && 'animate-spin')} />
+                  <span>{isSendingTest ? 'Contacting Meta Cloud API...' : 'Send Test WhatsApp Message'}</span>
                 </button>
               </form>
 
-              {testSuccess && (
-                <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2.5">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <div>
-                    <span className="font-bold block">Test Message Dispatched Successfully!</span>
-                    <span className="text-[11px]">Check your WhatsApp. You can now finalize connection.</span>
+              {/* SUCCESS CONFIRMATION BANNER */}
+              {testSuccess && testResult && (
+                <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-2xl space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-bold text-sm block text-emerald-950">
+                        Official Meta Test Message Dispatched Successfully!
+                      </span>
+                      <span className="text-[11px] text-emerald-700 block mt-0.5">
+                        Meta Cloud API verified the payload and confirmed delivery with a genuine WhatsApp message ID.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-emerald-200/80 space-y-1.5 font-mono text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-emerald-700 font-sans font-medium">Meta Message ID (wamid):</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-emerald-950 bg-emerald-100/80 px-2 py-0.5 rounded">
+                          {testResult.messageId}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(testResult.messageId || '')}
+                          className="text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {testResult.phoneNumberIdUsed && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-emerald-700 font-sans font-medium">Phone Number ID Used:</span>
+                        <span className="text-emerald-950">{testResult.phoneNumberIdUsed}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
+              {/* ERROR ALERT BANNER */}
               {testError && (
-                <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{testError}</span>
+                <div className="p-4 bg-rose-50 border border-rose-200 text-rose-900 text-xs rounded-2xl space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-rose-950">
+                          Meta WhatsApp Delivery Failed
+                        </span>
+                        {testResult?.errorCode && (
+                          <span className="px-2 py-0.5 bg-rose-200 text-rose-800 text-[10px] font-bold rounded-full">
+                            Error #{testResult.errorCode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-rose-800 font-medium leading-relaxed">
+                        {testError}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Diagnostic details accordion */}
+                  <div className="pt-2 border-t border-rose-200/80">
+                    <button
+                      type="button"
+                      onClick={() => setShowDebugDetails(!showDebugDetails)}
+                      className="text-[11px] font-bold text-rose-700 hover:text-rose-900 flex items-center gap-1 cursor-pointer"
+                    >
+                      <ChevronRight className={cn('w-3.5 h-3.5 transition-transform', showDebugDetails && 'rotate-90')} />
+                      <span>{showDebugDetails ? 'Hide Meta Debug Telemetry' : 'View Meta Debug Telemetry & Raw Response'}</span>
+                    </button>
+
+                    {showDebugDetails && testResult && (
+                      <div className="mt-2 p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[10px] overflow-x-auto space-y-2">
+                        <div>
+                          <span className="text-emerald-400 font-bold">// Endpoint &amp; Target</span>
+                          <p className="text-slate-300">
+                            Phone Number ID: {testResult.phoneNumberIdUsed || phoneNumberId || 'None'}
+                          </p>
+                          <p className="text-slate-300">
+                            Recipient: {testPhoneNumber}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-amber-400 font-bold">// Meta API Response Payload</span>
+                          <pre className="text-slate-300 whitespace-pre-wrap">
+                            {JSON.stringify(testResult.details || testResult, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -629,10 +817,21 @@ export default function WhatsAppConnectionWizardPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(6)}
-                  className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs min-h-[44px]"
+                  onClick={() => {
+                    if (!testSuccess) {
+                      const confirmProceed = confirm(
+                        'A real Meta test message has not been confirmed yet. Are you sure you want to proceed to completion?'
+                      );
+                      if (!confirmProceed) return;
+                    }
+                    setCurrentStep(6);
+                  }}
+                  className={cn(
+                    'px-6 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs min-h-[44px]',
+                    testSuccess ? 'bg-slate-900 hover:bg-slate-800 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                  )}
                 >
-                  <span>Next: Connection Success</span>
+                  <span>{testSuccess ? 'Next: Connection Success' : 'Skip & Finish'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>

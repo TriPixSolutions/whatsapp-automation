@@ -94,6 +94,12 @@ export class MetaWhatsAppClient {
         humanMessage = 'Message Undeliverable (#131026): The phone number does not have an active WhatsApp account or privacy settings block message.';
       } else if (code === 130429) {
         humanMessage = 'Rate Limit Hit (#130429): Cloud API messaging throughput limit reached. Slow down broadcasts.';
+      } else if (code === 131030) {
+        humanMessage = 'Recipient Not Allowed (#131030): In Meta Developer mode, recipient phone number must be added to Allowed Test Recipients in Meta App Dashboard > WhatsApp > API Setup.';
+      } else if (code === 131056) {
+        humanMessage = 'Pairing Rate Limit (#131056): Too many messages sent to this recipient in a short window. Please wait a few minutes before retrying.';
+      } else if (code === 133010) {
+        humanMessage = 'Phone Number Not Registered (#133010): The Phone Number ID is not registered or active with Meta WhatsApp Business Account.';
       } else if (code === 100) {
         humanMessage = `Invalid Parameter (#100): ${err.error_data?.details || err.message}`;
       } else if (code === 132001) {
@@ -126,8 +132,16 @@ export class MetaWhatsAppClient {
       },
     };
 
-    console.log(`[Meta Client] POST ${url}`);
-    console.log('[Meta Client] Outbound API Payload:', JSON.stringify(payload, null, 2));
+    const maskedToken = accessToken
+      ? `${accessToken.substring(0, Math.min(8, accessToken.length))}...${accessToken.substring(Math.max(0, accessToken.length - 4))}`
+      : 'None';
+
+    console.log(`[Meta Client] Outbound Request to Meta WhatsApp Cloud API:`);
+    console.log(`   - Endpoint: POST ${url}`);
+    console.log(`   - Phone Number ID: ${phoneNumberId}`);
+    console.log(`   - Access Token: ${maskedToken} (Length: ${accessToken ? accessToken.length : 0})`);
+    console.log(`   - Recipient (Sanitized): ${recipient}`);
+    console.log('   - Request Payload:', JSON.stringify(payload, null, 2));
 
     try {
       const res = await axios.post(url, payload, {
@@ -140,7 +154,16 @@ export class MetaWhatsAppClient {
 
       console.log(`[Meta Client] Meta API HTTP ${res.status} Full Response:`, JSON.stringify(res.data, null, 2));
 
-      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (!messageId || typeof messageId !== 'string' || !messageId.startsWith('wamid.')) {
+        console.error('[Meta Client] Meta responded with success status but message ID is missing or invalid:', res.data);
+        return {
+          success: false,
+          error: 'Meta Cloud API responded without a valid wamid message ID.',
+          details: res.data,
+        };
+      }
+
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
@@ -411,7 +434,16 @@ export class MetaWhatsAppClient {
 
       console.log(`[Meta Client] Meta API HTTP ${res.status} Full Response:`, JSON.stringify(res.data, null, 2));
 
-      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (!messageId || typeof messageId !== 'string' || !messageId.startsWith('wamid.')) {
+        console.error('[Meta Client] Meta response missing valid wamid message ID:', res.data);
+        return {
+          success: false,
+          error: 'Meta Cloud API did not return a valid wamid message ID.',
+          details: res.data,
+        };
+      }
+
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
