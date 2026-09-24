@@ -104,8 +104,6 @@ export default function SettingsPage() {
   // 4. Team Members State
   const [team, setTeam] = useState<TeamMember[]>([
     { id: '1', name: 'System Administrator', email: 'admin@tripixsolutions.com', role: 'Admin', status: 'Active' },
-    { id: '2', name: 'Sarah Jenkins', email: 'sarah.j@brand.com', role: 'Sales Agent', status: 'Active' },
-    { id: '3', name: 'Marcus Vance', email: 'marcus.v@brand.com', role: 'Sales Agent', status: 'Active' },
   ]);
   const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');

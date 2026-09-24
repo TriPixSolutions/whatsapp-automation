@@ -1,119 +1,93 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import {
-  Flame,
+  Users,
   Search,
   Plus,
   RefreshCw,
   MessageSquare,
   Phone,
-  UserCheck,
-  CheckCircle2,
-  AlertCircle,
   Tag,
   Clock,
-  ExternalLink,
-  ChevronDown,
-  Sparkles,
-  X,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  DollarSign,
+  ChevronRight,
   Filter,
+  X,
+  Building,
 } from 'lucide-react';
-import { cn, formatPhoneNumber } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { Contact } from '@/lib/db/types';
 
-interface PriorityLead {
-  id: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  phoneNumber: string;
-  lastMessage: string;
-  intent: string;
-  isPriority: boolean;
-  status: string;
-  assignedAgent: string;
-  tags: string[];
-  lastActivity: string;
-}
+const PIPELINE_STAGES = [
+  { id: 'new_lead', name: 'New Lead', color: 'border-slate-300' },
+  { id: 'contacted', name: 'Contacted', color: 'border-blue-400' },
+  { id: 'qualified', name: 'Qualified', color: 'border-amber-400' },
+  { id: 'proposal_sent', name: 'Proposal Sent', color: 'border-purple-400' },
+  { id: 'negotiation', name: 'Negotiation', color: 'border-indigo-400' },
+  { id: 'won', name: 'Won', color: 'border-emerald-500' },
+  { id: 'lost', name: 'Lost', color: 'border-rose-400' },
+] as const;
 
-const SALES_AGENTS = [
-  'Sales Specialist',
-  'Sarah Jenkins',
-  'Marcus Vance',
-  'Alex Chen',
-  'Unassigned',
-];
-
-const INTENT_BADGES: Record<string, { label: string; icon: string; bg: string; text: string; border: string }> = {
-  'Asked Price': { label: 'Price Inquiry', icon: '💰', bg: 'bg-amber-50', text: 'text-amber-800', border: 'border-amber-200' },
-  'Wants to Order': { label: 'Ready to Buy', icon: '🛒', bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' },
-  'Stock Check': { label: 'Stock Available?', icon: '📦', bg: 'bg-blue-50', text: 'text-blue-800', border: 'border-blue-200' },
-  'Delivery Charge': { label: 'Delivery Cost?', icon: '🚚', bg: 'bg-purple-50', text: 'text-purple-800', border: 'border-purple-200' },
-  'High Interest': { label: 'High Intent', icon: '🔥', bg: 'bg-rose-50', text: 'text-rose-800', border: 'border-rose-200' },
-  'General Inquiry': { label: 'Inquiry', icon: '💬', bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' },
-};
-
-export default function PriorityLeadsPage() {
-  const [leads, setLeads] = useState<PriorityLead[]>([]);
+export default function LeadsPipelinePage() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [intentFilter, setIntentFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // New Lead state
+  // New Lead form
   const [newPhone, setNewPhone] = useState('');
   const [newName, setNewName] = useState('');
-  const [newIntent, setNewIntent] = useState('Asked Price');
+  const [newEmail, setNewEmail] = useState('');
+  const [newCompany, setNewCompany] = useState('');
+  const [newStage, setNewStage] = useState<string>('new_lead');
+  const [newScore, setNewScore] = useState(70);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  const fetchLeads = useCallback(async () => {
+  const fetchLeadsData = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (search) params.set('search', search);
-      if (intentFilter !== 'all') params.set('intent', intentFilter);
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-
-      const res = await fetch(`/api/leads?${params.toString()}`);
+      const res = await fetch('/api/crm');
       if (res.ok) {
         const data = await res.json();
-        setLeads(data.leads || []);
+        setContacts(data.contacts || []);
       }
     } catch (err) {
-      console.warn('Failed to load leads:', err);
+      console.warn('Failed to load CRM leads:', err);
     } finally {
       setLoading(false);
     }
-  }, [search, intentFilter, statusFilter]);
+  }, []);
 
   useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+    fetchLeadsData();
+  }, [fetchLeadsData]);
 
-  const handleUpdateLead = async (id: string, updates: { status?: string; assignedAgent?: string }) => {
+  const handleUpdateStage = async (contactId: string, targetStage: string) => {
+    // Optimistic UI update
+    setContacts((prev) =>
+      prev.map((c) => (c.id === contactId ? { ...c, stage: targetStage } : c))
+    );
+
     try {
-      const res = await fetch('/api/leads', {
-        method: 'PATCH',
+      await fetch('/api/crm', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...updates }),
+        body: JSON.stringify({
+          action: 'update_stage',
+          contactId,
+          stage: targetStage,
+        }),
       });
-      if (res.ok) {
-        setLeads((prev) =>
-          prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
-        );
-        showToast('Lead updated successfully');
-      }
-    } catch {
-      showToast('Error updating lead');
+    } catch (e) {
+      console.warn('Failed to update stage:', e);
+      fetchLeadsData();
     }
   };
 
@@ -123,380 +97,322 @@ export default function PriorityLeadsPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/leads', {
+      const parts = newName.trim().split(' ');
+      const firstName = parts[0] || '';
+      const lastName = parts.slice(1).join(' ') || '';
+
+      const res = await fetch('/api/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phoneNumber: newPhone.trim(),
-          firstName: newName.trim() || 'Prospective Buyer',
-          tags: ['priority', newIntent.toLowerCase().replace(/\s+/g, '_')],
-          metadata: {
-            lastMessage: `Customer inquired: ${newIntent}`,
-            status: 'priority',
-          },
+          firstName,
+          lastName,
+          email: newEmail.trim() || undefined,
+          company: newCompany.trim() || undefined,
+          stage: newStage,
+          leadScore: newScore,
+          tags: ['Lead'],
         }),
       });
 
       if (res.ok) {
-        showToast('Priority lead created and automated follow-up scheduled!');
         setShowAddModal(false);
         setNewPhone('');
         setNewName('');
-        fetchLeads();
-      } else {
-        const d = await res.json();
-        alert(d.error || 'Failed to create lead');
+        setNewEmail('');
+        setNewCompany('');
+        fetchLeadsData();
       }
-    } catch (err: any) {
-      alert(err.message || 'Network error');
+    } catch (err) {
+      console.warn('Error adding lead:', err);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const priorityLeadsCount = leads.filter((l) => l.isPriority).length;
+  // Filter contacts by search
+  const filteredContacts = contacts.filter((c) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const fullName = `${c.firstName || ''} ${c.lastName || ''}`.toLowerCase();
+    return (
+      fullName.includes(q) ||
+      c.phoneNumber.includes(q) ||
+      (c.company || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
-    <div className="min-h-screen bg-slate-50/70 pb-20 md:pb-8 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-50 pl-0 md:pl-60 flex flex-col font-sans transition-all">
       <Sidebar />
-      <div className="md:pl-60 flex-1 flex flex-col">
-        <Header
-          title="Priority Leads"
-          subtitle="Auto-detected high-intent buyers ready for closing"
-        />
+      <Header
+        title="Lead Management"
+        subtitle="CRM pipeline to qualify and track WhatsApp customer opportunities through conversion"
+      />
 
-        {toastMessage && (
-          <div className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold border border-slate-700">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>{toastMessage}</span>
-          </div>
-        )}
-
-        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-          {/* Top Intent Explanation Banner */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-start sm:items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 text-2xl font-black shadow-2xs border border-amber-200/60">
-                🔥
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-slate-950">Automatic Buying Intent Recognition</h2>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                    Active
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
-                  Incoming replies containing keywords like <em>&ldquo;What is the price?&rdquo;</em>, <em>&ldquo;How can I order?&rdquo;</em>, or <em>&ldquo;Is stock available?&rdquo;</em> are automatically tagged and escalated here for your sales team.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Priority Leads</span>
-                <span className="text-base font-black text-slate-900 font-mono">{priorityLeadsCount}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer shrink-0 min-h-[42px]"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Priority Lead</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Filter & Search Bar */}
-          <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
-            {/* Search */}
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+      <main className="p-4 sm:p-6 lg:p-8 max-w-full mx-auto w-full space-y-6 pb-24 md:pb-12">
+        {/* Top Control Bar */}
+        <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search by name, phone, or message..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500 font-medium"
+                placeholder="Search leads by name, phone, company..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-800 focus:outline-hidden focus:border-slate-900"
               />
             </div>
+            <button
+              type="button"
+              onClick={fetchLeadsData}
+              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 cursor-pointer"
+              title="Refresh Leads"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            </button>
+          </div>
 
-            {/* Intent Filter Chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto p-0.5 scrollbar-none">
-              {[
-                { id: 'all', label: 'All Intents' },
-                { id: 'Price', label: '💰 Price' },
-                { id: 'Order', label: '🛒 Order' },
-                { id: 'Stock', label: '📦 Stock' },
-                { id: 'Delivery', label: '🚚 Delivery' },
-                { id: 'Interest', label: '🔥 High Intent' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setIntentFilter(tab.id)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer',
-                    intentFilter === tab.id
-                      ? 'bg-slate-900 text-white shadow-2xs'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  )}
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <span className="text-xs text-slate-500 font-semibold mr-1">
+              Total Leads: {contacts.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Lead</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 7-Stage Drag & Drop Kanban Pipeline */}
+        <div className="overflow-x-auto pb-4 custom-scrollbar">
+          <div className="inline-flex gap-4 min-w-full">
+            {PIPELINE_STAGES.map((stage, stageIdx) => {
+              const stageLeads = filteredContacts.filter((c) => {
+                const s = c.stage || 'new_lead';
+                if (stage.id === 'new_lead') {
+                  return s === 'new_lead' || s === 'lead' || s === 'new';
+                }
+                if (stage.id === 'proposal_sent') {
+                  return s === 'proposal_sent' || s === 'opportunity';
+                }
+                if (stage.id === 'won') {
+                  return s === 'won' || s === 'customer';
+                }
+                return s === stage.id;
+              });
+
+              return (
+                <div
+                  key={stage.id}
+                  className="w-72 shrink-0 bg-slate-100/70 rounded-2xl p-3 border border-slate-200 flex flex-col max-h-[calc(100vh-250px)]"
                 >
-                  {tab.label}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                onClick={fetchLeads}
-                title="Refresh leads"
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors ml-1"
-              >
-                <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin text-emerald-600')} />
-              </button>
-            </div>
-          </div>
-
-          {/* Priority Lead Table */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">Lead Name</th>
-                    <th className="py-3.5 px-4">Phone</th>
-                    <th className="py-3.5 px-4 max-w-xs">Last Message</th>
-                    <th className="py-3.5 px-4">Intent</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4">Assigned Agent</th>
-                    <th className="py-3.5 px-4">Last Activity</th>
-                    <th className="py-3.5 px-4 text-right">Quick Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loading && leads.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
-                        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-emerald-600" />
-                        <span>Loading priority leads...</span>
-                      </td>
-                    </tr>
-                  ) : leads.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-400">
-                        <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-xl">
-                          💬
-                        </div>
-                        <p className="font-semibold text-slate-700">No leads found</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          When leads reply on WhatsApp or ask for prices, they will automatically appear here.
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    leads.map((lead) => {
-                      const badge = INTENT_BADGES[lead.intent] || INTENT_BADGES['General Inquiry'];
-                      const cleanPhone = lead.phoneNumber.replace(/[^0-9]/g, '');
-
-                      return (
-                        <tr
-                          key={lead.id}
-                          className={cn(
-                            'hover:bg-slate-50/70 transition-colors',
-                            lead.isPriority && 'bg-amber-50/20'
-                          )}
-                        >
-                          {/* 1. Lead Name */}
-                          <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              {lead.isPriority && (
-                                <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" title="Hot Priority" />
-                              )}
-                              <span>{lead.name}</span>
-                            </div>
-                          </td>
-
-                          {/* 2. Phone */}
-                          <td className="py-3.5 px-4 font-mono text-slate-600 whitespace-nowrap">
-                            {formatPhoneNumber(lead.phoneNumber)}
-                          </td>
-
-                          {/* 3. Last Message */}
-                          <td className="py-3.5 px-4 text-slate-700 max-w-xs truncate" title={lead.lastMessage}>
-                            {lead.lastMessage}
-                          </td>
-
-                          {/* 4. Intent */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold border',
-                                badge.bg,
-                                badge.text,
-                                badge.border
-                              )}
-                            >
-                              <span>{badge.icon}</span>
-                              <span>{badge.label}</span>
-                            </span>
-                          </td>
-
-                          {/* 5. Status Selector */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <select
-                              value={lead.status}
-                              onChange={(e) => handleUpdateLead(lead.id, { status: e.target.value })}
-                              className="text-[11px] font-semibold px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer"
-                            >
-                              <option value="priority">🔥 Priority</option>
-                              <option value="new">🎯 New</option>
-                              <option value="contacted">💬 Contacted</option>
-                              <option value="won">🎉 Won</option>
-                              <option value="lost">❌ Lost</option>
-                            </select>
-                          </td>
-
-                          {/* 6. Assigned Agent */}
-                          <td className="py-3.5 px-4 whitespace-nowrap">
-                            <select
-                              value={lead.assignedAgent}
-                              onChange={(e) => handleUpdateLead(lead.id, { assignedAgent: e.target.value })}
-                              className="text-[11px] font-medium px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:border-emerald-500 cursor-pointer"
-                            >
-                              {SALES_AGENTS.map((agent) => (
-                                <option key={agent} value={agent}>
-                                  {agent}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-
-                          {/* 7. Last Activity */}
-                          <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap text-[11px]">
-                            {lead.lastActivity
-                              ? new Date(lead.lastActivity).toLocaleDateString([], {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })
-                              : 'Recent'}
-                          </td>
-
-                          {/* 8. Quick Action */}
-                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <a
-                                href={`https://wa.me/${cleanPhone}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold inline-flex items-center gap-1.5 transition-colors shadow-2xs"
-                                title="Open WhatsApp Chat directly"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                                <span>WhatsApp</span>
-                              </a>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Add Priority Lead Modal */}
-          {showAddModal && (
-            <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl p-6 max-w-md w-full border border-slate-200 shadow-xl space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2">
-                    <Flame className="w-4 h-4 text-amber-500" />
-                    <h3 className="text-sm font-bold text-slate-900">Add Priority Lead</h3>
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between pb-3 px-1 border-b border-slate-200/80 mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('w-2.5 h-2.5 rounded-full border-2', stage.color)} />
+                      <h4 className="text-xs font-bold text-slate-900">{stage.name}</h4>
+                    </div>
+                    <span className="text-xs font-bold font-mono bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-600">
+                      {stageLeads.length}
+                    </span>
                   </div>
+
+                  {/* Leads List within Column */}
+                  <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 custom-scrollbar">
+                    {stageLeads.length > 0 ? (
+                      stageLeads.map((lead) => {
+                        const fullName = `${lead.firstName || ''} ${lead.lastName || ''}`.trim() || 'WhatsApp Lead';
+                        return (
+                          <div
+                            key={lead.id}
+                            className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs hover:shadow-xs transition-shadow space-y-2.5 group"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <h5 className="text-xs font-bold text-slate-900 leading-tight">
+                                  {fullName}
+                                </h5>
+                                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                  {lead.phoneNumber}
+                                </p>
+                              </div>
+                              <Link
+                                href={`/inbox?phone=${encodeURIComponent(lead.phoneNumber)}`}
+                                className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 transition-colors"
+                                title="Chat on WhatsApp"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                              </Link>
+                            </div>
+
+                            {lead.company && (
+                              <p className="text-[10px] text-slate-500 flex items-center gap-1 font-medium">
+                                <Building className="w-3 h-3 text-slate-400" />
+                                <span>{lead.company}</span>
+                              </p>
+                            )}
+
+                            {/* Tags */}
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {(lead.tags || []).slice(0, 2).map((t) => (
+                                <span
+                                  key={t}
+                                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600"
+                                >
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Pipeline Advancement Buttons */}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] font-bold">
+                              {stageIdx > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStage(lead.id, PIPELINE_STAGES[stageIdx - 1].id)}
+                                  className="text-slate-400 hover:text-slate-800 flex items-center gap-0.5 cursor-pointer"
+                                  title={`Move back to ${PIPELINE_STAGES[stageIdx - 1].name}`}
+                                >
+                                  <ArrowLeft className="w-3 h-3" />
+                                  <span>Back</span>
+                                </button>
+                              ) : (
+                                <span />
+                              )}
+
+                              {stageIdx < PIPELINE_STAGES.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateStage(lead.id, PIPELINE_STAGES[stageIdx + 1].id)}
+                                  className="text-slate-900 hover:text-emerald-700 flex items-center gap-0.5 cursor-pointer ml-auto"
+                                  title={`Advance to ${PIPELINE_STAGES[stageIdx + 1].name}`}
+                                >
+                                  <span>Advance</span>
+                                  <ArrowRight className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="py-8 text-center text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                        No leads in this stage
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Add Lead Modal */}
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-slate-200 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-sm font-bold text-slate-900">Add New Lead</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddLead} className="space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    WhatsApp Phone Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="+14155552671"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Alex Morgan"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Company</label>
+                  <input
+                    type="text"
+                    value={newCompany}
+                    onChange={(e) => setNewCompany(e.target.value)}
+                    placeholder="Morgan Enterprise"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="alex@example.com"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Initial Stage</label>
+                  <select
+                    value={newStage}
+                    onChange={(e) => setNewStage(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                  >
+                    {PIPELINE_STAGES.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="text-slate-400 hover:text-slate-600 p-1"
+                    className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                   >
-                    <X className="w-4 h-4" />
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Adding...' : 'Create Lead'}
                   </button>
                 </div>
-
-                <form onSubmit={handleAddLead} className="space-y-4">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      WhatsApp Phone Number *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="+15551234567 (with country code)"
-                      value={newPhone}
-                      onChange={(e) => setNewPhone(e.target.value)}
-                      className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      Lead Name (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. John Doe"
-                      value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
-                      className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
-                      Initial Buying Intent Trigger
-                    </label>
-                    <select
-                      value={newIntent}
-                      onChange={(e) => setNewIntent(e.target.value)}
-                      className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
-                    >
-                      <option value="Asked Price">💰 Asked Price (&quot;What is the price?&quot;)</option>
-                      <option value="Wants to Order">🛒 Ready to Order (&quot;How can I order?&quot;)</option>
-                      <option value="Stock Check">📦 Stock Available? (&quot;Is stock available?&quot;)</option>
-                      <option value="Delivery Charge">🚚 Delivery Charge (&quot;Delivery fee?&quot;)</option>
-                      <option value="High Interest">🔥 High Interest (&quot;Interested, buy now&quot;)</option>
-                    </select>
-                  </div>
-
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-900">
-                    💡 This lead will immediately be tagged as a <strong>Priority Lead</strong> and our automated follow-up sequence will trigger to nurture them.
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowAddModal(false)}
-                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
-                    >
-                      {isSubmitting ? 'Saving...' : 'Create Priority Lead'}
-                    </button>
-                  </div>
-                </form>
-              </div>
+              </form>
             </div>
-          )}
-        </main>
-      </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }

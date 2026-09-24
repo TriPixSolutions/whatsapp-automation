@@ -28,13 +28,15 @@ export async function GET(request: NextRequest) {
     const contacts = ContactsDB.list({ workspaceId });
     const companies = CompaniesDB.list(workspaceId);
 
-    // Compute pipeline metrics
+    // Compute pipeline metrics for 7 standard stages
     const stages = {
-      lead: contacts.filter((c) => (c.stage || 'lead') === 'lead'),
+      new_lead: contacts.filter((c) => !c.stage || c.stage === 'new_lead' || c.stage === 'lead' || c.stage === 'new'),
       contacted: contacts.filter((c) => c.stage === 'contacted'),
       qualified: contacts.filter((c) => c.stage === 'qualified'),
-      opportunity: contacts.filter((c) => c.stage === 'opportunity'),
-      customer: contacts.filter((c) => c.stage === 'customer'),
+      proposal_sent: contacts.filter((c) => c.stage === 'proposal_sent' || c.stage === 'opportunity'),
+      negotiation: contacts.filter((c) => c.stage === 'negotiation'),
+      won: contacts.filter((c) => c.stage === 'won' || c.stage === 'customer'),
+      lost: contacts.filter((c) => c.stage === 'lost'),
     };
 
     return NextResponse.json({

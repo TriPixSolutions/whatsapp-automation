@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MessagesDB, CampaignsDB, AutomationsDB, ConversationsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { MessagesDB, CampaignsDB, AutomationsDB, ConversationsDB, ContactsDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -15,55 +15,63 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
 
+    // Fetch live statistics
     const stats = MessagesDB.getStats(targetWorkspaceId);
     const campaigns = CampaignsDB.list(targetWorkspaceId);
     const automations = AutomationsDB.list(targetWorkspaceId);
     const conversations = ConversationsDB.list(targetWorkspaceId);
+    const contacts = ContactsDB.list({ workspaceId: targetWorkspaceId });
+    const settings = SettingsDB.get(targetWorkspaceId);
 
-    // Calculate real rates
+    // Compute strictly authentic metrics
+    const connectedNumbersCount = settings.phoneNumberId ? 1 : 0;
     const sent = stats.messagesSent || 0;
     const delivered = stats.deliveredCount || 0;
     const read = stats.readCount || 0;
     const failed = stats.failedCount || 0;
-    const replied = conversations.filter((c) => c.last_inbound_at).length;
+    const replies = conversations.filter((c) => c.last_inbound_at).length;
 
-    const deliveryRate = sent > 0 ? Math.round((delivered / sent) * 100) : 0;
-    const readRate = delivered > 0 ? Math.round((read / delivered) * 100) : 0;
-    const replyRate = read > 0 ? Math.round((replied / read) * 100) : 0;
-    const clickRate = read > 0 ? Math.round((replied / read) * 50) : 0;
-    const conversionRate = conversations.length > 0 ? Math.round((replied / conversations.length) * 100) : 0;
+    // Lead Conversions (Contacts in 'Won' or 'Qualified' / Total)
+    const wonCount = contacts.filter((c) => c.stage === 'won' || c.stage === 'customer').length;
+    const qualifiedCount = contacts.filter((c) => c.stage === 'qualified').length;
+    const totalLeads = contacts.length;
+    const leadConversionRate = totalLeads > 0 ? Math.round((wonCount / totalLeads) * 100) : 0;
+
+    // Automation performance
     const totalExecutions = automations.reduce((acc, a) => acc + (a.executionCount || 0), 0);
-    const workflowSuccessRate = totalExecutions > 0 ? 100 : 0;
+    const activeAutomationsCount = automations.filter((a) => a.isActive !== false).length;
 
-    // Hourly distribution data (mock realistic 24h curve)
-    const hourlyTrends = [
-      { hour: '00:00', sent: 8, delivered: 8, read: 6 },
-      { hour: '04:00', sent: 3, delivered: 3, read: 2 },
-      { hour: '08:00', sent: 48, delivered: 47, read: 42 },
-      { hour: '12:00', sent: 112, delivered: 110, read: 104 },
-      { hour: '16:00', sent: 145, delivered: 142, read: 131 },
-      { hour: '20:00', sent: 88, delivered: 86, read: 78 },
-      { hour: '23:00', sent: 24, delivered: 23, read: 19 },
-    ];
+    // Broadcast performance
+    const broadcastTotalSent = campaigns.reduce((acc, c) => acc + (c.sentCount || c.sent_count || 0), 0);
+    const broadcastTotalDelivered = campaigns.reduce((acc, c) => acc + (c.deliveredCount || c.delivered_count || 0), 0);
+    const broadcastDeliveryRate = broadcastTotalSent > 0 ? Math.round((broadcastTotalDelivered / broadcastTotalSent) * 100) : 0;
 
     return NextResponse.json({
       metrics: {
+        connectedNumbers: connectedNumbersCount,
         messagesSent: sent,
         delivered,
         read,
-        failed,
-        replied,
-        deliveryRate,
-        readRate,
-        clickRate,
-        replyRate,
-        conversionRate,
-        workflowSuccessRate,
+        replies,
+        conversions: wonCount,
+        failedMessages: failed,
+        deliveryRate: sent > 0 ? Math.round((delivered / sent) * 100) : 0,
+        readRate: delivered > 0 ? Math.round((read / delivered) * 100) : 0,
+        replyRate: read > 0 ? Math.round((replies / read) * 100) : 0,
+        leadConversionRate,
+        automationPerformance: {
+          activeAutomations: activeAutomationsCount,
+          totalExecutions,
+        },
+        broadcastPerformance: {
+          totalBroadcasts: campaigns.length,
+          totalSent: broadcastTotalSent,
+          totalDelivered: broadcastTotalDelivered,
+          deliveryRate: broadcastDeliveryRate,
+        },
       },
-      hourlyTrends,
       campaigns: campaigns.slice(0, 10),
-      totalAutomations: automations.length,
-      activeConversations: conversations.length,
+      automations: automations.slice(0, 10),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

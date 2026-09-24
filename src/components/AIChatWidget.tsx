@@ -279,8 +279,8 @@ export function AIChatWidget() {
                 {/* Greeting Card */}
                 <div className="bg-white p-4 rounded-2xl border border-purple-100 shadow-sm">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center text-[#7C3AED] shrink-0 font-bold text-xs">
-                      🍇
+                    <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white shrink-0 font-bold text-xs">
+                      <Bot className="w-4 h-4" />
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-[#0D0F2D]">Welcome to Passion Fruit!</h4>

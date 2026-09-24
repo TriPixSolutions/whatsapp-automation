@@ -106,7 +106,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         {/* New Broadcast CTA */}
         <Link
           href="/campaigns"
-          className="gradient-button text-xs px-3.5 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 text-white shadow-2xs group"
+          className="bg-slate-900 hover:bg-slate-800 text-xs px-3.5 py-1.5 rounded-xl font-semibold flex items-center gap-1.5 text-white shadow-2xs group transition-colors"
         >
           <Send className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Broadcast</span>

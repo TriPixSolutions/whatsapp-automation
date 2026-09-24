@@ -6,9 +6,9 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Inbox,
-  Contact,
-  Bot,
-  FlaskConical,
+  Users,
+  Zap,
+  Send,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,11 +17,11 @@ export function MobileBottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Inbox', href: '/inbox', icon: Inbox },
-    { name: 'Contacts', href: '/contacts', icon: Contact },
-    { name: 'Automate', href: '/automations', icon: Bot },
-    { name: 'Broadcast', href: '/campaigns', icon: FlaskConical },
+    { name: 'Leads', href: '/leads', icon: Users },
+    { name: 'Automate', href: '/automations', icon: Zap },
+    { name: 'Broadcast', href: '/campaigns', icon: Send },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
@@ -39,19 +39,19 @@ export function MobileBottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-150 min-h-[48px] min-w-[56px]',
+                'flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all duration-150 min-h-[48px] min-w-[50px]',
                 isActive
-                  ? 'text-emerald-700 font-bold'
-                  : 'text-slate-500 hover:text-slate-900 active:scale-95'
+                  ? 'text-slate-900 font-bold'
+                  : 'text-slate-500 hover:text-slate-900'
               )}
             >
               <div
                 className={cn(
                   'p-1 rounded-lg transition-colors',
-                  isActive ? 'bg-emerald-50 text-emerald-600' : 'text-slate-500'
+                  isActive ? 'bg-slate-100 text-slate-900' : 'text-slate-500'
                 )}
               >
-                <Icon className="w-5 h-5 shrink-0" />
+                <Icon className="w-4 h-4 shrink-0" />
               </div>
               <span className="text-[10px] tracking-tight leading-tight mt-0.5">
                 {item.name}

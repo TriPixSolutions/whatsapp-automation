@@ -9,13 +9,10 @@ import {
   Contact,
   Users,
   Zap,
-  Bot,
   Send,
   FileText,
   FlaskConical,
   BarChart3,
-  Webhook,
-  Code2,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,13 +26,13 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Inbox', href: '/inbox', icon: Inbox, badge: 'Live' },
+  { name: 'Inbox', href: '/inbox', icon: Inbox },
+  { name: 'Leads', href: '/leads', icon: Users },
   { name: 'Contacts', href: '/contacts', icon: Contact },
   { name: 'Automations', href: '/automations', icon: Zap },
   { name: 'Broadcasts', href: '/campaigns', icon: Send },
-  { name: 'Templates', href: '/templates', icon: FileText },
+  { name: 'Automation Lab', href: '/test-center', icon: FlaskConical },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Test Center', href: '/test-center', icon: FlaskConical, badge: 'Lab' },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -59,16 +56,14 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
               'flex items-center rounded-xl text-xs font-semibold tracking-normal transition-all duration-150 relative group',
               collapsed ? 'justify-center p-3' : 'gap-3 px-3.5 py-2.5',
               isActive
-                ? 'bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/60 shadow-2xs'
-                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100/80'
+                ? 'bg-slate-900 text-white font-bold shadow-xs'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
             )}
           >
             <Icon
               className={cn(
                 'w-4 h-4 shrink-0 transition-colors',
-                isActive
-                  ? 'text-emerald-600'
-                  : 'text-slate-400 group-hover:text-slate-700'
+                isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-700'
               )}
             />
             {!collapsed && (
@@ -78,9 +73,7 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
                   <span
                     className={cn(
                       'text-[9px] font-bold px-1.5 py-0.5 rounded-md font-mono tracking-wider',
-                      isActive
-                        ? 'bg-emerald-200/60 text-emerald-900'
-                        : 'bg-amber-100 text-amber-800'
+                      isActive ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'
                     )}
                   >
                     {item.badge}

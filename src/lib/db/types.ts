@@ -110,7 +110,7 @@ export interface Contact {
   company?: string;
   leadSource?: string;
   leadScore?: number;
-  stage?: 'lead' | 'contacted' | 'qualified' | 'opportunity' | 'customer' | 'lost';
+  stage?: 'new_lead' | 'lead' | 'contacted' | 'qualified' | 'proposal_sent' | 'opportunity' | 'negotiation' | 'won' | 'customer' | 'lost' | string;
   assignedAgent?: string;
   notes?: ContactNote[];
   customFields?: Record<string, string | number | boolean>;

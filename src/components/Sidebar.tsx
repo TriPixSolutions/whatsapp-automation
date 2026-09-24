@@ -27,8 +27,8 @@ export function Sidebar() {
           <div className="flex items-center justify-between px-1 pt-1">
             <Link href="/dashboard" className="flex items-center gap-2 overflow-hidden">
               {collapsed ? (
-                <div className="w-9 h-9 rounded-xl bg-slate-950 flex items-center justify-center text-white text-base font-black shadow-sm shrink-0">
-                  🍇
+                <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center text-white text-xs font-black shadow-xs shrink-0">
+                  P
                 </div>
               ) : (
                 <PassionFruitLogo size="sm" showSubtitle={false} />

@@ -55,28 +55,28 @@ export interface FAQChip {
 export const FAQ_CHIPS: FAQChip[] = [
   {
     id: 'meta_setup',
-    label: '⚡ How to connect Meta API?',
+    label: 'How to connect Meta API?',
     query: 'How do I connect Meta WhatsApp Cloud API to Passion Fruit?',
   },
   {
     id: 'team_inbox',
-    label: '💬 How does the Shared Inbox work?',
+    label: 'How does the Shared Inbox work?',
     query: 'How do I use the Shared Team Inbox, assign chats, and view read receipts?',
   },
   {
     id: 'automations',
-    label: '🤖 Explain the 4 Automation Nodes',
-    query: 'What are the 4 automation node types in the Flow Builder and how do they work?',
+    label: 'Explain Automation Workflows',
+    query: 'What are the automation node types in the Flow Builder and how do they work?',
   },
   {
     id: 'broadcasts',
-    label: '📢 How to launch a Campaign?',
+    label: 'How to launch a Broadcast?',
     query: 'How do I send broadcast campaigns to my tagged contacts?',
   },
   {
     id: 'what_is_pf',
-    label: '✨ What is Passion Fruit?',
-    query: 'What is Passion Fruit and what are its key features?',
+    label: 'What is TriPix WhatsApp Automation?',
+    query: 'What is TriPix WhatsApp Automation and what are its key features?',
   },
 ];
 
@@ -125,9 +125,9 @@ export const PRECONFIGURED_FAQ_ANSWERS: Record<string, string> = {
 2. **Choose Approved Template**: Select official templates like \`teaser_alert\` or \`order_confirmation\`.
 3. **Dispatch**: Click **Dispatch Campaign**. Passion Fruit streams messages with official 50ms pacing and logs real-time delivery rates.`,
 
-  what_is_pf: `### Welcome to Passion Fruit! 🍇
+  what_is_pf: `### Welcome to TriPix WhatsApp Automation!
 
-**Passion Fruit** is an enterprise-grade WhatsApp Automation & Omnichannel Shared Team Inbox SaaS platform designed for high-growth businesses and luxury brands:
+**TriPix WhatsApp Automation** is an enterprise-grade WhatsApp Automation & Omnichannel Shared Team Inbox SaaS platform:
 - **Shared Team Inbox**: Centralized multi-agent customer conversations with real-time status ticks.
 - **Visual Flow Builder**: 4 interactive WhatsApp node types (Text, 3-Buttons, List, Product Carousel).
 - **Direct Meta Cloud API (v18.0+)**: Zero third-party markups, direct Facebook Graph API integration.

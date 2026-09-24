@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import {
-  Sparkles,
+  Check,
   CheckCheck,
   MoreVertical,
   Phone,
@@ -13,13 +13,17 @@ import {
   ChevronRight,
   ExternalLink,
   Smartphone,
-  Layers,
   List as ListIcon,
   Play,
   FileText,
   Music,
   MapPin,
   User,
+  ShoppingBag,
+  Tag,
+  Copy,
+  Paperclip,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -31,10 +35,30 @@ export interface PhoneMockupProps {
   footerText?: string;
   mediaUrl?: string;
   mediaType?: 'image' | 'video' | 'audio' | 'document';
-  messageType?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'button' | 'list' | 'carousel' | 'whatsapp_flow' | 'template';
-  buttons?: { id: string; title: string }[];
+  messageType?:
+    | 'text'
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'document'
+    | 'location'
+    | 'contact'
+    | 'button'
+    | 'list'
+    | 'carousel'
+    | 'template'
+    | 'catalog'
+    | 'whatsapp_flow'
+    | 'coupon';
+  buttons?: { id: string; title: string; type?: 'quick_reply' | 'call' | 'url'; url?: string; phone?: string }[];
   sections?: { title: string; rows: { id: string; title: string; description?: string }[] }[];
   cards?: { headerImage?: string; title: string; description: string; buttons: { id: string; title: string }[] }[];
+  location?: { name: string; address: string; latitude?: number; longitude?: number };
+  contactCard?: { name: string; phone: string; organization?: string };
+  catalogProduct?: { title: string; price: string; image?: string; subtitle?: string };
+  couponCode?: string;
+  fileName?: string;
+  fileSize?: string;
   flowTitle?: string;
   flowCta?: string;
   showInboundReply?: boolean;
@@ -44,46 +68,64 @@ export interface PhoneMockupProps {
 }
 
 export function PhoneMockup({
-  businessName = 'TriPix Concierge',
-  templateName = 'teaser_alert',
-  bodyText = 'Hello! Welcome to our automated WhatsApp VIP concierge. How can we assist you today?',
-  headerText = 'TriPix Private Showcase',
-  footerText = 'Confidential • By Invitation Only',
+  businessName = 'TriPix Business',
+  templateName = 'welcome_notice',
+  bodyText = 'Hello {{name}}! Welcome to our official WhatsApp service. How can we assist you today?',
+  headerText,
+  footerText,
   mediaUrl,
   mediaType = 'image',
-  messageType = 'button',
+  messageType = 'text',
   buttons = [
-    { id: 'btn_specs', title: 'Browse Products' },
-    { id: 'btn_pricing', title: 'VIP Pricing' },
-    { id: 'btn_agent', title: 'Talk to Agent' },
+    { id: 'btn_1', title: 'View Products' },
+    { id: 'btn_2', title: 'Talk to Support' },
   ],
   sections = [
     {
-      title: 'Luxury Collections',
+      title: 'Our Services',
       rows: [
-        { id: 'row_1', title: 'Grand Tourbillon', description: 'Limited edition of 25 pieces' },
-        { id: 'row_2', title: 'Perpetual Calendar', description: 'Handcrafted rose gold casing' },
+        { id: 'row_1', title: 'Catalog Inquiries', description: 'Browse active items and pricing' },
+        { id: 'row_2', title: 'Order Tracking', description: 'Real-time status updates' },
+        { id: 'row_3', title: 'Support Assistance', description: 'Direct contact with team' },
       ],
     },
   ],
   cards = [
     {
-      headerImage: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=500&auto=format&fit=crop&q=80',
-      title: 'Grand Complication Watch',
-      description: 'Exclusive handmade timepiece featuring 18k rose gold and sapphire crystal.',
-      buttons: [{ id: 'card_btn_1', title: 'View Details' }, { id: 'card_btn_2', title: 'Reserve Piece' }],
+      headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+      title: 'Premium Watch Series',
+      description: 'Handcrafted precision timepieces with sapphire crystal.',
+      buttons: [{ id: 'card_btn_1', title: 'View Specs' }, { id: 'card_btn_2', title: 'Order Now' }],
     },
     {
-      headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop&q=80',
-      title: 'Signature Chronograph',
-      description: 'Aerospace-grade titanium alloy with 72-hour power reserve.',
-      buttons: [{ id: 'card_btn_3', title: 'View Specs' }],
+      headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
+      title: 'Signature Athletic',
+      description: 'Aerodynamic performance engineered for speed and comfort.',
+      buttons: [{ id: 'card_btn_3', title: 'Select Size' }],
     },
   ],
-  flowTitle = 'Book Private Consultation',
-  flowCta = 'Start Booking',
+  location = {
+    name: 'TriPix Headquarters',
+    address: 'Business Park Tower A, Suite 400',
+  },
+  contactCard = {
+    name: 'Customer Support Lead',
+    phone: '+1 (555) 019-2834',
+    organization: 'TriPix Solutions Support',
+  },
+  catalogProduct = {
+    title: 'Precision Mechanical Watch',
+    price: '$249.00',
+    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&auto=format&fit=crop&q=80',
+    subtitle: 'Free Worldwide Shipping',
+  },
+  couponCode = 'WELCOME20',
+  fileName = 'Product_Brochure_2026.pdf',
+  fileSize = '2.4 MB PDF',
+  flowTitle = 'Book Appointment',
+  flowCta = 'Schedule Consultation',
   showInboundReply = false,
-  inboundText = 'Show me',
+  inboundText = 'I am interested in placing an order',
   onButtonClick,
   className,
 }: PhoneMockupProps) {
@@ -92,60 +134,71 @@ export function PhoneMockup({
   const [showListMenu, setShowListMenu] = useState(false);
   const [showFlowModal, setShowFlowModal] = useState(false);
   const [lastUserReply, setLastUserReply] = useState<string | null>(null);
+  const [copiedCoupon, setCopiedCoupon] = useState(false);
 
   const handleSimulateClick = (title: string) => {
     setLastUserReply(title);
     onButtonClick?.(title);
   };
 
+  const handleCopyCoupon = () => {
+    setCopiedCoupon(true);
+    setTimeout(() => setCopiedCoupon(false), 2000);
+  };
+
+  // Interpolate dynamic variables in preview for realism
+  const formattedBody = (bodyText || '')
+    .replace(/\{\{name\}\}/gi, 'Alex')
+    .replace(/\{\{phone\}\}/gi, '+1 (555) 019-2834')
+    .replace(/\{\{company\}\}/gi, 'TriPix');
+
   return (
     <div
       className={cn(
-        'relative mx-auto w-[340px] rounded-[52px] p-3.5 bg-gradient-to-b from-slate-700 via-slate-800 to-slate-950 shadow-2xl border-4 border-slate-600/40 select-none transition-all',
+        'relative mx-auto w-[330px] rounded-[48px] p-3 bg-slate-900 shadow-2xl border-4 border-slate-700/60 select-none transition-all',
         className
       )}
     >
-      {/* Outer Phone Bezel & Dynamic Island */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 w-28 h-5 bg-black rounded-full z-30 flex items-center justify-between px-3">
-        <div className="w-2.5 h-2.5 rounded-full bg-slate-900 border border-slate-800" />
-        <div className="w-2.5 h-2.5 rounded-full bg-blue-900/60" />
+      {/* Top Phone Speaker & Camera Notch */}
+      <div className="absolute top-5 left-1/2 -translate-x-1/2 w-24 h-4 bg-black rounded-full z-30 flex items-center justify-between px-2.5">
+        <div className="w-2 h-2 rounded-full bg-slate-800" />
+        <div className="w-2 h-2 rounded-full bg-blue-950/80" />
       </div>
 
       {/* Screen Frame */}
       <div
         className={cn(
-          'relative w-full h-[640px] rounded-[40px] overflow-hidden flex flex-col border transition-colors',
+          'relative w-full h-[620px] rounded-[38px] overflow-hidden flex flex-col border transition-colors',
           isDarkMode ? 'bg-[#0b141a] border-slate-900 text-white' : 'bg-[#EFEAE2] border-slate-200 text-slate-900'
         )}
       >
-        {/* WhatsApp Top Status & Navigation Bar */}
+        {/* WhatsApp Top Header */}
         <div
           className={cn(
             'pt-8 pb-2.5 px-3 flex items-center justify-between shadow-xs z-20 transition-colors',
             isDarkMode ? 'bg-[#202c33] text-white' : 'bg-[#008069] text-white'
           )}
         >
-          <div className="flex items-center gap-2">
-            <ChevronLeft className="w-5 h-5 text-white/90" />
-            <div className="w-8 h-8 rounded-full bg-emerald-700 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-              <Sparkles className="w-4 h-4 text-emerald-200" />
+          <div className="flex items-center gap-2 min-w-0">
+            <ChevronLeft className="w-5 h-5 text-white/90 shrink-0" />
+            <div className="w-8 h-8 rounded-full bg-emerald-800 flex items-center justify-center text-white font-bold text-xs shrink-0 border border-white/20">
+              {businessName.slice(0, 1)}
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-1">
-                <span className="font-semibold text-xs leading-tight">{businessName}</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" title="Verified Business" />
+                <span className="font-semibold text-xs leading-tight truncate">{businessName}</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="Verified Business" />
               </div>
-              <p className="text-[10px] text-white/75 font-mono">Official Business Account</p>
+              <p className="text-[10px] text-white/80 font-mono truncate">Official Business Account</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-white/90">
-            {/* Theme Toggle Button */}
+          <div className="flex items-center gap-2 text-white/90 shrink-0">
             <button
               type="button"
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-1 rounded-full hover:bg-black/10 transition-colors"
-              title={isDarkMode ? 'Switch to Light WhatsApp' : 'Switch to Dark WhatsApp'}
+              title="Toggle Theme"
             >
               {isDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-300" /> : <Moon className="w-3.5 h-3.5" />}
             </button>
@@ -155,16 +208,16 @@ export function PhoneMockup({
           </div>
         </div>
 
-        {/* WhatsApp Chat Wallpaper Area */}
+        {/* WhatsApp Chat Body Wallpaper */}
         <div
           className={cn(
-            'flex-1 p-3.5 space-y-3 overflow-y-auto relative',
+            'flex-1 p-3 space-y-2.5 overflow-y-auto relative',
             isDarkMode
               ? 'bg-[radial-gradient(#1f2c34_1px,transparent_1px)] [background-size:16px_16px] bg-[#0b141a]'
               : 'bg-[radial-gradient(#d1d7db_1px,transparent_1px)] [background-size:16px_16px] bg-[#EFEAE2]'
           )}
         >
-          {/* Timestamp Badge */}
+          {/* Date Stamp */}
           <div className="flex justify-center my-1">
             <span
               className={cn(
@@ -176,16 +229,16 @@ export function PhoneMockup({
             </span>
           </div>
 
-          {/* WhatsApp Outbound Message Bubble */}
+          {/* Outbound Message Bubble */}
           <div
             className={cn(
-              'max-w-[90%] ml-auto rounded-2xl rounded-tr-xs p-3 shadow-xs space-y-2',
+              'max-w-[92%] ml-auto rounded-2xl rounded-tr-xs p-3 shadow-xs space-y-2',
               isDarkMode
                 ? 'bg-[#005c4b] text-white border border-emerald-600/30'
                 : 'bg-[#D9FDD3] text-slate-900 border border-emerald-100'
             )}
           >
-            {/* Header Text */}
+            {/* Header Text (if present) */}
             {headerText && (
               <p
                 className={cn(
@@ -197,22 +250,199 @@ export function PhoneMockup({
               </p>
             )}
 
-            {/* Media Attachment if available */}
-            {mediaUrl && (
+            {/* 1. Image Message */}
+            {(messageType === 'image' || (mediaUrl && mediaType === 'image')) && mediaUrl && (
               <div className="rounded-xl overflow-hidden my-1 max-h-36 border border-black/10">
-                {mediaType === 'video' ? (
-                  <div className="relative bg-black h-36 flex items-center justify-center text-white">
-                    <Play className="w-8 h-8 opacity-80" />
-                  </div>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={mediaUrl} alt="Message Media" className="w-full h-full object-cover" />
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={mediaUrl} alt="WhatsApp Media" className="w-full h-full object-cover" />
               </div>
             )}
 
-            {/* Message Body */}
-            <p className="text-xs leading-relaxed font-sans">{bodyText}</p>
+            {/* 2. Video Message */}
+            {(messageType === 'video' || (mediaUrl && mediaType === 'video')) && (
+              <div className="relative rounded-xl overflow-hidden my-1 bg-black h-36 flex items-center justify-center text-white border border-black/10">
+                {mediaUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={mediaUrl} alt="Video Thumbnail" className="w-full h-full object-cover opacity-60" />
+                ) : (
+                  <div className="w-full h-full bg-slate-900" />
+                )}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                    <Play className="w-5 h-5 text-white ml-0.5" />
+                  </div>
+                </div>
+                <span className="absolute bottom-2 right-2 text-[9px] font-mono bg-black/70 px-1.5 py-0.5 rounded text-white">
+                  0:45
+                </span>
+              </div>
+            )}
+
+            {/* 3. Audio Voice Note Message */}
+            {messageType === 'audio' && (
+              <div
+                className={cn(
+                  'flex items-center gap-2.5 p-2 rounded-xl my-1 border',
+                  isDarkMode ? 'bg-[#004d3e] border-white/10' : 'bg-white/90 border-emerald-200/60'
+                )}
+              >
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0"
+                >
+                  <Play className="w-3.5 h-3.5 ml-0.5" />
+                </button>
+                <div className="flex-1 space-y-1">
+                  {/* Waveform Visualization */}
+                  <div className="flex items-center gap-0.5 h-4">
+                    {[40, 70, 30, 90, 60, 100, 50, 80, 45, 65, 85, 35, 75, 95, 55, 60].map((h, i) => (
+                      <span
+                        key={i}
+                        className={cn('w-0.5 rounded-full', isDarkMode ? 'bg-emerald-300' : 'bg-emerald-600')}
+                        style={{ height: `${h}%` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                    <span>0:32</span>
+                    <span>Voice Note</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. Document PDF Message */}
+            {messageType === 'document' && (
+              <div
+                className={cn(
+                  'flex items-center gap-2.5 p-2.5 rounded-xl my-1 border',
+                  isDarkMode ? 'bg-[#004d3e] border-white/10' : 'bg-white/90 border-emerald-200/60'
+                )}
+              >
+                <div className="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shrink-0 font-bold text-xs">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold truncate text-slate-900 dark:text-white">{fileName}</p>
+                  <p className="text-[10px] text-slate-500 font-mono">{fileSize}</p>
+                </div>
+              </div>
+            )}
+
+            {/* 5. Location Message */}
+            {messageType === 'location' && (
+              <div
+                className={cn(
+                  'rounded-xl overflow-hidden my-1 border',
+                  isDarkMode ? 'bg-[#004d3e] border-white/10' : 'bg-white/90 border-emerald-200/60'
+                )}
+              >
+                <div className="h-24 bg-emerald-100 dark:bg-emerald-950/40 relative flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md animate-bounce">
+                    <MapPin className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="p-2 space-y-0.5">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">{location.name}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{location.address}</p>
+                </div>
+              </div>
+            )}
+
+            {/* 6. Contact Card Message */}
+            {messageType === 'contact' && (
+              <div
+                className={cn(
+                  'rounded-xl p-2.5 my-1 border space-y-2',
+                  isDarkMode ? 'bg-[#004d3e] border-white/10' : 'bg-white/90 border-emerald-200/60'
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-300">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 dark:text-white">{contactCard.name}</p>
+                    <p className="text-[10px] text-slate-500 font-mono">{contactCard.phone}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSimulateClick(`Contact: ${contactCard.name}`)}
+                  className="w-full py-1 text-center text-xs font-bold text-emerald-700 dark:text-emerald-300 border-t border-slate-200 dark:border-white/10 pt-1.5 cursor-pointer"
+                >
+                  Message Contact
+                </button>
+              </div>
+            )}
+
+            {/* 7. Catalog Product Card */}
+            {messageType === 'catalog' && (
+              <div
+                className={cn(
+                  'rounded-xl overflow-hidden my-1 border space-y-2',
+                  isDarkMode ? 'bg-[#004d3e] border-white/10' : 'bg-white/90 border-emerald-200/60'
+                )}
+              >
+                {catalogProduct.image && (
+                  <div className="h-28 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={catalogProduct.image} alt="Product" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="p-2 pt-0 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-xs font-bold text-slate-900 dark:text-white">{catalogProduct.title}</h5>
+                    <span className="text-xs font-mono font-bold text-emerald-700 dark:text-emerald-300">
+                      {catalogProduct.price}
+                    </span>
+                  </div>
+                  {catalogProduct.subtitle && (
+                    <p className="text-[10px] text-slate-500">{catalogProduct.subtitle}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleSimulateClick('View Catalog Item')}
+                    className="w-full py-1 text-center text-xs font-bold text-emerald-700 dark:text-emerald-300 border-t border-slate-200 dark:border-white/10 pt-1 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <ShoppingBag className="w-3 h-3" />
+                    <span>View item</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 8. Coupon Message Banner */}
+            {messageType === 'coupon' && (
+              <div
+                className={cn(
+                  'rounded-xl p-2.5 my-1 border-2 border-dashed space-y-1.5',
+                  isDarkMode ? 'border-amber-400/40 bg-amber-950/20' : 'border-amber-500/50 bg-amber-50/80'
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>Exclusive Coupon</span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">Valid today</span>
+                </div>
+                <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-amber-200 dark:border-amber-900/50 font-mono text-xs font-bold text-slate-900 dark:text-white">
+                  <span>{couponCode}</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyCoupon}
+                    className="text-[10px] font-sans font-bold px-2 py-0.5 rounded bg-emerald-600 text-white flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy className="w-2.5 h-2.5" />
+                    <span>{copiedCoupon ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Message Body Text */}
+            <p className="text-xs leading-relaxed font-sans whitespace-pre-wrap">{formattedBody}</p>
 
             {/* Footer Text */}
             {footerText && (
@@ -238,9 +468,9 @@ export function PhoneMockup({
             </div>
           </div>
 
-          {/* Interactive Quick Reply Buttons */}
+          {/* Interactive Button Messages & CTA Buttons */}
           {(messageType === 'button' || messageType === 'template') && buttons && buttons.length > 0 && (
-            <div className="max-w-[90%] ml-auto space-y-1 pl-4">
+            <div className="max-w-[92%] ml-auto space-y-1 pl-4">
               {buttons.map((btn) => (
                 <button
                   key={btn.id}
@@ -253,6 +483,8 @@ export function PhoneMockup({
                       : 'bg-white hover:bg-slate-50 text-emerald-700 border border-emerald-200/80'
                   )}
                 >
+                  {btn.type === 'call' && <Phone className="w-3 h-3 text-emerald-600" />}
+                  {btn.type === 'url' && <ExternalLink className="w-3 h-3 text-blue-600" />}
                   <span>{btn.title}</span>
                 </button>
               ))}
@@ -261,7 +493,7 @@ export function PhoneMockup({
 
           {/* Interactive List Button */}
           {messageType === 'list' && (
-            <div className="max-w-[90%] ml-auto pl-4">
+            <div className="max-w-[92%] ml-auto pl-4">
               <button
                 type="button"
                 onClick={() => setShowListMenu(!showListMenu)}
@@ -278,9 +510,9 @@ export function PhoneMockup({
             </div>
           )}
 
-          {/* Interactive WhatsApp Flow CTA Button */}
+          {/* WhatsApp Flow CTA Button */}
           {messageType === 'whatsapp_flow' && (
-            <div className="max-w-[90%] ml-auto pl-4">
+            <div className="max-w-[92%] ml-auto pl-4">
               <button
                 type="button"
                 onClick={() => setShowFlowModal(true)}
@@ -292,9 +524,9 @@ export function PhoneMockup({
             </div>
           )}
 
-          {/* Interactive Carousel Cards Swiper */}
+          {/* Carousel Swiper */}
           {messageType === 'carousel' && cards && cards.length > 0 && (
-            <div className="max-w-[95%] ml-auto space-y-2">
+            <div className="max-w-[96%] ml-auto space-y-2">
               <div
                 className={cn(
                   'rounded-2xl overflow-hidden p-3 shadow-xs space-y-2 border transition-all',
@@ -329,7 +561,6 @@ export function PhoneMockup({
                   ))}
                 </div>
 
-                {/* Carousel Navigator */}
                 <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] text-slate-400">
                   <button
                     type="button"
@@ -355,11 +586,11 @@ export function PhoneMockup({
             </div>
           )}
 
-          {/* User Inbound Reply Bubble (Simulated click result) */}
+          {/* User Inbound Reply Simulation */}
           {(lastUserReply || showInboundReply) && (
             <div
               className={cn(
-                'max-w-[75%] mr-auto rounded-2xl rounded-tl-xs p-3 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-200',
+                'max-w-[80%] mr-auto rounded-2xl rounded-tl-xs p-3 shadow-xs animate-in fade-in slide-in-from-bottom-2 duration-200',
                 isDarkMode ? 'bg-[#202c33] text-white border border-white/5' : 'bg-white text-slate-900 border border-slate-200'
               )}
             >
@@ -376,7 +607,7 @@ export function PhoneMockup({
           )}
         </div>
 
-        {/* Interactive List Selector Modal */}
+        {/* List Menu Modal Sheet */}
         {showListMenu && (
           <div className="absolute inset-x-0 bottom-0 top-16 bg-black/60 z-30 flex flex-col justify-end animate-in fade-in duration-150">
             <div
@@ -427,7 +658,7 @@ export function PhoneMockup({
           </div>
         )}
 
-        {/* Interactive WhatsApp Flow Modal Sheet */}
+        {/* WhatsApp Flow Modal Sheet */}
         {showFlowModal && (
           <div className="absolute inset-x-0 bottom-0 top-16 bg-black/60 z-40 flex flex-col justify-end animate-in fade-in duration-150">
             <div
@@ -463,9 +694,9 @@ export function PhoneMockup({
                 <div>
                   <label className="text-[11px] font-semibold text-slate-500 block mb-1">Inquiry Category</label>
                   <select className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2 text-xs text-slate-800">
-                    <option>Bespoke Custom Jewelry</option>
-                    <option>Luxury Horology Consultation</option>
-                    <option>Private Showroom Booking</option>
+                    <option>Product Inquiries</option>
+                    <option>Bulk Order Pricing</option>
+                    <option>Technical Support</option>
                   </select>
                 </div>
 
@@ -475,7 +706,7 @@ export function PhoneMockup({
                     handleSimulateClick('Consultation Request Submitted');
                     setShowFlowModal(false);
                   }}
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors"
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
                 >
                   Submit WhatsApp Flow
                 </button>
@@ -484,7 +715,7 @@ export function PhoneMockup({
           </div>
         )}
 
-        {/* WhatsApp Bottom Input Area */}
+        {/* WhatsApp Bottom Input Field Bar */}
         <div
           className={cn(
             'p-2.5 flex items-center gap-2 border-t transition-colors',
@@ -493,7 +724,7 @@ export function PhoneMockup({
         >
           <div
             className={cn(
-              'flex-1 rounded-full px-3.5 py-1.5 text-xs',
+              'flex-1 rounded-full px-3.5 py-1.5 text-xs truncate',
               isDarkMode ? 'bg-[#2a3942] text-slate-300' : 'bg-white text-slate-700 shadow-2xs'
             )}
           >

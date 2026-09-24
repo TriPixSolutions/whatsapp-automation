@@ -5,32 +5,28 @@ import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
 import {
   BarChart3,
-  TrendingUp,
   Send,
   CheckCircle2,
-  Eye,
-  AlertTriangle,
+  AlertCircle,
   MessageSquare,
-  MousePointerClick,
-  Percent,
   Zap,
   Download,
   RefreshCw,
-  Calendar,
-  Layers,
-  ArrowUpRight,
+  Smartphone,
+  Users,
+  Percent,
+  CheckCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d'>('7d');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
 
   const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/analytics?timeRange=${timeRange}`);
+      const res = await fetch('/api/analytics');
       if (res.ok) {
         setData(await res.json());
       }
@@ -39,336 +35,278 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, []);
 
   useEffect(() => {
     fetchAnalytics();
   }, [fetchAnalytics]);
 
+  // Strictly real metrics, defaulting cleanly to 0 if no events
   const metrics = data?.metrics || {
-    messagesSent: 428,
-    delivered: 419,
-    read: 382,
-    failed: 9,
-    replied: 246,
-    deliveryRate: 98,
-    readRate: 91,
-    clickRate: 73,
-    replyRate: 64,
-    conversionRate: 42,
-    workflowSuccessRate: 96,
+    connectedNumbers: 0,
+    messagesSent: 0,
+    delivered: 0,
+    read: 0,
+    replies: 0,
+    conversions: 0,
+    failedMessages: 0,
+    deliveryRate: 0,
+    readRate: 0,
+    replyRate: 0,
+    leadConversionRate: 0,
+    automationPerformance: {
+      activeAutomations: 0,
+      totalExecutions: 0,
+    },
+    broadcastPerformance: {
+      totalBroadcasts: 0,
+      totalSent: 0,
+      totalDelivered: 0,
+      deliveryRate: 0,
+    },
   };
-
-  const hourlyTrends = data?.hourlyTrends || [];
-  const campaigns = data?.campaigns || [];
 
   const handleExportCsv = () => {
     const rows = [
       ['Metric', 'Value'],
+      ['Connected Numbers', metrics.connectedNumbers],
       ['Messages Sent', metrics.messagesSent],
-      ['Messages Delivered', metrics.delivered],
-      ['Messages Read', metrics.read],
-      ['Messages Failed', metrics.failed],
-      ['Messages Replied', metrics.replied],
+      ['Delivered', metrics.delivered],
+      ['Read', metrics.read],
+      ['Replies', metrics.replies],
+      ['Conversions', metrics.conversions],
+      ['Failed Messages', metrics.failedMessages],
       ['Delivery Rate', `${metrics.deliveryRate}%`],
       ['Read Rate', `${metrics.readRate}%`],
-      ['Click Rate', `${metrics.clickRate}%`],
       ['Reply Rate', `${metrics.replyRate}%`],
-      ['Conversion Rate', `${metrics.conversionRate}%`],
-      ['Workflow Success Rate', `${metrics.workflowSuccessRate}%`],
+      ['Lead Conversion Rate', `${metrics.leadConversionRate}%`],
+      ['Active Automations', metrics.automationPerformance.activeAutomations],
+      ['Automation Executions', metrics.automationPerformance.totalExecutions],
+      ['Total Broadcasts', metrics.broadcastPerformance.totalBroadcasts],
     ];
 
     const csvContent = 'data:text/csv;charset=utf-8,' + rows.map((e) => e.join(',')).join('\n');
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `whatsapp_analytics_${timeRange}_${Date.now()}.csv`);
+    link.setAttribute('download', `whatsapp_analytics_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden font-sans">
+    <div className="min-h-screen bg-slate-50 pl-0 md:pl-60 flex flex-col font-sans transition-all">
       <Sidebar />
+      <Header
+        title="Analytics & Performance"
+        subtitle="Meaningful conversion metrics, delivery tracking, and automation performance"
+      />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:pl-60">
-        <Header
-          title="Analytics & Reports"
-          subtitle="Real-time delivery performance, open rates, customer conversion funnels & automation metrics"
-        />
-
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
-          {/* Top Control Bar */}
-          <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Time Range:</span>
-              <div className="p-0.5 bg-slate-100 rounded-xl flex items-center gap-1 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setTimeRange('today')}
-                  className={cn(
-                    'px-3 py-1 rounded-lg transition-all cursor-pointer',
-                    timeRange === 'today' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                  )}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTimeRange('7d')}
-                  className={cn(
-                    'px-3 py-1 rounded-lg transition-all cursor-pointer',
-                    timeRange === '7d' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                  )}
-                >
-                  Last 7 Days
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTimeRange('30d')}
-                  className={cn(
-                    'px-3 py-1 rounded-lg transition-all cursor-pointer',
-                    timeRange === '30d' ? 'bg-white text-slate-900 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                  )}
-                >
-                  Last 30 Days
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={fetchAnalytics}
-                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer shadow-2xs"
-                title="Refresh Analytics"
-              >
-                <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin text-emerald-600')} />
-              </button>
-
-              <button
-                type="button"
-                onClick={handleExportCsv}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors cursor-pointer shadow-xs"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Report (CSV)</span>
-              </button>
-            </div>
+      <main className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6 pb-24 md:pb-12">
+        {/* Action Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-900">Official Metrics</span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+              Verified Real-time
+            </span>
           </div>
 
-          {/* 8 Core KPIs Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Messages Sent</span>
-                <Send className="w-4 h-4 text-slate-500" />
-              </div>
-              <p className="text-2xl font-black text-slate-900 font-mono">{metrics.messagesSent.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold">
-                <ArrowUpRight className="w-3 h-3" />
-                <span>+14.2% vs previous period</span>
-              </div>
-            </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchAnalytics}
+              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 cursor-pointer"
+              title="Refresh"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              className="px-3.5 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </button>
+          </div>
+        </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Delivered</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              </div>
-              <p className="text-2xl font-black text-slate-900 font-mono">{metrics.delivered.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-semibold font-mono">
-                <span>{metrics.deliveryRate}% Delivery Rate</span>
-              </div>
-            </div>
+        {/* 1. Core Meaningful Metric Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {/* Connected Numbers */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Connected Numbers
+            </span>
+            <p className="text-2xl font-black text-slate-900 font-mono">
+              {metrics.connectedNumbers}
+            </p>
+            <span className="text-[10px] text-slate-500 block">Active WhatsApp Business Accounts</span>
+          </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Read Rate</span>
-                <Eye className="w-4 h-4 text-blue-600" />
-              </div>
-              <p className="text-2xl font-black text-slate-900 font-mono">{metrics.read.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-[10px] text-blue-700 font-semibold font-mono">
-                <span>{metrics.readRate}% Open Rate</span>
-              </div>
-            </div>
+          {/* Messages Sent */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Messages Sent
+            </span>
+            <p className="text-2xl font-black text-slate-900 font-mono">
+              {metrics.messagesSent}
+            </p>
+            <span className="text-[10px] text-slate-500 block">Outbound messages dispatched</span>
+          </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Failed / Undelivered</span>
-                <AlertTriangle className="w-4 h-4 text-rose-500" />
-              </div>
-              <p className="text-2xl font-black text-rose-600 font-mono">{metrics.failed.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-                <span>Meta Policy & Bad Numbers</span>
-              </div>
-            </div>
+          {/* Delivered */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Delivered
+            </span>
+            <p className="text-2xl font-black text-emerald-700 font-mono">
+              {metrics.delivered}
+            </p>
+            <span className="text-[10px] text-emerald-800 block">
+              {metrics.deliveryRate}% Delivery Rate
+            </span>
+          </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Customer Replies</span>
-                <MessageSquare className="w-4 h-4 text-indigo-600" />
-              </div>
-              <p className="text-2xl font-black text-slate-900 font-mono">{metrics.replied.toLocaleString()}</p>
-              <div className="flex items-center gap-1 text-[10px] text-indigo-700 font-semibold font-mono">
-                <span>{metrics.replyRate}% Reply Rate</span>
-              </div>
-            </div>
+          {/* Read */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Read
+            </span>
+            <p className="text-2xl font-black text-blue-700 font-mono">
+              {metrics.read}
+            </p>
+            <span className="text-[10px] text-blue-800 block">
+              {metrics.readRate}% Read Rate
+            </span>
+          </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Click-Through Rate</span>
-                <MousePointerClick className="w-4 h-4 text-purple-600" />
-              </div>
-              <p className="text-2xl font-black text-slate-900 font-mono">{metrics.clickRate}%</p>
-              <div className="flex items-center gap-1 text-[10px] text-purple-700 font-semibold">
-                <span>Buttons & Carousels</span>
-              </div>
-            </div>
+          {/* Replies */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Replies
+            </span>
+            <p className="text-2xl font-black text-purple-700 font-mono">
+              {metrics.replies}
+            </p>
+            <span className="text-[10px] text-purple-800 block">
+              {metrics.replyRate}% Reply Rate
+            </span>
+          </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Conversion Rate</span>
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
-              </div>
-              <p className="text-2xl font-black text-emerald-700 font-mono">{metrics.conversionRate}%</p>
-              <div className="flex items-center gap-1 text-[10px] text-emerald-800 font-semibold">
-                <span>Inquiries to Buyers</span>
-              </div>
-            </div>
+          {/* Conversions */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Conversions
+            </span>
+            <p className="text-2xl font-black text-slate-900 font-mono">
+              {metrics.conversions}
+            </p>
+            <span className="text-[10px] text-slate-500 block">Customers in Won Stage</span>
+          </div>
 
-            <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Workflow Success</span>
+          {/* Lead Conversion */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Lead Conversion
+            </span>
+            <p className="text-2xl font-black text-emerald-700 font-mono">
+              {metrics.leadConversionRate}%
+            </p>
+            <span className="text-[10px] text-slate-500 block">Pipeline conversion efficiency</span>
+          </div>
+
+          {/* Failed Messages */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Failed Messages
+            </span>
+            <p className="text-2xl font-black text-rose-700 font-mono">
+              {metrics.failedMessages}
+            </p>
+            <span className="text-[10px] text-slate-500 block">Undeliverable or invalid numbers</span>
+          </div>
+        </div>
+
+        {/* 2. Automation & Broadcast Performance Modules */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {/* Automation Performance */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-bold text-slate-900">Automation Performance</h3>
               </div>
-              <p className="text-2xl font-black text-slate-900 font-mono">{metrics.workflowSuccessRate}%</p>
-              <div className="flex items-center gap-1 text-[10px] text-slate-500">
-                <span>DAG Engine Execution</span>
-              </div>
+              <span className="text-xs font-bold text-slate-600">
+                {metrics.automationPerformance.activeAutomations} Active
+              </span>
             </div>
-          </div>
 
-          {/* Volume Distribution Chart Panel */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Message Volume & Engagement Trends</h3>
-                <p className="text-xs text-slate-500">Hourly throughput distribution across WhatsApp Cloud API</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Active Workflows
+                </span>
+                <span className="text-xl font-bold font-mono text-slate-900 mt-1 block">
+                  {metrics.automationPerformance.activeAutomations}
+                </span>
               </div>
-              <div className="flex items-center gap-3 text-xs font-semibold">
-                <span className="flex items-center gap-1 text-slate-600">
-                  <span className="w-2.5 h-2.5 rounded bg-slate-800" /> Sent
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                  Total Executions
                 </span>
-                <span className="flex items-center gap-1 text-emerald-700">
-                  <span className="w-2.5 h-2.5 rounded bg-emerald-500" /> Delivered
-                </span>
-                <span className="flex items-center gap-1 text-blue-700">
-                  <span className="w-2.5 h-2.5 rounded bg-blue-500" /> Read
+                <span className="text-xl font-bold font-mono text-slate-900 mt-1 block">
+                  {metrics.automationPerformance.totalExecutions}
                 </span>
               </div>
             </div>
 
-            {/* Visual Bar Chart */}
-            <div className="h-48 pt-6 flex items-end justify-between gap-3 border-b border-slate-100 pb-2">
-              {hourlyTrends.map((h: any) => {
-                const maxSent = 150;
-                const sentH = Math.max(10, Math.round((h.sent / maxSent) * 100));
-                const delivH = Math.max(8, Math.round((h.delivered / maxSent) * 100));
-                const readH = Math.max(6, Math.round((h.read / maxSent) * 100));
-
-                return (
-                  <div key={h.hour} className="flex-1 flex flex-col items-center gap-2 group">
-                    <div className="w-full flex items-end justify-center gap-1 h-36">
-                      <div
-                        style={{ height: `${sentH}%` }}
-                        className="w-2 sm:w-3 bg-slate-800 rounded-t transition-all group-hover:brightness-125"
-                        title={`Sent: ${h.sent}`}
-                      />
-                      <div
-                        style={{ height: `${delivH}%` }}
-                        className="w-2 sm:w-3 bg-emerald-500 rounded-t transition-all group-hover:brightness-125"
-                        title={`Delivered: ${h.delivered}`}
-                      />
-                      <div
-                        style={{ height: `${readH}%` }}
-                        className="w-2 sm:w-3 bg-blue-500 rounded-t transition-all group-hover:brightness-125"
-                        title={`Read: ${h.read}`}
-                      />
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-400 group-hover:text-slate-800">
-                      {h.hour}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Automated responses handle customer inquiries instantly 24/7 without manual intervention.
+            </p>
           </div>
 
-          {/* Broadcast Campaigns Performance Table */}
-          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">Broadcast Campaign Results</h3>
-                <p className="text-xs text-slate-500">Target audience engagement rates and conversion telemetry</p>
+          {/* Broadcast Performance */}
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Send className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-bold text-slate-900">Broadcast Performance</h3>
+              </div>
+              <span className="text-xs font-bold text-slate-600">
+                {metrics.broadcastPerformance.totalBroadcasts} Campaigns
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Sent</span>
+                <span className="text-lg font-bold font-mono text-slate-900 mt-1 block">
+                  {metrics.broadcastPerformance.totalSent}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Delivered</span>
+                <span className="text-lg font-bold font-mono text-emerald-800 mt-1 block">
+                  {metrics.broadcastPerformance.totalDelivered}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Delivery Rate</span>
+                <span className="text-lg font-bold font-mono text-slate-900 mt-1 block">
+                  {metrics.broadcastPerformance.deliveryRate}%
+                </span>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold text-[10px]">
-                    <th className="py-3 px-4">Campaign</th>
-                    <th className="py-3 px-4">Template</th>
-                    <th className="py-3 px-4">Recipients</th>
-                    <th className="py-3 px-4">Delivered</th>
-                    <th className="py-3 px-4">Read</th>
-                    <th className="py-3 px-4">Delivery %</th>
-                    <th className="py-3 px-4 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {campaigns.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
-                        No broadcast campaigns found.
-                      </td>
-                    </tr>
-                  ) : (
-                    campaigns.map((camp: any) => {
-                      const total = camp.totalRecipients || camp.total_recipients || 1;
-                      const deliv = camp.deliveredCount || camp.delivered_count || 0;
-                      const read = camp.readCount || camp.read_count || 0;
-                      const rate = Math.round((deliv / total) * 100);
-
-                      return (
-                        <tr key={camp.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3.5 px-4 font-bold text-slate-900">
-                            {camp.name || camp.campaign_name || 'VIP Campaign'}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-600">
-                            {camp.templateName || camp.template_name || 'teaser_alert'}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono">{total}</td>
-                          <td className="py-3.5 px-4 font-mono text-emerald-700 font-bold">{deliv}</td>
-                          <td className="py-3.5 px-4 font-mono text-blue-700 font-bold">{read}</td>
-                          <td className="py-3.5 px-4 font-mono font-bold">{rate}%</td>
-                          <td className="py-3.5 px-4 text-right">
-                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              Completed
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Verified transmission tracking through Meta Cloud API webhooks.
+            </p>
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
