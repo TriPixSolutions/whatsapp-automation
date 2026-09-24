@@ -13,10 +13,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
+    const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
+    const settings = SettingsDB.get(targetWorkspaceId);
     return NextResponse.json({
       ...settings,
       accessToken: maskToken(settings.accessToken),
+      appSecret: settings.appSecret ? maskToken(settings.appSecret) : undefined,
       rawTokenConfigured: Boolean(settings.accessToken && !settings.accessToken.includes('SAMPLE_TOKEN')),
     });
   } catch (err: any) {
@@ -31,8 +33,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
     const body = await request.json();
-    const current = SettingsDB.get(DEFAULT_WORKSPACE_ID);
+    const current = SettingsDB.get(targetWorkspaceId);
 
     // Guard against saving masked token bullets back into database
     let tokenToSave = body.accessToken;
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
         adAccountId: body.adAccountId !== undefined ? body.adAccountId : current.adAccountId,
         customSubdomain: body.customSubdomain !== undefined ? body.customSubdomain : current.customSubdomain,
       },
-      DEFAULT_WORKSPACE_ID
+      targetWorkspaceId
     );
 
     return NextResponse.json({
@@ -65,6 +68,7 @@ export async function POST(request: NextRequest) {
       settings: {
         ...updated,
         accessToken: maskToken(updated.accessToken),
+        appSecret: updated.appSecret ? maskToken(updated.appSecret) : undefined,
       },
     });
   } catch (err: any) {

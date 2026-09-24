@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
     const tag = searchParams.get('tag') || undefined;
     const search = searchParams.get('search') || undefined;
 
-    const contacts = ContactsDB.list({ workspaceId, tag, search });
+    const contacts = ContactsDB.list({ workspaceId: targetWorkspaceId, tag, search });
 
     // Map to frontend-friendly structure
     const mapped = contacts.map((c) => ({
@@ -64,6 +64,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Phone number is required.' }, { status: 400 });
     }
 
+    const targetWorkspaceId = user.workspaceId || workspaceId || DEFAULT_WORKSPACE_ID;
+
     const created = ContactsDB.upsert(
       {
         phoneNumber: rawPhone,
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
         tags: Array.isArray(tags) ? tags : [tags],
         optinStatus: optinStatus !== undefined ? optinStatus : optin_status !== undefined ? optin_status : true,
       },
-      workspaceId
+      targetWorkspaceId
     );
 
     return NextResponse.json(
@@ -106,12 +108,12 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
     if (!id) {
       return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 });
     }
 
-    const deleted = ContactsDB.delete(id, workspaceId);
+    const deleted = ContactsDB.delete(id, targetWorkspaceId);
     return NextResponse.json({ success: deleted });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

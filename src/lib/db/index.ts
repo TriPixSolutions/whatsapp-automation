@@ -15,6 +15,11 @@ import {
   IntegrationRecord,
   MessageStatus,
   Conversation,
+  ConversationState,
+  Company,
+  ContactNote,
+  ContactTimelineEvent,
+  MetaTemplateItem,
 } from './types';
 
 export * from './types';
@@ -58,6 +63,9 @@ interface TenantState {
   activity: ActivityLogItem[];
   deletions: Map<string, DataDeletionRecord>;
   integrations: Map<string, IntegrationRecord>;
+  companies: Map<string, Company>;
+  timeline: Map<string, ContactTimelineEvent[]>;
+  templates: Map<string, MetaTemplateItem>;
 }
 
 const memoryState: TenantState = {
@@ -90,6 +98,9 @@ const memoryState: TenantState = {
   activity: [],
   deletions: new Map(),
   integrations: new Map(),
+  companies: new Map(),
+  timeline: new Map(),
+  templates: new Map(),
 };
 
 // Seed initial default super admin into memory
@@ -102,6 +113,8 @@ const defaultSuperAdmin: UserRecord = {
   provider: 'email',
   role: 'super_admin',
   status: 'approved',
+  workspaceId: DEFAULT_WORKSPACE_ID,
+  workspace_id: DEFAULT_WORKSPACE_ID,
   company: 'TriPix Solutions',
   intendedUse: 'WhatsApp Cloud Automation & Multi-tenant SaaS',
   createdAt: new Date().toISOString(),
@@ -134,6 +147,86 @@ const defaultFlow: AutomationFlow = {
 };
 memoryState.automations.set(defaultFlow.id, defaultFlow);
 
+// Seed initial default Meta templates
+const defaultTemplates: MetaTemplateItem[] = [
+  {
+    id: 'tmpl_teaser_alert',
+    name: 'teaser_alert',
+    category: 'MARKETING',
+    language: 'en_US',
+    status: 'APPROVED',
+    body: 'Hello {{1}}! We have an exclusive VIP update regarding your inquiry. Reply to speak with our specialist.',
+    header: 'VIP Notification',
+    footer: 'Reply STOP to unsubscribe',
+    buttons: [
+      { id: 'btn_1', type: 'QUICK_REPLY', text: 'View VIP Update' },
+      { id: 'btn_2', type: 'QUICK_REPLY', text: 'Chat with Specialist' },
+    ],
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'tmpl_welcome_lead',
+    name: 'welcome_lead',
+    category: 'UTILITY',
+    language: 'en_US',
+    status: 'APPROVED',
+    body: 'Hello {{1}}! Thank you for contacting TriPix Solutions. Here is our official product catalog and pricing sheet.',
+    header: 'Welcome to TriPix',
+    footer: 'Official WhatsApp Business',
+    buttons: [
+      { id: 'btn_cat', type: 'QUICK_REPLY', text: 'Browse Catalog' },
+      { id: 'btn_price', type: 'QUICK_REPLY', text: 'Pricing Sheet' },
+    ],
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'tmpl_followup_reminder',
+    name: 'followup_reminder',
+    category: 'MARKETING',
+    language: 'en_US',
+    status: 'APPROVED',
+    body: 'Quick reminder: Your reserved 10% coupon code expires tonight. Would you like free doorstep delivery on your order?',
+    header: 'Special Offer Expiring',
+    footer: 'Valid today only',
+    buttons: [
+      { id: 'btn_claim', type: 'QUICK_REPLY', text: 'Claim 10% Off' },
+      { id: 'btn_help', type: 'QUICK_REPLY', text: 'Need Assistance' },
+    ],
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'tmpl_vip_offer',
+    name: 'vip_offer',
+    category: 'MARKETING',
+    language: 'en_US',
+    status: 'APPROVED',
+    body: 'Exclusive 15% VIP Flash Sale for our valued customers today only. Use promo code VIP15 to claim.',
+    header: 'Exclusive Flash Sale',
+    footer: 'TriPix Concierge',
+    buttons: [
+      { id: 'btn_vip', type: 'QUICK_REPLY', text: 'Apply VIP15' },
+    ],
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'tmpl_order_confirmation',
+    name: 'order_confirmation',
+    category: 'UTILITY',
+    language: 'en_US',
+    status: 'APPROVED',
+    body: 'Thank you for your order #{{1}}! Your order of {{2}} has been confirmed and is being prepared for dispatch.',
+    header: 'Order Confirmed',
+    footer: 'Track your order anytime',
+    buttons: [
+      { id: 'btn_track', type: 'URL', text: 'Track Order', url: 'https://tripixsolutions.com/orders' },
+    ],
+    updatedAt: new Date().toISOString(),
+  },
+];
+for (const tmpl of defaultTemplates) {
+  memoryState.templates.set(tmpl.name, tmpl);
+}
+
 // ==============================================================================
 // 1. WORKSPACES & SETTINGS REPOSITORY
 // ==============================================================================
@@ -151,6 +244,18 @@ export const SettingsDB = {
       verifyToken: s.verifyToken || process.env.META_WEBHOOK_VERIFY_TOKEN || 'tripix_verify_token_2026',
       appId: s.appId || process.env.META_APP_ID || '',
     };
+  },
+
+  getByWabaId(wabaId: string): WorkspaceSettings {
+    const s = memoryState.settings;
+    if (s.wabaId === wabaId) return this.get(s.id);
+    return this.get(DEFAULT_WORKSPACE_ID);
+  },
+
+  getByPhoneNumberId(phoneNumberId: string): WorkspaceSettings {
+    const s = memoryState.settings;
+    if (s.phoneNumberId === phoneNumberId) return this.get(s.id);
+    return this.get(DEFAULT_WORKSPACE_ID);
   },
 
   update(partial: Partial<WorkspaceSettings>, workspaceId: string = DEFAULT_WORKSPACE_ID): WorkspaceSettings {
@@ -266,10 +371,11 @@ export const ContactsDB = {
   },
 
   getByPhone(phone: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Contact | null {
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const cleanDigits = phone.replace(/[^0-9]/g, '');
+    if (!cleanDigits) return null;
     for (const c of memoryState.contacts.values()) {
       if ((c.workspaceId || c.workspace_id) === workspaceId) {
-        if (c.phoneNumber.replace(/[^0-9]/g, '') === cleanPhone) {
+        if (c.phoneNumber.replace(/[^0-9]/g, '') === cleanDigits) {
           return c;
         }
       }
@@ -278,9 +384,8 @@ export const ContactsDB = {
   },
 
   upsert(contactData: Partial<Contact> & { phoneNumber: string }, workspaceId: string = DEFAULT_WORKSPACE_ID): Contact {
-    const cleanPhone = contactData.phoneNumber.startsWith('+')
-      ? contactData.phoneNumber
-      : `+${contactData.phoneNumber.replace(/[^0-9]/g, '')}`;
+    const rawDigits = contactData.phoneNumber.replace(/[^0-9]/g, '');
+    const cleanPhone = `+${rawDigits}`;
 
     const existing = this.getByPhone(cleanPhone, workspaceId);
     const now = new Date().toISOString();
@@ -295,6 +400,14 @@ export const ContactsDB = {
       first_name: contactData.firstName || contactData.first_name || existing?.firstName || '',
       lastName: contactData.lastName || contactData.last_name || existing?.lastName || '',
       last_name: contactData.lastName || contactData.last_name || existing?.lastName || '',
+      email: contactData.email !== undefined ? contactData.email : existing?.email,
+      company: contactData.company !== undefined ? contactData.company : existing?.company,
+      leadSource: contactData.leadSource !== undefined ? contactData.leadSource : existing?.leadSource || 'WhatsApp Direct',
+      leadScore: contactData.leadScore !== undefined ? contactData.leadScore : existing?.leadScore ?? 50,
+      stage: contactData.stage !== undefined ? contactData.stage : existing?.stage || 'lead',
+      assignedAgent: contactData.assignedAgent !== undefined ? contactData.assignedAgent : existing?.assignedAgent || 'Unassigned',
+      notes: contactData.notes || existing?.notes || [],
+      customFields: { ...(existing?.customFields || {}), ...(contactData.customFields || {}) },
       tags: contactData.tags || existing?.tags || ['vip'],
       optinStatus: contactData.optinStatus !== undefined ? contactData.optinStatus : existing?.optinStatus ?? true,
       optin_status: contactData.optinStatus !== undefined ? contactData.optinStatus : existing?.optinStatus ?? true,
@@ -306,6 +419,15 @@ export const ContactsDB = {
     };
 
     memoryState.contacts.set(contact.id, contact);
+
+    // Record initial timeline event if new contact
+    if (!existing) {
+      this.addTimelineEvent(contact.id, {
+        type: 'stage_changed',
+        title: 'Contact Created',
+        description: `Contact added via ${contact.leadSource}`,
+      });
+    }
 
     // Async persist to Supabase
     const supabase = getAdminClient();
@@ -329,6 +451,45 @@ export const ContactsDB = {
     return contact;
   },
 
+  addNote(contactId: string, note: { authorName: string; content: string }): ContactNote | null {
+    const contact = memoryState.contacts.get(contactId);
+    if (!contact) return null;
+    const newNote: ContactNote = {
+      id: `note_${Date.now()}`,
+      contactId,
+      authorName: note.authorName || 'Agent',
+      content: note.content,
+      createdAt: new Date().toISOString(),
+    };
+    contact.notes = [newNote, ...(contact.notes || [])];
+    contact.updatedAt = new Date().toISOString();
+    this.addTimelineEvent(contactId, {
+      type: 'note_added',
+      title: 'Internal Note Added',
+      description: note.content,
+    });
+    return newNote;
+  },
+
+  addTimelineEvent(
+    contactId: string,
+    event: Omit<ContactTimelineEvent, 'id' | 'contactId' | 'timestamp'>
+  ): ContactTimelineEvent {
+    const existingEvents = memoryState.timeline.get(contactId) || [];
+    const newEvent: ContactTimelineEvent = {
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      contactId,
+      ...event,
+      timestamp: new Date().toISOString(),
+    };
+    memoryState.timeline.set(contactId, [newEvent, ...existingEvents]);
+    return newEvent;
+  },
+
+  getTimeline(contactId: string): ContactTimelineEvent[] {
+    return memoryState.timeline.get(contactId) || [];
+  },
+
   delete(id: string, workspaceId: string = DEFAULT_WORKSPACE_ID): boolean {
     const deleted = memoryState.contacts.delete(id);
     const supabase = getAdminClient();
@@ -342,6 +503,60 @@ export const ContactsDB = {
 
   count(workspaceId: string = DEFAULT_WORKSPACE_ID): number {
     return this.list({ workspaceId }).length;
+  },
+};
+
+// ==============================================================================
+// 2b. COMPANIES REPOSITORY
+// ==============================================================================
+export const CompaniesDB = {
+  list(workspaceId: string = DEFAULT_WORKSPACE_ID): Company[] {
+    return Array.from(memoryState.companies.values()).filter((c) => c.workspaceId === workspaceId);
+  },
+
+  getById(id: string): Company | null {
+    return memoryState.companies.get(id) || null;
+  },
+
+  upsert(companyData: Partial<Company> & { name: string }, workspaceId: string = DEFAULT_WORKSPACE_ID): Company {
+    const now = new Date().toISOString();
+    const existing = companyData.id ? memoryState.companies.get(companyData.id) : null;
+    const company: Company = {
+      id: existing ? existing.id : `comp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      workspaceId,
+      name: companyData.name,
+      domain: companyData.domain || existing?.domain,
+      industry: companyData.industry || existing?.industry,
+      phone: companyData.phone || existing?.phone,
+      contactCount: companyData.contactCount !== undefined ? companyData.contactCount : existing?.contactCount || 0,
+      dealValue: companyData.dealValue !== undefined ? companyData.dealValue : existing?.dealValue || 0,
+      createdAt: existing ? existing.createdAt : now,
+      updatedAt: now,
+    };
+    memoryState.companies.set(company.id, company);
+    return company;
+  },
+
+  delete(id: string): boolean {
+    return memoryState.companies.delete(id);
+  },
+};
+
+// ==============================================================================
+// 2c. TEMPLATES REPOSITORY
+// ==============================================================================
+export const TemplatesDB = {
+  list(): MetaTemplateItem[] {
+    return Array.from(memoryState.templates.values());
+  },
+
+  getByName(name: string): MetaTemplateItem | null {
+    return memoryState.templates.get(name) || null;
+  },
+
+  upsert(template: MetaTemplateItem): MetaTemplateItem {
+    memoryState.templates.set(template.name, template);
+    return template;
   },
 };
 
@@ -655,6 +870,22 @@ export const ConversationsDB = {
     }
     return false;
   },
+
+  updateState(identifier: string, state: ConversationState, workspaceId: string = DEFAULT_WORKSPACE_ID): Conversation | null {
+    const conv = this.get(identifier, workspaceId);
+    if (!conv) return null;
+    conv.state = state;
+    conv.updated_at = new Date().toISOString();
+    return conv;
+  },
+
+  assignAgent(identifier: string, agentId: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Conversation | null {
+    const conv = this.get(identifier, workspaceId);
+    if (!conv) return null;
+    conv.assigned_agent_id = agentId;
+    conv.updated_at = new Date().toISOString();
+    return conv;
+  },
 };
 
 // ==============================================================================
@@ -911,6 +1142,8 @@ export const UsersDB = {
       provider: userData.provider || 'email',
       role: userData.role || 'employee',
       status: userData.status || 'approved',
+      workspaceId: userData.workspaceId || userData.workspace_id || DEFAULT_WORKSPACE_ID,
+      workspace_id: userData.workspaceId || userData.workspace_id || DEFAULT_WORKSPACE_ID,
       company: userData.company,
       intendedUse: userData.intendedUse || userData.intended_use,
       intended_use: userData.intendedUse || userData.intended_use,

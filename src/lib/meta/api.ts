@@ -592,6 +592,194 @@ export class MetaWhatsAppClient {
     const { syncProductsToMetaCatalog } = await import('./catalog');
     return syncProductsToMetaCatalog(options);
   }
+
+  /**
+   * 12. Send Native Location Message
+   */
+  static async sendLocation(options: {
+    phoneNumberId: string;
+    accessToken: string;
+    to: string;
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  }): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, latitude, longitude, name, address } = options;
+    const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipient,
+      type: 'location',
+      location: {
+        latitude,
+        longitude,
+        name: name || 'Location',
+        address: address || '',
+      },
+    };
+
+    try {
+      const res = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        timeout: 15000,
+      });
+      const messageId = res.data?.messages?.[0]?.id || `wamid.loc_${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      return { success: false, error: parsed.message, errorCode: parsed.code };
+    }
+  }
+
+  /**
+   * 13. Send Native Contact Card Message
+   */
+  static async sendContactCard(options: {
+    phoneNumberId: string;
+    accessToken: string;
+    to: string;
+    contactName: string;
+    contactPhone: string;
+    organization?: string;
+  }): Promise<MetaApiResult> {
+    const { phoneNumberId, accessToken, to, contactName, contactPhone, organization } = options;
+    const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipient,
+      type: 'contacts',
+      contacts: [
+        {
+          name: {
+            first_name: contactName,
+            formatted_name: contactName,
+          },
+          org: organization ? { company: organization } : undefined,
+          phones: [{ phone: contactPhone, type: 'WORK' }],
+        },
+      ],
+    };
+
+    try {
+      const res = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        timeout: 15000,
+      });
+      const messageId = res.data?.messages?.[0]?.id || `wamid.cnt_${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      return { success: false, error: parsed.message, errorCode: parsed.code };
+    }
+  }
+
+  /**
+   * 14. Send Interactive WhatsApp Flow Message
+   */
+  static async sendWhatsAppFlow(options: {
+    phoneNumberId: string;
+    accessToken: string;
+    to: string;
+    flowId: string;
+    flowCta?: string;
+    headerText?: string;
+    bodyText: string;
+    footerText?: string;
+    flowToken?: string;
+    screen?: string;
+    screenData?: Record<string, any>;
+  }): Promise<MetaApiResult> {
+    const {
+      phoneNumberId,
+      accessToken,
+      to,
+      flowId,
+      flowCta = 'Start Flow',
+      headerText,
+      bodyText,
+      footerText,
+      flowToken = `flow_tok_${Date.now()}`,
+      screen = 'START',
+      screenData = {},
+    } = options;
+    const recipient = this.cleanPhone(to);
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+
+    const interactivePayload: any = {
+      type: 'flow',
+      body: { text: bodyText },
+      action: {
+        name: 'flow',
+        parameters: {
+          flow_message_version: '3',
+          flow_token: flowToken,
+          flow_id: flowId,
+          flow_cta: flowCta,
+          flow_action: 'navigate',
+          flow_action_payload: {
+            screen,
+            data: screenData,
+          },
+        },
+      },
+    };
+
+    if (headerText) {
+      interactivePayload.header = { type: 'text', text: headerText };
+    }
+    if (footerText) {
+      interactivePayload.footer = { text: footerText };
+    }
+
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: recipient,
+      type: 'interactive',
+      interactive: interactivePayload,
+    };
+
+    try {
+      const res = await axios.post(url, payload, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        timeout: 15000,
+      });
+      const messageId = res.data?.messages?.[0]?.id || `wamid.flow_${Date.now()}`;
+      return { success: true, messageId, metaMessageId: messageId, details: res.data };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      return { success: false, error: parsed.message, errorCode: parsed.code };
+    }
+  }
+
+  /**
+   * 15. Fetch Live Approved Templates from Meta WABA Account
+   */
+  static async fetchWabaTemplates(options: {
+    wabaId: string;
+    accessToken: string;
+  }): Promise<{ success: boolean; templates?: any[]; error?: string }> {
+    const { wabaId, accessToken } = options;
+    const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${wabaId}/message_templates?fields=id,name,status,category,language,components&limit=100`;
+
+    try {
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 15000,
+      });
+      return { success: true, templates: res.data?.data || [] };
+    } catch (err: any) {
+      const parsed = this.parseMetaError(err);
+      return { success: false, error: parsed.message };
+    }
+  }
 }
 
 export * from './catalog';

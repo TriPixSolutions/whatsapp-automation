@@ -5,11 +5,18 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Inbox,
+  Contact,
+  Users,
+  Zap,
   Bot,
   Send,
-  Flame,
-  Settings,
+  FileText,
   FlaskConical,
+  BarChart3,
+  Webhook,
+  Code2,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,10 +29,13 @@ export interface NavItem {
 
 export const navItems: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Automations', href: '/automations', icon: Bot },
-  { name: 'Test Center', href: '/test-center', icon: FlaskConical, badge: 'Live Lab' },
+  { name: 'Inbox', href: '/inbox', icon: Inbox, badge: 'Live' },
+  { name: 'Contacts', href: '/contacts', icon: Contact },
+  { name: 'Automations', href: '/automations', icon: Zap },
   { name: 'Broadcasts', href: '/campaigns', icon: Send },
-  { name: 'Priority Leads', href: '/leads', icon: Flame, badge: 'Intent' },
+  { name: 'Templates', href: '/templates', icon: FileText },
+  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Test Center', href: '/test-center', icon: FlaskConical, badge: 'Lab' },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -33,7 +43,7 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
 
   return (
-    <nav className="space-y-1.5 pt-2">
+    <nav className="space-y-1 pt-1 overflow-y-auto max-h-[calc(100vh-140px)] pr-0.5 custom-scrollbar">
       {navItems.map((item) => {
         const isActive =
           pathname === item.href ||

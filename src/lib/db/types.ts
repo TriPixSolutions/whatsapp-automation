@@ -43,6 +43,59 @@ export interface WorkspaceSettings {
   createdAt: string;
 }
 
+export interface ContactNote {
+  id: string;
+  contactId: string;
+  authorId?: string;
+  authorName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ContactTimelineEvent {
+  id: string;
+  contactId: string;
+  type:
+    | 'message_inbound'
+    | 'message_outbound'
+    | 'automation_triggered'
+    | 'tag_added'
+    | 'tag_removed'
+    | 'agent_assigned'
+    | 'note_added'
+    | 'stage_changed';
+  title: string;
+  description: string;
+  metadata?: Record<string, any>;
+  timestamp: string;
+}
+
+export interface Company {
+  id: string;
+  workspaceId: string;
+  name: string;
+  domain?: string;
+  industry?: string;
+  phone?: string;
+  contactCount?: number;
+  dealValue?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface MetaTemplateItem {
+  id: string;
+  name: string;
+  category: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+  language: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED';
+  body: string;
+  header?: string;
+  footer?: string;
+  buttons?: { id: string; type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url?: string; phone_number?: string }[];
+  updatedAt: string;
+}
+
 export interface Contact {
   id: string;
   workspaceId?: string;
@@ -53,6 +106,14 @@ export interface Contact {
   first_name?: string;
   lastName: string;
   last_name?: string;
+  email?: string;
+  company?: string;
+  leadSource?: string;
+  leadScore?: number;
+  stage?: 'lead' | 'contacted' | 'qualified' | 'opportunity' | 'customer' | 'lost';
+  assignedAgent?: string;
+  notes?: ContactNote[];
+  customFields?: Record<string, string | number | boolean>;
   tags: string[];
   optinStatus: boolean;
   optin_status?: boolean;
@@ -191,6 +252,8 @@ export interface UserRecord {
   provider?: 'email' | 'google';
   role: UserRole;
   status: UserStatus;
+  workspaceId?: string;
+  workspace_id?: string;
   company?: string;
   intendedUse?: string;
   intended_use?: string;

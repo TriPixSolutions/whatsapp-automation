@@ -7,6 +7,7 @@
 -- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
 -- 2. USERS TABLE
 CREATE TABLE IF NOT EXISTS public.users (
@@ -30,6 +31,8 @@ CREATE TABLE IF NOT EXISTS public.workspaces (
     subdomain TEXT UNIQUE,
     owner_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     custom_subdomain TEXT,
+    subscription_tier TEXT NOT NULL DEFAULT 'starter' CHECK (subscription_tier IN ('starter', 'growth', 'enterprise')),
+    monthly_message_quota INT NOT NULL DEFAULT 50000,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
@@ -40,6 +43,8 @@ CREATE TABLE IF NOT EXISTS public.workspace_members (
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     role TEXT NOT NULL DEFAULT 'employee' CHECK (role IN ('owner', 'admin', 'manager', 'employee')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    max_concurrent_chats INT NOT NULL DEFAULT 10,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     CONSTRAINT uq_workspace_member UNIQUE (workspace_id, user_id)
@@ -77,21 +82,43 @@ CREATE TABLE IF NOT EXISTS public.phone_numbers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 7. CONTACTS (Customer Audience)
+-- 7. CRM COMPANIES (B2B Accounts & Organizations)
+CREATE TABLE IF NOT EXISTS public.companies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    domain TEXT,
+    industry TEXT,
+    size TEXT,
+    owner_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 8. CONTACTS (Unified Customer Audience & CRM Leads)
 CREATE TABLE IF NOT EXISTS public.contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    company_id UUID REFERENCES public.companies(id) ON DELETE SET NULL,
     phone_number TEXT NOT NULL,
+    phone_normalized TEXT NOT NULL,
     first_name TEXT DEFAULT '',
     last_name TEXT DEFAULT '',
+    email TEXT,
+    company_name TEXT,
+    lead_source TEXT DEFAULT 'direct',
+    lead_score INT NOT NULL DEFAULT 50,
+    stage TEXT NOT NULL DEFAULT 'lead' CHECK (stage IN ('lead', 'contacted', 'qualified', 'opportunity', 'customer')),
+    assigned_agent_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     optin_status BOOLEAN NOT NULL DEFAULT TRUE,
+    custom_fields JSONB DEFAULT '{}'::JSONB,
     metadata JSONB DEFAULT '{}'::JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
-    CONSTRAINT uq_workspace_contact_phone UNIQUE (workspace_id, phone_number)
+    CONSTRAINT uq_workspace_contact_phone UNIQUE (workspace_id, phone_normalized)
 );
 
--- 8. CONTACT TAGS
+-- 9. CONTACT TAGS
 CREATE TABLE IF NOT EXISTS public.contact_tags (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -101,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.contact_tags (
     CONSTRAINT uq_contact_tag UNIQUE (contact_id, tag)
 );
 
--- 9. CONVERSATIONS (24-Hour Policy Window Tracking)
+-- 10. CONVERSATIONS (24-Hour Policy Window Tracking & Team Inbox)
 CREATE TABLE IF NOT EXISTS public.conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -111,14 +138,16 @@ CREATE TABLE IF NOT EXISTS public.conversations (
     last_outbound_at TIMESTAMPTZ,
     window_expires_at TIMESTAMPTZ,
     state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'closed', 'expired', 'archived')),
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('urgent', 'high', 'medium', 'low')),
     assigned_agent_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
     unread_count INT NOT NULL DEFAULT 0,
+    tags TEXT[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     CONSTRAINT uq_workspace_conversation_contact UNIQUE (workspace_id, contact_id)
 );
 
--- 10. MESSAGES (Ledger of Inbound & Outbound Communication)
+-- 11. MESSAGES (Ledger of Inbound & Outbound WhatsApp Communication)
 CREATE TABLE IF NOT EXISTS public.messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -127,17 +156,18 @@ CREATE TABLE IF NOT EXISTS public.messages (
     phone_number TEXT NOT NULL,
     meta_message_id TEXT UNIQUE,
     direction TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
-    type TEXT NOT NULL CHECK (type IN ('text', 'image', 'video', 'audio', 'document', 'template', 'button', 'list', 'carousel', 'catalog', 'interactive')),
+    type TEXT NOT NULL CHECK (type IN ('text', 'image', 'video', 'audio', 'document', 'template', 'button', 'list', 'carousel', 'catalog', 'interactive', 'location', 'contact_card', 'flow')),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
     content TEXT NOT NULL DEFAULT '',
     media_url TEXT,
     payload JSONB DEFAULT '{}'::JSONB,
+    error_code INT,
     error_message TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 11. MESSAGE STATUSES (Audit Receipts)
+-- 12. MESSAGE STATUSES (Audit Receipts)
 CREATE TABLE IF NOT EXISTS public.message_statuses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -150,7 +180,7 @@ CREATE TABLE IF NOT EXISTS public.message_statuses (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 12. TEMPLATES (Meta-Approved Templates)
+-- 13. TEMPLATES (Meta-Approved Templates)
 CREATE TABLE IF NOT EXISTS public.templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -168,7 +198,7 @@ CREATE TABLE IF NOT EXISTS public.templates (
     CONSTRAINT uq_workspace_template UNIQUE (workspace_id, name, language)
 );
 
--- 13. CAMPAIGNS (Bulk Broadcast Jobs)
+-- 14. CAMPAIGNS (Bulk Broadcast Jobs)
 CREATE TABLE IF NOT EXISTS public.campaigns (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -188,7 +218,7 @@ CREATE TABLE IF NOT EXISTS public.campaigns (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 14. CAMPAIGN CONTACTS
+-- 15. CAMPAIGN CONTACTS
 CREATE TABLE IF NOT EXISTS public.campaign_contacts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
@@ -200,31 +230,33 @@ CREATE TABLE IF NOT EXISTS public.campaign_contacts (
     CONSTRAINT uq_campaign_contact UNIQUE (campaign_id, contact_id)
 );
 
--- 15. AUTOMATIONS (Workflow Definitions)
+-- 16. AUTOMATIONS (Visual Workflow Definitions)
 CREATE TABLE IF NOT EXISTS public.automations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
-    trigger_type TEXT NOT NULL CHECK (trigger_type IN ('keyword', 'button_reply', 'list_reply', 'lead_created', 'tag_added', 'inbound_any')),
+    description TEXT,
+    trigger_type TEXT NOT NULL,
     trigger_value TEXT NOT NULL DEFAULT '',
+    graph_data JSONB DEFAULT '{}'::JSONB,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     execution_count INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 16. AUTOMATION STEPS
+-- 17. AUTOMATION STEPS / NODES
 CREATE TABLE IF NOT EXISTS public.automation_steps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     automation_id UUID NOT NULL REFERENCES public.automations(id) ON DELETE CASCADE,
     step_order INT NOT NULL,
-    step_type TEXT NOT NULL CHECK (step_type IN ('trigger', 'condition', 'wait', 'message', 'tag', 'assign', 'webhook', 'end')),
+    step_type TEXT NOT NULL,
     payload JSONB NOT NULL DEFAULT '{}'::JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     CONSTRAINT uq_automation_step_order UNIQUE (automation_id, step_order)
 );
 
--- 17. SCHEDULED JOBS (Follow-Ups & Timed Sequences)
+-- 18. SCHEDULED JOBS (Follow-Ups & Timed Sequences)
 CREATE TABLE IF NOT EXISTS public.scheduled_jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -237,18 +269,19 @@ CREATE TABLE IF NOT EXISTS public.scheduled_jobs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 18. WEBHOOK EVENTS (Deduplication & Audit Trail)
+-- 19. WEBHOOK EVENTS (Deduplication & Audit Trail)
 CREATE TABLE IF NOT EXISTS public.webhook_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE,
-    meta_event_id TEXT UNIQUE NOT NULL,
+    meta_event_id TEXT NOT NULL,
     event_type TEXT NOT NULL,
     payload JSONB NOT NULL,
     status TEXT NOT NULL DEFAULT 'processed' CHECK (status IN ('received', 'processed', 'ignored', 'failed')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT uq_workspace_webhook_event UNIQUE (workspace_id, meta_event_id)
 );
 
--- 19. LEAD SOURCES
+-- 20. LEAD SOURCES
 CREATE TABLE IF NOT EXISTS public.lead_sources (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -258,7 +291,7 @@ CREATE TABLE IF NOT EXISTS public.lead_sources (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 20. LEADS
+-- 21. LEADS
 CREATE TABLE IF NOT EXISTS public.leads (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -273,7 +306,7 @@ CREATE TABLE IF NOT EXISTS public.leads (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 21. MEDIA ASSETS
+-- 22. MEDIA ASSETS
 CREATE TABLE IF NOT EXISTS public.media_assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -287,7 +320,7 @@ CREATE TABLE IF NOT EXISTS public.media_assets (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 22. AUDIT LOGS
+-- 23. AUDIT LOGS
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -300,7 +333,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 23. DATA DELETIONS (Meta Compliance)
+-- 24. DATA DELETIONS (Meta Compliance)
 CREATE TABLE IF NOT EXISTS public.data_deletions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     confirmation_code TEXT UNIQUE NOT NULL,
@@ -312,7 +345,7 @@ CREATE TABLE IF NOT EXISTS public.data_deletions (
     completed_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now())
 );
 
--- 24. INTEGRATIONS (Store Connections)
+-- 25. INTEGRATIONS (Store Connections)
 CREATE TABLE IF NOT EXISTS public.integrations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
@@ -328,54 +361,104 @@ CREATE TABLE IF NOT EXISTS public.integrations (
     CONSTRAINT uq_workspace_platform UNIQUE (workspace_id, platform)
 );
 
+-- 26. CONTACT ACTIVITIES (Unified Activity Timeline)
+CREATE TABLE IF NOT EXISTS public.contact_activities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    contact_id UUID NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
+    actor_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    activity_type TEXT NOT NULL CHECK (activity_type IN ('message_sent', 'message_received', 'tag_added', 'tag_removed', 'stage_changed', 'agent_assigned', 'note_added', 'flow_triggered')),
+    title TEXT NOT NULL,
+    description TEXT,
+    metadata JSONB DEFAULT '{}'::JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 27. CONTACT NOTES (Internal Agent Collaboration)
+CREATE TABLE IF NOT EXISTS public.contact_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    contact_id UUID NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
+    author_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    author_name TEXT NOT NULL DEFAULT 'Support Agent',
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 28. CANNED RESPONSES (Team Inbox Quick Replies)
+CREATE TABLE IF NOT EXISTS public.canned_responses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    shortcut TEXT NOT NULL,
+    content TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT uq_workspace_canned_shortcut UNIQUE (workspace_id, shortcut)
+);
+
+-- 29. API KEYS (External Developer & Integration Access)
+CREATE TABLE IF NOT EXISTS public.api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+    key_name TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    key_prefix TEXT NOT NULL,
+    scopes TEXT[] NOT NULL DEFAULT '{messages:send,contacts:read}',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    last_used_at TIMESTAMPTZ
+);
+
 -- ==============================================================================
--- INDEXES FOR HIGH-THROUGHPUT MULTI-TENANT QUERIES
+-- COMPOSITE & TRIGRAM INDEXES FOR HIGH-THROUGHPUT QUERIES
 -- ==============================================================================
+
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_workspace_members_user ON public.workspace_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_members_ws ON public.workspace_members(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_meta_conn_ws ON public.meta_connections(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_phone_numbers_ws ON public.phone_numbers(workspace_id);
+
+-- Contacts Indexes
 CREATE INDEX IF NOT EXISTS idx_contacts_ws ON public.contacts(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_contacts_phone ON public.contacts(phone_number);
-CREATE INDEX IF NOT EXISTS idx_contact_tags_contact ON public.contact_tags(contact_id);
-CREATE INDEX IF NOT EXISTS idx_contact_tags_tag ON public.contact_tags(workspace_id, tag);
-CREATE INDEX IF NOT EXISTS idx_conversations_ws ON public.conversations(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_contact ON public.conversations(contact_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_window ON public.conversations(window_expires_at);
-CREATE INDEX IF NOT EXISTS idx_messages_ws ON public.messages(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_messages_conv ON public.messages(conversation_id);
-CREATE INDEX IF NOT EXISTS idx_messages_meta_id ON public.messages(meta_message_id);
-CREATE INDEX IF NOT EXISTS idx_messages_phone ON public.messages(phone_number);
-CREATE INDEX IF NOT EXISTS idx_messages_status ON public.messages(status);
+CREATE INDEX IF NOT EXISTS idx_contacts_normalized ON public.contacts(workspace_id, phone_normalized);
+CREATE INDEX IF NOT EXISTS idx_contacts_company ON public.contacts(company_id);
+CREATE INDEX IF NOT EXISTS idx_contacts_stage ON public.contacts(workspace_id, stage);
+CREATE INDEX IF NOT EXISTS idx_contacts_search ON public.contacts USING gin (first_name gin_trgm_ops, last_name gin_trgm_ops, phone_normalized gin_trgm_ops);
+
+-- Conversations Indexes
+CREATE INDEX IF NOT EXISTS idx_conversations_inbox ON public.conversations(workspace_id, state, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_agent ON public.conversations(workspace_id, assigned_agent_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversations_window ON public.conversations(window_expires_at) WHERE state = 'open';
+
+-- Messages Indexes
+CREATE INDEX IF NOT EXISTS idx_messages_stream ON public.messages(workspace_id, conversation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_meta_lookup ON public.messages(meta_message_id) WHERE meta_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_messages_status ON public.messages(workspace_id, status);
+
+-- Message Statuses & Webhook Events
 CREATE INDEX IF NOT EXISTS idx_message_statuses_meta_id ON public.message_statuses(meta_message_id);
-CREATE INDEX IF NOT EXISTS idx_templates_ws ON public.templates(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_campaigns_ws ON public.campaigns(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_campaigns_status ON public.campaigns(status);
-CREATE INDEX IF NOT EXISTS idx_campaign_contacts_camp ON public.campaign_contacts(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_automations_ws ON public.automations(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_automations_trigger ON public.automations(workspace_id, trigger_type, lower(trigger_value));
-CREATE INDEX IF NOT EXISTS idx_automation_steps_auto ON public.automation_steps(automation_id, step_order);
-CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_sched ON public.scheduled_jobs(status, scheduled_at);
-CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_ref ON public.scheduled_jobs(workspace_id, reference_id);
-CREATE INDEX IF NOT EXISTS idx_webhook_events_meta_id ON public.webhook_events(meta_event_id);
-CREATE INDEX IF NOT EXISTS idx_leads_ws ON public.leads(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_leads_phone ON public.leads(phone_number);
-CREATE INDEX IF NOT EXISTS idx_media_assets_ws ON public.media_assets(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_ws ON public.audit_logs(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_data_deletions_code ON public.data_deletions(confirmation_code);
-CREATE INDEX IF NOT EXISTS idx_integrations_ws ON public.integrations(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_dedup ON public.webhook_events(workspace_id, meta_event_id);
+
+-- Activities & Notes Indexes
+CREATE INDEX IF NOT EXISTS idx_activities_contact ON public.contact_activities(contact_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notes_contact ON public.contact_notes(contact_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_companies_ws ON public.companies(workspace_id);
 
 -- ==============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ==============================================================================
+
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspaces ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.meta_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.phone_numbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contact_activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contact_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_statuses ENABLE ROW LEVEL SECURITY;
@@ -386,21 +469,24 @@ ALTER TABLE public.automations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.automation_steps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.scheduled_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.webhook_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lead_sources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.canned_responses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.media_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.data_deletions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.integrations ENABLE ROW LEVEL SECURITY;
 
--- Allow service role full access to all tables (for background workers & server API handlers)
+-- Service Role Full Access (For server APIs & Background Queue Workers)
 CREATE POLICY "Service Role Full Access Users" ON public.users FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Workspaces" ON public.workspaces FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Members" ON public.workspace_members FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Meta" ON public.meta_connections FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Phones" ON public.phone_numbers FOR ALL USING (true);
+CREATE POLICY "Service Role Full Access Companies" ON public.companies FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Contacts" ON public.contacts FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Tags" ON public.contact_tags FOR ALL USING (true);
+CREATE POLICY "Service Role Full Access Activities" ON public.contact_activities FOR ALL USING (true);
+CREATE POLICY "Service Role Full Access Notes" ON public.contact_notes FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Conversations" ON public.conversations FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Messages" ON public.messages FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Statuses" ON public.message_statuses FOR ALL USING (true);
@@ -411,16 +497,19 @@ CREATE POLICY "Service Role Full Access Automations" ON public.automations FOR A
 CREATE POLICY "Service Role Full Access Steps" ON public.automation_steps FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Jobs" ON public.scheduled_jobs FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access WebhookEvents" ON public.webhook_events FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access LeadSources" ON public.lead_sources FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Leads" ON public.leads FOR ALL USING (true);
+CREATE POLICY "Service Role Full Access Canned" ON public.canned_responses FOR ALL USING (true);
+CREATE POLICY "Service Role Full Access ApiKeys" ON public.api_keys FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Media" ON public.media_assets FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Audit" ON public.audit_logs FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Deletions" ON public.data_deletions FOR ALL USING (true);
 CREATE POLICY "Service Role Full Access Integrations" ON public.integrations FOR ALL USING (true);
 
--- Authenticated Tenant Client Isolation Policies (Defense-in-depth for client queries)
+-- Authenticated Tenant Client Isolation Policies
 CREATE POLICY "Tenant User Access Workspaces" ON public.workspaces FOR SELECT USING (
   id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid()) OR owner_id = auth.uid()
+);
+CREATE POLICY "Tenant User Access Companies" ON public.companies FOR ALL USING (
+  workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
 );
 CREATE POLICY "Tenant User Access Contacts" ON public.contacts FOR ALL USING (
   workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
@@ -431,10 +520,15 @@ CREATE POLICY "Tenant User Access Messages" ON public.messages FOR ALL USING (
 CREATE POLICY "Tenant User Access Conversations" ON public.conversations FOR ALL USING (
   workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
 );
+CREATE POLICY "Tenant User Access Activities" ON public.contact_activities FOR ALL USING (
+  workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
+);
+CREATE POLICY "Tenant User Access Notes" ON public.contact_notes FOR ALL USING (
+  workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
+);
 CREATE POLICY "Tenant User Access Automations" ON public.automations FOR ALL USING (
   workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
 );
 CREATE POLICY "Tenant User Access Campaigns" ON public.campaigns FOR ALL USING (
   workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
 );
-

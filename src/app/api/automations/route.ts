@@ -15,16 +15,16 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
     const format = searchParams.get('format'); // 'nodes' or default
 
     // If requesting modern DAG workflows
-    const workflows = TestCenterStore.listWorkflows(workspaceId);
+    const workflows = TestCenterStore.listWorkflows(targetWorkspaceId);
     if (format === 'dag' || workflows.length > 0) {
       return NextResponse.json(workflows);
     }
 
-    const flows = AutomationsDB.list(workspaceId);
+    const flows = AutomationsDB.list(targetWorkspaceId);
     return NextResponse.json(flows);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -39,13 +39,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const workspaceId = body.workspaceId || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
 
     // Check if this is a Workflow 2.0 DAG definition
     if (Array.isArray(body.nodes)) {
       const newWorkflow: WorkflowDefinition = {
         id: body.id || `wf_${Date.now()}`,
-        workspaceId,
+        workspaceId: targetWorkspaceId,
         name: body.name || 'Untitled Workflow',
         description: body.description || '',
         triggerType: body.triggerType || 'keyword',
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
           actionPayload: { body: 'DAG Flow', buttons: [] } as any,
           isActive: saved.isActive,
         },
-        workspaceId
+        targetWorkspaceId
       );
 
       return NextResponse.json(saved, { status: 201 });
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         actionPayload,
         isActive: true,
       },
-      workspaceId
+      targetWorkspaceId
     );
 
     return NextResponse.json(created, { status: 201 });
@@ -123,7 +123,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, workspaceId = DEFAULT_WORKSPACE_ID, ...partial } = body;
+    const targetWorkspaceId = user.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
+    const { id, ...partial } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Flow ID is required for updates.' }, { status: 400 });
@@ -140,7 +141,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(updatedWf);
     }
 
-    const updated = AutomationsDB.update(id, partial, workspaceId);
+    const updated = AutomationsDB.update(id, partial, targetWorkspaceId);
     if (!updated) {
       return NextResponse.json({ error: 'Flow not found.' }, { status: 404 });
     }
@@ -160,14 +161,14 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
 
     if (!id) {
       return NextResponse.json({ error: 'Flow ID is required.' }, { status: 400 });
     }
 
     TestCenterStore.deleteWorkflow(id);
-    const success = AutomationsDB.delete(id, workspaceId);
+    const success = AutomationsDB.delete(id, targetWorkspaceId);
     return NextResponse.json({ success });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

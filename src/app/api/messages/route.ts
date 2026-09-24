@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
     const phoneNumber = searchParams.get('phoneNumber') || undefined;
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 100;
 
-    const messages = MessagesDB.list({ workspaceId, phoneNumber, limit });
-    const conversations = MessagesDB.getRecentConversations(workspaceId);
-    const stats = MessagesDB.getStats(workspaceId);
+    const messages = MessagesDB.list({ workspaceId: targetWorkspaceId, phoneNumber, limit });
+    const conversations = MessagesDB.getRecentConversations(targetWorkspaceId);
+    const stats = MessagesDB.getStats(targetWorkspaceId);
 
     return NextResponse.json({
       messages,

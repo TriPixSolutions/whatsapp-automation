@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Inbox,
+  Contact,
   Bot,
-  Send,
-  Flame,
-  Settings,
   FlaskConical,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,11 +17,11 @@ export function MobileBottomNav() {
   const pathname = usePathname();
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Automations', href: '/automations', icon: Bot },
-    { name: 'Test Center', href: '/test-center', icon: FlaskConical },
-    { name: 'Broadcasts', href: '/campaigns', icon: Send },
-    { name: 'Priority', href: '/leads', icon: Flame },
+    { name: 'Home', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Inbox', href: '/inbox', icon: Inbox },
+    { name: 'Contacts', href: '/contacts', icon: Contact },
+    { name: 'Automate', href: '/automations', icon: Bot },
+    { name: 'Broadcast', href: '/campaigns', icon: FlaskConical },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 

@@ -101,7 +101,11 @@ async function dispatchAutomationReply(fromPhone: string, contactId: string, mat
   AutomationsDB.incrementExecution(matchedFlow.id);
 }
 
-export async function handleWebhookInboundMessages(messages: MetaMessageObject[], contactsList?: any[]) {
+export async function handleWebhookInboundMessages(
+  messages: MetaMessageObject[],
+  contactsList?: any[],
+  workspaceId: string = DEFAULT_WORKSPACE_ID
+) {
   const profileContact = contactsList?.[0];
   const senderName = profileContact?.profile?.name || '';
   const [firstName, ...restName] = senderName.split(' ');
@@ -111,14 +115,17 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
     const { content, triggerText, interactionPayload } = parseMessageContent(message);
 
     // 1. Initial contact lookup or creation
-    let contact = ContactsDB.getByPhone(fromPhone, DEFAULT_WORKSPACE_ID);
+    let contact = ContactsDB.getByPhone(fromPhone, workspaceId);
     if (!contact) {
-      contact = ContactsDB.upsert({
-        phoneNumber: fromPhone,
-        firstName: firstName || '',
-        lastName: restName.join(' ') || '',
-        optinStatus: true,
-      });
+      contact = ContactsDB.upsert(
+        {
+          phoneNumber: fromPhone,
+          firstName: firstName || '',
+          lastName: restName.join(' ') || '',
+          optinStatus: true,
+        },
+        workspaceId
+      );
     }
 
     // 1b. Buying Intent Recognition & Automatic Priority Lead Escalation
@@ -141,11 +148,14 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
       if (isAvailableInquiry) updatedTags.add('available_inquiry');
     }
 
-    contact = ContactsDB.upsert({
-      ...contact,
-      phoneNumber: fromPhone,
-      tags: Array.from(updatedTags),
-    });
+    contact = ContactsDB.upsert(
+      {
+        ...contact,
+        phoneNumber: fromPhone,
+        tags: Array.from(updatedTags),
+      },
+      workspaceId
+    );
 
     // Update leads table status in Supabase if a record exists
     const supabase = getAdminClient();
@@ -157,33 +167,37 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
             status: isHighIntent ? 'priority' : 'engaged',
             updated_at: new Date().toISOString(),
           })
-          .eq('phone_number', fromPhone);
+          .eq('phone_number', fromPhone)
+          .eq('workspace_id', workspaceId);
       } catch {
         // non-blocking
       }
     }
 
     // 2. Persist inbound message to database
-    MessagesDB.create({
-      metaMessageId: message.id,
-      phoneNumber: fromPhone,
-      contactId: contact.id,
-      direction: 'inbound',
-      type: message.type === 'interactive' ? 'interactive' : (message.type as any) || 'text',
-      status: 'delivered',
-      content,
-      payload: { rawType: message.type, interaction: interactionPayload, timestamp: message.timestamp },
-    });
+    MessagesDB.create(
+      {
+        metaMessageId: message.id,
+        phoneNumber: fromPhone,
+        contactId: contact.id,
+        direction: 'inbound',
+        type: message.type === 'interactive' ? 'interactive' : (message.type as any) || 'text',
+        status: 'delivered',
+        content,
+        payload: { rawType: message.type, interaction: interactionPayload, timestamp: message.timestamp },
+      },
+      workspaceId
+    );
 
     // 2b. Open 24-Hour WhatsApp Policy Window & Track Conversation
-    ConversationsDB.recordInbound(fromPhone, contact.id, DEFAULT_WORKSPACE_ID);
+    ConversationsDB.recordInbound(fromPhone, contact.id, workspaceId);
 
     // 3. Customer replied: automatically cancel pending scheduled follow-ups!
     await FollowUpEngine.cancelPendingOnReply(fromPhone);
 
     // 4. Interactive Chatbot Branch Execution (Yes/No buttons or dynamic options)
     let branchHandled = false;
-    const activeFlows = AutomationsDB.list(DEFAULT_WORKSPACE_ID);
+    const activeFlows = AutomationsDB.list(workspaceId);
     for (const flow of activeFlows) {
       if (!flow.isActive) continue;
       const payload = flow.actionPayload as any;
@@ -238,14 +252,14 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
       const advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
         triggerType,
         { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
-        DEFAULT_WORKSPACE_ID
+        workspaceId
       );
 
       if (advancedMatches.length > 0) {
         for (const matchedWf of advancedMatches) {
           await AdvancedWorkflowEngine.executeWorkflow(matchedWf, {
             workflowId: matchedWf.id,
-            workspaceId: DEFAULT_WORKSPACE_ID,
+            workspaceId,
             phoneNumber: fromPhone,
             contactId: contact.id,
             triggerType,
@@ -261,7 +275,7 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
     if (advancedWorkflowHandled) continue;
 
     // 6. Automation Flow Trigger Engine (Keyword / Trigger Match)
-    const matchedFlow = AutomationsDB.findMatch(triggerText);
+    const matchedFlow = AutomationsDB.findMatch(triggerText, workspaceId);
     if (matchedFlow) {
       await dispatchAutomationReply(fromPhone, contact.id, matchedFlow);
     } else if (message.type === 'text' && triggerText) {

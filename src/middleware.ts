@@ -25,12 +25,20 @@ const PUBLIC_API_PREFIXES = [
 // Workspace page routes that require authenticated status
 const WORKSPACE_PAGES = [
   '/dashboard',
-  '/campaigns',
-  '/automations',
-  '/leads',
+  '/inbox',
   '/contacts',
+  '/crm',
+  '/automations',
+  '/chatbot',
+  '/campaigns',
+  '/templates',
+  '/test-center',
+  '/analytics',
+  '/webhook-logs',
+  '/api-logs',
   '/settings',
   '/setup',
+  '/leads',
 ];
 
 // Workspace API routes that perform Meta messaging or data mutations

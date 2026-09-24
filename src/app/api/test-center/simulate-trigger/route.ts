@@ -176,6 +176,48 @@ export async function POST(request: NextRequest) {
         };
         break;
 
+      // 8b. Simulate List Selection
+      case 'list_selection':
+        triggerType = 'button_click';
+        triggerPayload = {
+          listId: buttonId || 'opt_vip_support',
+          listTitle: buttonTitle || 'VIP Priority Support',
+          title: buttonTitle || 'VIP Priority Support',
+        };
+        MessagesDB.create({
+          phoneNumber: cleanPhone,
+          contactId: contact.id,
+          direction: 'inbound',
+          type: 'interactive',
+          status: 'delivered',
+          content: `List selected: ${buttonTitle || buttonId || 'VIP Priority Support'}`,
+          payload: triggerPayload,
+        });
+        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        break;
+
+      // 8c. Simulate WhatsApp Flow Submission
+      case 'flow_submission':
+        triggerType = 'button_click';
+        triggerPayload = {
+          flowId: 'flow_reg_9921',
+          response: {
+            screen: 'REGISTER_SCREEN',
+            data: { email: 'customer@example.com', service: 'WhatsApp Automation' },
+          },
+        };
+        MessagesDB.create({
+          phoneNumber: cleanPhone,
+          contactId: contact.id,
+          direction: 'inbound',
+          type: 'interactive',
+          status: 'delivered',
+          content: 'WhatsApp Flow submitted: Registration Form',
+          payload: triggerPayload,
+        });
+        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        break;
+
       // 9. Simulate Webhook Event
       case 'webhook_event':
         triggerType = 'webhook_trigger';

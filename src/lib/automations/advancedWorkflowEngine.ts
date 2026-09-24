@@ -311,6 +311,19 @@ export class AdvancedWorkflowEngine {
       }
     }
 
+    if (stepCount >= maxSteps && currentNode) {
+      stepsTrace.push({
+        nodeId: 'loop_guard_protection',
+        nodeType: 'end',
+        nodeTitle: 'Loop Guard Protection Triggered',
+        status: 'failed',
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        durationMs: 0,
+        error: `Workflow execution aborted: Node traversal threshold reached (${maxSteps} hops). Check workflow graph for cyclical loops.`,
+      });
+    }
+
     // 4. Finalize execution status
     const completedAt = new Date().toISOString();
     const hasFailures = stepsTrace.some((s) => s.status === 'failed');

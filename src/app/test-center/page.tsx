@@ -33,8 +33,11 @@ import {
   Info,
   Activity,
   Zap,
+  Pause,
+  Square,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PhoneMockup } from '@/components/PhoneMockup';
 import {
   WorkflowExecutionLog,
   MessageDeliveryReceipt,
@@ -50,6 +53,8 @@ import {
 export default function TestCenterPage() {
   const [activeTab, setActiveTab] = useState<
     | 'simulator'
+    | 'message_lab'
+    | 'sandbox_settings'
     | 'execution_monitor'
     | 'meta_viewer'
     | 'webhook_inspector'
@@ -68,6 +73,8 @@ export default function TestCenterPage() {
     | 'carousel_click'
     | 'cta_click'
     | 'lead_form'
+    | 'list_selection'
+    | 'flow_submission'
     | 'webhook_event'
     | 'api_trigger'
     | 'manual_trigger'
@@ -82,6 +89,31 @@ export default function TestCenterPage() {
   const [debugMode, setDebugMode] = useState(true);
   const [isExecuting, setIsExecuting] = useState(false);
   const [activeExecution, setActiveExecution] = useState<WorkflowExecutionLog | null>(null);
+
+  // Message Lab State
+  const [testMsgType, setTestMsgType] = useState<
+    'text' | 'template' | 'image' | 'video' | 'audio' | 'document' | 'button' | 'list' | 'carousel' | 'flow' | 'location' | 'contact_card'
+  >('text');
+  const [testMsgRecipient, setTestMsgRecipient] = useState('+919876543210');
+  const [testMsgText, setTestMsgText] = useState('🌟 Hello from WhatsApp Test Center! All systems functional.');
+  const [testMsgTemplate, setTestMsgTemplate] = useState('welcome_offer_2026');
+  const [testMsgMediaUrl, setTestMsgMediaUrl] = useState('https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80');
+  const [testMsgCaption, setTestMsgCaption] = useState('Exclusive product showcase for registered VIP members.');
+  const [testMsgLocationName, setTestMsgLocationName] = useState('Connaught Place');
+  const [testMsgLocationAddress, setTestMsgLocationAddress] = useState('New Delhi, India');
+  const [testMsgContactName, setTestMsgContactName] = useState('TriPix Support Specialist');
+  const [testMsgContactPhone, setTestMsgContactPhone] = useState('+18005550199');
+  const [isSendingTestMsg, setIsSendingTestMsg] = useState(false);
+  const [testMsgResult, setTestMsgResult] = useState<any>(null);
+
+  // Sandbox State
+  const [sandboxEnabled, setSandboxEnabled] = useState(false);
+  const [sandboxRecipients, setSandboxRecipients] = useState<
+    { phoneNumber: string; name: string; addedAt: string; verified: boolean }[]
+  >([]);
+  const [newRecipientPhone, setNewRecipientPhone] = useState('');
+  const [newRecipientName, setNewRecipientName] = useState('');
+  const [workflowStatusMap, setWorkflowStatusMap] = useState<Record<string, 'running' | 'paused' | 'stopped'>>({});
 
   // Data Stores
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
@@ -139,6 +171,16 @@ export default function TestCenterPage() {
         const chatData = await chatRes.json();
         setChatMessages(chatData.messages || []);
       }
+
+      // 5. Sandbox Settings
+      const sbRes = await fetch('/api/test-center/sandbox');
+      if (sbRes.ok) {
+        const sbData = await sbRes.json();
+        setSandboxEnabled(Boolean(sbData.sandboxEnabled));
+        if (Array.isArray(sbData.sandboxRecipients)) {
+          setSandboxRecipients(sbData.sandboxRecipients);
+        }
+      }
     } catch (err) {
       console.error('[Test Center] Data load failed:', err);
     } finally {
@@ -175,6 +217,11 @@ export default function TestCenterPage() {
         payload.cardButtonId = simCardButtonId;
       } else if (simulationType === 'lead_form') {
         payload.leadFormSource = simLeadSource;
+      } else if (simulationType === 'list_selection') {
+        payload.buttonId = simButtonId || 'opt_vip_support';
+        payload.buttonTitle = simButtonTitle || 'VIP Priority Support';
+      } else if (simulationType === 'flow_submission') {
+        payload.flowId = 'flow_reg_9921';
       }
 
       const res = await fetch('/api/test-center/simulate-trigger', {
@@ -217,6 +264,113 @@ export default function TestCenterPage() {
       }
     } catch (err) {
       console.error('[Production Check Error]:', err);
+    }
+  };
+
+  // Direct Message Lab Dispatch
+  const handleSendTestMessage = async () => {
+    setIsSendingTestMsg(true);
+    setTestMsgResult(null);
+    try {
+      const res = await fetch('/api/test-center/send-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: testMsgType,
+          phoneNumber: testMsgRecipient || testPhoneNumber,
+          text: testMsgText,
+          templateName: testMsgTemplate,
+          mediaUrl: testMsgMediaUrl,
+          caption: testMsgCaption,
+          location: {
+            name: testMsgLocationName,
+            address: testMsgLocationAddress,
+            latitude: 28.6139,
+            longitude: 77.2090,
+          },
+          contactCard: {
+            formattedName: testMsgContactName,
+            phoneNumber: testMsgContactPhone,
+            org: 'TriPix Global',
+          },
+        }),
+      });
+      const data = await res.json();
+      setTestMsgResult(data);
+      await loadData();
+    } catch (err: any) {
+      setTestMsgResult({ error: err.message });
+    } finally {
+      setIsSendingTestMsg(false);
+    }
+  };
+
+  // Sandbox Mode Control
+  const handleToggleSandbox = async () => {
+    const nextState = !sandboxEnabled;
+    setSandboxEnabled(nextState);
+    try {
+      await fetch('/api/test-center/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle_enabled', enabled: nextState }),
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddSandboxRecipient = async () => {
+    if (!newRecipientPhone) return;
+    try {
+      const res = await fetch('/api/test-center/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_recipient',
+          phoneNumber: newRecipientPhone,
+          name: newRecipientName || 'Sandbox Tester',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.recipients) setSandboxRecipients(data.recipients);
+        setNewRecipientPhone('');
+        setNewRecipientName('');
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRemoveSandboxRecipient = async (phone: string) => {
+    try {
+      const res = await fetch('/api/test-center/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_recipient', phoneNumber: phone }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.recipients) setSandboxRecipients(data.recipients);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleWorkflowAction = (wfId: string, action: 'run' | 'pause' | 'resume' | 'stop') => {
+    if (action === 'run') {
+      setSelectedWorkflowId(wfId);
+      handleRunSimulation();
+      setWorkflowStatusMap((prev) => ({ ...prev, [wfId]: 'running' }));
+    } else if (action === 'pause') {
+      setWorkflowStatusMap((prev) => ({ ...prev, [wfId]: 'paused' }));
+    } else if (action === 'resume') {
+      setWorkflowStatusMap((prev) => ({ ...prev, [wfId]: 'running' }));
+    } else if (action === 'stop') {
+      setWorkflowStatusMap((prev) => ({ ...prev, [wfId]: 'stopped' }));
+      setActiveExecution(null);
     }
   };
 
@@ -337,13 +491,15 @@ export default function TestCenterPage() {
         <div className="bg-slate-100/80 border-b border-slate-200 px-6 py-2 overflow-x-auto scrollbar-none flex items-center gap-1">
           {[
             { id: 'simulator', label: '1. Simulate Triggers', icon: Zap },
-            { id: 'execution_monitor', label: '2. Live Execution & Deliveries', icon: Activity },
-            { id: 'meta_viewer', label: '3. Meta Response Viewer', icon: Code2 },
-            { id: 'webhook_inspector', label: '4. Webhook Inspector', icon: Webhook },
-            { id: 'conversation_view', label: '5. Live WhatsApp Inbox', icon: Smartphone },
-            { id: 'button_lab', label: '6. Button Testing Lab', icon: MousePointerClick },
-            { id: 'carousel_lab', label: '7. Carousel Testing Lab', icon: Layers },
-            { id: 'production_checker', label: '8. Meta & Production Readiness', icon: ShieldCheck },
+            { id: 'message_lab', label: '2. Send Test Message (12 Types)', icon: Send },
+            { id: 'sandbox_settings', label: '3. Test Numbers & Sandbox', icon: Smartphone },
+            { id: 'execution_monitor', label: '4. Live Execution & Deliveries', icon: Activity },
+            { id: 'meta_viewer', label: '5. Meta Response Viewer', icon: Code2 },
+            { id: 'webhook_inspector', label: '6. Webhook Inspector', icon: Webhook },
+            { id: 'conversation_view', label: '7. Live WhatsApp Inbox', icon: Smartphone },
+            { id: 'button_lab', label: '8. Button Testing Lab', icon: MousePointerClick },
+            { id: 'carousel_lab', label: '9. Carousel Testing Lab', icon: Layers },
+            { id: 'production_checker', label: '10. Meta & Readiness', icon: ShieldCheck },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -468,6 +624,8 @@ export default function TestCenterPage() {
                         { id: 'carousel_click', label: 'Carousel Click', icon: '🎠' },
                         { id: 'cta_click', label: 'CTA URL Button', icon: '🔗' },
                         { id: 'lead_form', label: 'Meta Lead Form', icon: '📋' },
+                        { id: 'list_selection', label: 'List Selection', icon: '📑' },
+                        { id: 'flow_submission', label: 'Flow Submission', icon: '📝' },
                         { id: 'webhook_event', label: 'Webhook Event', icon: '⚡' },
                         { id: 'api_trigger', label: 'Custom API Trigger', icon: '🌐' },
                       ].map((item) => (
@@ -606,6 +764,48 @@ export default function TestCenterPage() {
                             Instagram Lead Ad
                           </label>
                         </div>
+                      </div>
+                    )}
+
+                    {simulationType === 'list_selection' && (
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">List Row ID</label>
+                          <input
+                            type="text"
+                            value={simButtonId}
+                            onChange={(e) => setSimButtonId(e.target.value)}
+                            placeholder="opt_vip_support"
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">List Row Title</label>
+                          <input
+                            type="text"
+                            value={simButtonTitle}
+                            onChange={(e) => setSimButtonTitle(e.target.value)}
+                            placeholder="VIP Priority Support"
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {simulationType === 'flow_submission' && (
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">WhatsApp Flow ID</label>
+                          <input
+                            type="text"
+                            disabled
+                            value="flow_reg_9921 (Registration & Lead Intake)"
+                            className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600 font-mono cursor-not-allowed"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Simulates native form completion with email, service choice, and customer preferences payload.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -758,10 +958,505 @@ export default function TestCenterPage() {
           )}
 
           {/* ============================================================== */}
-          {/* TAB 2: LIVE EXECUTION MONITOR & MESSAGE DELIVERY TRACKER */}
+          {/* TAB 2: DIRECT MESSAGE DISPATCH LAB (12 WHATSAPP MESSAGE TYPES) */}
+          {/* ============================================================== */}
+          {activeTab === 'message_lab' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Message Configuration Form */}
+              <div className="lg:col-span-6 space-y-5">
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <Send className="w-4 h-4 text-emerald-600" />
+                        Interactive Message Dispatcher
+                      </h2>
+                      <p className="text-[11px] text-slate-500">
+                        Dispatch and verify all 12 native WhatsApp Cloud API payload types
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Recipient Phone */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Recipient WhatsApp Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      value={testMsgRecipient}
+                      onChange={(e) => setTestMsgRecipient(e.target.value)}
+                      placeholder="+919876543210"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                  </div>
+
+                  {/* Message Type Selector */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Select WhatsApp Message Type
+                    </label>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'text', label: 'Text Message', icon: '💬' },
+                        { id: 'template', label: 'Meta Template', icon: '📄' },
+                        { id: 'image', label: 'Image', icon: '🖼️' },
+                        { id: 'video', label: 'Video', icon: '🎥' },
+                        { id: 'audio', label: 'Audio Note', icon: '🎙️' },
+                        { id: 'document', label: 'Document PDF', icon: '📑' },
+                        { id: 'button', label: 'Quick Buttons', icon: '🔘' },
+                        { id: 'list', label: 'List Picker', icon: '📋' },
+                        { id: 'carousel', label: 'Carousel', icon: '🎠' },
+                        { id: 'flow', label: 'WhatsApp Flow', icon: '📝' },
+                        { id: 'location', label: 'Location Map', icon: '📍' },
+                        { id: 'contact_card', label: 'Contact vCard', icon: '👤' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setTestMsgType(item.id as any)}
+                          className={cn(
+                            'flex flex-col items-center gap-1 p-2 rounded-xl border text-center transition-all cursor-pointer',
+                            testMsgType === item.id
+                              ? 'border-emerald-500 bg-emerald-50/70 text-emerald-900 font-bold shadow-2xs'
+                              : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                          )}
+                        >
+                          <span className="text-lg">{item.icon}</span>
+                          <span className="text-[11px] leading-tight truncate w-full">{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Dynamic Fields */}
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 space-y-3">
+                    {/* Text Field */}
+                    {['text', 'button', 'list', 'flow'].includes(testMsgType) && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Message Body Text
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={testMsgText}
+                          onChange={(e) => setTestMsgText(e.target.value)}
+                          placeholder="Type your WhatsApp message..."
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                        />
+                      </div>
+                    )}
+
+                    {/* Template Field */}
+                    {testMsgType === 'template' && (
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          Select Approved Meta Template
+                        </label>
+                        <select
+                          value={testMsgTemplate}
+                          onChange={(e) => setTestMsgTemplate(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                        >
+                          <option value="welcome_offer_2026">welcome_offer_2026 (Marketing - 20% Off)</option>
+                          <option value="teaser_alert">teaser_alert (Utility - Exclusive Update)</option>
+                          <option value="followup_reminder">followup_reminder (Marketing - Reminder)</option>
+                          <option value="vip_offer">vip_offer (Marketing - Flash Sale)</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Media Fields */}
+                    {['image', 'video', 'audio', 'document'].includes(testMsgType) && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Media Asset URL
+                          </label>
+                          <input
+                            type="text"
+                            value={testMsgMediaUrl}
+                            onChange={(e) => setTestMsgMediaUrl(e.target.value)}
+                            placeholder="https://domain.com/file.jpg"
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono"
+                          />
+                        </div>
+                        {testMsgType !== 'audio' && (
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Caption Text
+                            </label>
+                            <input
+                              type="text"
+                              value={testMsgCaption}
+                              onChange={(e) => setTestMsgCaption(e.target.value)}
+                              placeholder="Caption text..."
+                              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Location Fields */}
+                    {testMsgType === 'location' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Place Name</label>
+                          <input
+                            type="text"
+                            value={testMsgLocationName}
+                            onChange={(e) => setTestMsgLocationName(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Address</label>
+                          <input
+                            type="text"
+                            value={testMsgLocationAddress}
+                            onChange={(e) => setTestMsgLocationAddress(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Contact Card Fields */}
+                    {testMsgType === 'contact_card' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Name</label>
+                          <input
+                            type="text"
+                            value={testMsgContactName}
+                            onChange={(e) => setTestMsgContactName(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">Contact Phone</label>
+                          <input
+                            type="text"
+                            value={testMsgContactPhone}
+                            onChange={(e) => setTestMsgContactPhone(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Send Button */}
+                  <button
+                    type="button"
+                    disabled={isSendingTestMsg}
+                    onClick={handleSendTestMessage}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-[0.99] cursor-pointer disabled:opacity-60"
+                  >
+                    {isSendingTestMsg ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Transmitting to Meta Cloud API...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Send Test Message
+                      </>
+                    )}
+                  </button>
+
+                  {/* Result Telemetry Banner */}
+                  {testMsgResult && (
+                    <div
+                      className={cn(
+                        'p-4 rounded-xl border text-xs',
+                        testMsgResult.success
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : 'bg-rose-50 border-rose-200 text-rose-900'
+                      )}
+                    >
+                      <div className="flex items-center justify-between mb-1 font-bold">
+                        <span>{testMsgResult.success ? 'Message Dispatched Successfully' : 'Dispatch Failed'}</span>
+                        {testMsgResult.messageId && (
+                          <span className="font-mono text-[10px] bg-white/80 px-2 py-0.5 rounded border border-emerald-300">
+                            {testMsgResult.messageId}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        {testMsgResult.success
+                          ? `Delivered to ${testMsgResult.recipient} (${testMsgResult.type}). View in Live Inbox or Meta Viewer.`
+                          : testMsgResult.error}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Phone Mockup Live Simulator */}
+              <div className="lg:col-span-6 flex flex-col items-center justify-center">
+                <div className="text-center mb-3">
+                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    Instant WhatsApp Preview Simulator
+                  </span>
+                </div>
+                <PhoneMockup
+                  businessName="TriPix Automation Hub"
+                  messageType={
+                    testMsgType === 'flow'
+                      ? 'whatsapp_flow'
+                      : testMsgType === 'contact_card' || testMsgType === 'location'
+                      ? 'text'
+                      : (testMsgType as any)
+                  }
+                  bodyText={
+                    testMsgType === 'location'
+                      ? `📍 Location: ${testMsgLocationName}\n${testMsgLocationAddress}`
+                      : testMsgType === 'contact_card'
+                      ? `👤 Contact Card:\n${testMsgContactName}\n${testMsgContactPhone}`
+                      : testMsgText
+                  }
+                  templateName={testMsgTemplate}
+                  mediaUrl={testMsgMediaUrl}
+                  mediaType={
+                    ['image', 'video', 'audio', 'document'].includes(testMsgType)
+                      ? (testMsgType as any)
+                      : undefined
+                  }
+                  buttons={[
+                    { id: 'btn_1', title: 'Yes, Confirm' },
+                    { id: 'btn_2', title: 'Need Assistance' },
+                  ]}
+                  sections={[
+                    {
+                      title: 'Available Options',
+                      rows: [
+                        { id: 'row_1', title: 'Product Catalog', description: 'Browse our latest collection' },
+                        { id: 'row_2', title: 'Live Agent Support', description: 'Connect with a specialist' },
+                      ],
+                    },
+                  ]}
+                  cards={[
+                    {
+                      headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80',
+                      title: 'Nike Air Velocity 2026',
+                      description: 'Breathable sports cushion sneakers',
+                      buttons: [{ id: 'c1', title: 'Shop Now' }],
+                    },
+                    {
+                      headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80',
+                      title: 'Chronos Smart Watch',
+                      description: 'AMOLED display fitness tracker',
+                      buttons: [{ id: 'c2', title: 'View Specs' }],
+                    },
+                  ]}
+                  flowTitle="Registration & Lead Intake Form"
+                  flowCta="Open Registration Form"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* TAB 3: TEST NUMBERS & SANDBOX SETTINGS */}
+          {/* ============================================================== */}
+          {activeTab === 'sandbox_settings' && (
+            <div className="max-w-4xl mx-auto space-y-6">
+              {/* Sandbox Master Toggle */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-slate-900">Sandbox Isolation Mode</h2>
+                      <span
+                        className={cn(
+                          'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider',
+                          sandboxEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                        )}
+                      >
+                        {sandboxEnabled ? 'Active' : 'Disabled'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 max-w-xl">
+                      When enabled, outbound messages, chatbot replies, and automated campaigns are strictly
+                      confined to registered test phone numbers. Prevents unintended dispatches to live clients during testing.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleToggleSandbox}
+                    className={cn(
+                      'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden',
+                      sandboxEnabled ? 'bg-emerald-600' : 'bg-slate-300'
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out',
+                        sandboxEnabled ? 'translate-x-5' : 'translate-x-0'
+                      )}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Authorized Test Numbers Directory */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Authorized Test Recipients</h3>
+                    <p className="text-xs text-slate-500">
+                      Pre-verified numbers permitted to receive sandbox triggers and test broadcasts
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-slate-600">
+                    {sandboxRecipients.length} Numbers Registered
+                  </span>
+                </div>
+
+                {/* Add Number Form */}
+                <div className="flex flex-col sm:flex-row gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                  <input
+                    type="text"
+                    value={newRecipientPhone}
+                    onChange={(e) => setNewRecipientPhone(e.target.value)}
+                    placeholder="+919876543210 (Phone Number)"
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono text-slate-800"
+                  />
+                  <input
+                    type="text"
+                    value={newRecipientName}
+                    onChange={(e) => setNewRecipientName(e.target.value)}
+                    placeholder="Recipient Label (e.g. Lead QA Phone)"
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSandboxRecipient}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                  >
+                    Add Number
+                  </button>
+                </div>
+
+                {/* Numbers Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
+                        <th className="py-2.5 px-3 font-semibold">Phone Number</th>
+                        <th className="py-2.5 px-3 font-semibold">Label</th>
+                        <th className="py-2.5 px-3 font-semibold">Registered At</th>
+                        <th className="py-2.5 px-3 font-semibold">Status</th>
+                        <th className="py-2.5 px-3 font-semibold text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
+                      {sandboxRecipients.map((rec) => (
+                        <tr key={rec.phoneNumber} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 font-bold text-slate-800">{rec.phoneNumber}</td>
+                          <td className="py-3 px-3 font-sans text-slate-600">{rec.name}</td>
+                          <td className="py-3 px-3 text-slate-400">
+                            {new Date(rec.addedAt).toLocaleDateString()}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Verified SIM
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSandboxRecipient(rec.phoneNumber)}
+                              className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* TAB 4: LIVE EXECUTION MONITOR & MESSAGE DELIVERY TRACKER */}
           {/* ============================================================== */}
           {activeTab === 'execution_monitor' && (
             <div className="space-y-6">
+              {/* Workflow Execution Control Bar */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">Workflow Execution Controller</h3>
+                    <p className="text-[11px] text-slate-500">
+                      Active: {workflows.find((w) => w.id === selectedWorkflowId)?.name || 'Default Workflow'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <span
+                    className={cn(
+                      'text-xs font-bold px-2.5 py-1 rounded-full uppercase tracking-wider',
+                      (workflowStatusMap[selectedWorkflowId] || 'running') === 'running'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : (workflowStatusMap[selectedWorkflowId] || 'running') === 'paused'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-rose-100 text-rose-800'
+                    )}
+                  >
+                    {workflowStatusMap[selectedWorkflowId] || 'running'}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => handleWorkflowAction(selectedWorkflowId || workflows[0]?.id, 'run')}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    Run Workflow
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleWorkflowAction(selectedWorkflowId || workflows[0]?.id, 'pause')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <Pause className="w-3.5 h-3.5" />
+                    Pause
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleWorkflowAction(selectedWorkflowId || workflows[0]?.id, 'resume')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Resume
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleWorkflowAction(selectedWorkflowId || workflows[0]?.id, 'stop')}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                  >
+                    <Square className="w-3.5 h-3.5" />
+                    Stop
+                  </button>
+                </div>
+              </div>
+
               {/* Delivery Tracker Receipts */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">

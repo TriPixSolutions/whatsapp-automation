@@ -16,14 +16,14 @@ const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthorizedUser();
+    const user = await getAuthorizedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
-    const settings = SettingsDB.get(workspaceId);
+    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const settings = SettingsDB.get(targetWorkspaceId);
 
     const { wabaId, phoneNumberId, accessToken, verifyToken, webhookUrl, appId } = settings;
 
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const healthReport: any = {
       connectionStatus: 'disconnected',
       isLive: isConfigured,
-      workspaceId,
+      workspaceId: targetWorkspaceId,
       credentials: {
         businessId: settings.adAccountId || '',
         wabaId: wabaId || '',
@@ -132,7 +132,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthorizedUser();
+    const user = await getAuthorizedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -149,6 +149,8 @@ export async function POST(request: NextRequest) {
       catalogId,
       workspaceId = DEFAULT_WORKSPACE_ID,
     } = body;
+
+    const targetWorkspaceId = user.workspaceId || workspaceId || DEFAULT_WORKSPACE_ID;
 
     if (!phoneNumberId || !accessToken) {
       return NextResponse.json(
@@ -229,7 +231,7 @@ export async function POST(request: NextRequest) {
         adAccountId: businessId || undefined,
         catalogId: catalogId || undefined,
       },
-      workspaceId
+      targetWorkspaceId
     );
 
     // 4. Update Supabase Phone Numbers and Meta Connection tables
@@ -238,7 +240,7 @@ export async function POST(request: NextRequest) {
       try {
         await supabase.from('phone_numbers').upsert(
           {
-            workspace_id: workspaceId,
+            workspace_id: targetWorkspaceId,
             phone_number_id: cleanPhoneId,
             display_phone_number: displayPhone,
             verified_name: verifiedName,
@@ -258,7 +260,7 @@ export async function POST(request: NextRequest) {
       connectionStatus: 'connected',
       message: 'Meta WhatsApp Business connection saved and verified successfully.',
       connection: {
-        workspaceId,
+        workspaceId: targetWorkspaceId,
         wabaId: cleanWabaId,
         phoneNumberId: cleanPhoneId,
         displayPhoneNumber: displayPhone,
