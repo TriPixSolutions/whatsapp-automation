@@ -60,11 +60,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Your access request was rejected by an administrator.' }, { status: 403 });
     }
 
-    let redirectTo = '/pending';
+    let redirectTo = '/dashboard';
     if (user.status === 'approved') {
-      if (user.role === 'super_admin') {
-        redirectTo = requestedRedirect || '/admin';
-      } else if (requestedRedirect && !requestedRedirect.includes('admin') && !requestedRedirect.includes('super-admin')) {
+      if (requestedRedirect && !requestedRedirect.includes('admin') && !requestedRedirect.includes('super-admin') && !requestedRedirect.includes('pending')) {
         redirectTo = requestedRedirect;
       } else {
         redirectTo = '/dashboard';

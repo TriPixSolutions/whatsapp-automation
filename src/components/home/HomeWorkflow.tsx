@@ -38,7 +38,7 @@ const steps = [
 
 export function HomeWorkflow() {
   return (
-    <section className="py-20 bg-white border-b border-slate-200/80 overflow-hidden">
+    <section id="workflow" className="py-20 bg-white border-b border-slate-200/80 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/60">

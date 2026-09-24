@@ -1,6 +1,5 @@
 import { ContactsDB, MessagesDB, AutomationsDB, ConversationsDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import { handleWhatsAppCheckoutAction } from './webhookCheckoutHandler';
 import { handleAiInboundReply } from './webhookAiAssistant';
 import { FollowUpEngine } from '@/lib/followup/followupEngine';
 import { getAdminClient } from '@/lib/supabase/server';
@@ -182,11 +181,7 @@ export async function handleWebhookInboundMessages(messages: MetaMessageObject[]
     // 3. Customer replied: automatically cancel pending scheduled follow-ups!
     await FollowUpEngine.cancelPendingOnReply(fromPhone);
 
-    // 4. WhatsApp In-Chat Checkout Flow Interceptor
-    const handledByCheckout = await handleWhatsAppCheckoutAction(fromPhone, triggerText, contact);
-    if (handledByCheckout) continue;
-
-    // 5. Interactive Chatbot Branch Execution (Yes/No buttons or dynamic options)
+    // 4. Interactive Chatbot Branch Execution (Yes/No buttons or dynamic options)
     let branchHandled = false;
     const activeFlows = AutomationsDB.list(DEFAULT_WORKSPACE_ID);
     for (const flow of activeFlows) {

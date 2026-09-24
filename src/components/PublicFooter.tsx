@@ -12,7 +12,7 @@ export function PublicFooter() {
           <div className="md:col-span-2 space-y-3">
             <PassionFruitLogo size="sm" showSubtitle={true} />
             <p className="text-xs text-slate-500 max-w-sm leading-relaxed pt-2">
-              Next-generation WhatsApp Business &amp; E-Commerce Automation infrastructure engineered for high-growth brands.
+              Next-generation WhatsApp Lead Follow-Up &amp; Broadcast Automation infrastructure engineered for high-growth businesses.
             </p>
             <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-600 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -23,21 +23,20 @@ export function PublicFooter() {
           <div className="space-y-3">
             <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">Product</h4>
             <ul className="space-y-2">
-              <li><Link href="/solutions" className="hover:text-slate-950 transition-colors">Solutions</Link></li>
-              <li><Link href="/pricing" className="hover:text-slate-950 transition-colors">Pricing</Link></li>
-              <li><Link href="/integrations" className="hover:text-slate-950 transition-colors">Integrations</Link></li>
-              <li><Link href="/about" className="hover:text-slate-950 transition-colors">About Us</Link></li>
-              <li><Link href="/contact" className="hover:text-slate-950 transition-colors">Contact Sales</Link></li>
+              <li><Link href="/#features" className="hover:text-slate-950 transition-colors">Features</Link></li>
+              <li><Link href="/#workflow" className="hover:text-slate-950 transition-colors">How It Works</Link></li>
+              <li><Link href="/#pricing" className="hover:text-slate-950 transition-colors">Pricing</Link></li>
+              <li><Link href="/#faq" className="hover:text-slate-950 transition-colors">FAQ</Link></li>
             </ul>
           </div>
 
           <div className="space-y-3">
-            <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">Platforms</h4>
+            <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-wider">Modules</h4>
             <ul className="space-y-2">
-              <li><Link href="/integrations" className="hover:text-slate-950 transition-colors">Shopify App</Link></li>
-              <li><Link href="/integrations" className="hover:text-slate-950 transition-colors">WooCommerce Plugin</Link></li>
-              <li><Link href="/inbox" className="hover:text-slate-950 transition-colors">Multi-Agent Inbox</Link></li>
-              <li><Link href="/automations" className="hover:text-slate-950 transition-colors">Visual Flow Builder</Link></li>
+              <li><Link href="/automations" className="hover:text-slate-950 transition-colors">Lead Follow-Up Flows</Link></li>
+              <li><Link href="/campaigns" className="hover:text-slate-950 transition-colors">Broadcast Marketing</Link></li>
+              <li><Link href="/leads" className="hover:text-slate-950 transition-colors">Priority Leads</Link></li>
+              <li><Link href="/setup" className="hover:text-slate-950 transition-colors">Meta WABA Setup</Link></li>
             </ul>
           </div>
 
@@ -56,7 +55,6 @@ export function PublicFooter() {
           <div className="flex items-center gap-6">
             <Link href="/privacy-policy" className="hover:text-slate-700 transition-colors">Privacy Policy</Link>
             <Link href="/terms-of-service" className="hover:text-slate-700 transition-colors">Terms of Service</Link>
-            <Link href="/data-deletion" className="hover:text-slate-700 transition-colors">Data Deletion</Link>
           </div>
         </div>
       </div>

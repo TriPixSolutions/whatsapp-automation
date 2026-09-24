@@ -291,7 +291,8 @@ campaignWorker.on('failed', (job, err) => {
 
 // Graceful process shutdown
 const handleShutdown = async (signal) => {
-  console.log(`\n[Worker] Received ${signal}. Gracefully closing worker and redis connection...`);
+  console.log(`\n[Worker] Received ${signal}. Gracefully closing worker, intervals, and redis connection...`);
+  if (followUpIntervalTimer) clearInterval(followUpIntervalTimer);
   await campaignWorker.close();
   await redisConnection.quit();
   console.log('[Worker] Shutdown complete.');
@@ -300,3 +301,100 @@ const handleShutdown = async (signal) => {
 
 process.on('SIGINT', () => handleShutdown('SIGINT'));
 process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+
+/**
+ * ==============================================================================
+ * Scheduled Follow-Up Dispatch Engine
+ * Periodically polls Supabase for pending follow-up jobs that are due
+ * ==============================================================================
+ */
+let followUpIntervalTimer = null;
+
+async function processDueFollowUpJobs() {
+  if (!supabase) return;
+
+  try {
+    const nowIso = new Date().toISOString();
+    const { data: dueJobs, error } = await supabase
+      .from('scheduled_jobs')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('job_type', 'follow_up')
+      .lte('scheduled_at', nowIso)
+      .limit(20);
+
+    if (error) {
+      console.error('[Follow-Up Runner] Error querying due jobs:', error.message);
+      return;
+    }
+
+    if (!dueJobs || dueJobs.length === 0) {
+      return;
+    }
+
+    console.log(`[Follow-Up Runner] Found ${dueJobs.length} due follow-up jobs to dispatch.`);
+
+    for (const job of dueJobs) {
+      await supabase
+        .from('scheduled_jobs')
+        .update({ status: 'running', updated_at: new Date().toISOString() })
+        .eq('id', job.id);
+
+      const workspaceId = job.workspace_id;
+      const recipientPhone = job.reference_id;
+      const payload = job.payload || {};
+      const templateName = payload.templateName || (payload.payload && payload.payload.templateName) || 'teaser_alert';
+      const languageCode = payload.languageCode || 'en_US';
+
+      const { data: metaConn } = await supabase
+        .from('meta_connections')
+        .select('access_token_encrypted, phone_number_id')
+        .eq('workspace_id', workspaceId)
+        .maybeSingle();
+
+      const rawToken = metaConn?.access_token_encrypted || process.env.META_ACCESS_TOKEN || '';
+      const accessToken = decryptToken(rawToken);
+      const phoneNumberId = metaConn?.phone_number_id || process.env.META_PHONE_NUMBER_ID;
+
+      const result = await sendWhatsAppTemplateMessage({
+        phoneNumberId,
+        accessToken,
+        recipientPhone,
+        templateName,
+        languageCode,
+      });
+
+      if (result.success) {
+        console.log(`[Follow-Up Runner] Dispatched job ${job.id} to ${recipientPhone}`);
+        await supabase
+          .from('scheduled_jobs')
+          .update({ status: 'completed', updated_at: new Date().toISOString() })
+          .eq('id', job.id);
+
+        await supabase.from('messages').insert({
+          workspace_id: workspaceId,
+          phone_number: recipientPhone,
+          meta_message_id: result.metaMessageId,
+          direction: 'outbound',
+          type: 'template',
+          status: 'sent',
+          content: `Follow-Up: ${templateName}`,
+          payload: { template: templateName, jobId: job.id },
+        }).catch(() => {});
+      } else {
+        console.error(`[Follow-Up Runner] Failed to dispatch job ${job.id}:`, result.error);
+        await supabase
+          .from('scheduled_jobs')
+          .update({ status: 'failed', updated_at: new Date().toISOString() })
+          .eq('id', job.id);
+      }
+    }
+  } catch (err) {
+    console.error('[Follow-Up Runner] Unexpected error in polling cycle:', err.message);
+  }
+}
+
+// Start polling every 15 seconds
+followUpIntervalTimer = setInterval(processDueFollowUpJobs, 15000);
+console.log('[Worker] Scheduled follow-up dispatch runner active (15s polling interval).');
+

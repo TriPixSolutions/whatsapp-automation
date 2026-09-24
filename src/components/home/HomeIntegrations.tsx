@@ -54,10 +54,10 @@ export function HomeIntegrations() {
             </p>
           </div>
           <Link
-            href="/integrations"
+            href="/setup"
             className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 shrink-0"
           >
-            <span>View all 20+ integrations</span>
+            <span>Connect Meta WABA in 5 Mins</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </Link>
         </div>

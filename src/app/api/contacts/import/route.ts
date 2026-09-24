@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ContactsDB } from '@/lib/db';
+import { ContactsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized access.' }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { contacts } = body;
+    const { contacts, workspaceId: bodyWsId } = body;
+    const workspaceId = bodyWsId || DEFAULT_WORKSPACE_ID;
 
     if (!Array.isArray(contacts) || contacts.length === 0) {
       return NextResponse.json({ error: 'No contact records provided.' }, { status: 400 });
@@ -22,6 +29,7 @@ export async function POST(request: NextRequest) {
         : ['vip'];
 
       ContactsDB.upsert({
+        workspaceId,
         phoneNumber: rawPhone,
         firstName: c.first_name || c.firstName || '',
         lastName: c.last_name || c.lastName || '',

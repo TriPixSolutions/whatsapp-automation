@@ -1,11 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
 
-const AI_SALES_PROMPT = `You are the AI Sales & Support Assistant for an e-commerce brand on WhatsApp.
-Reply to the customer warmly, concisely (under 2 sentences), and answer their inquiry directly.
-If they are asking about products, offer to show the catalog.
-If they need help, invite them to reply with 'agent' or their order number.
-Keep tone professional and helpful. No markdown bolding over-use.`;
+const AI_SALES_PROMPT = `You are the AI Assistant for our business on WhatsApp.
+Reply to prospective and current customers warmly, concisely (under 2 sentences), and address their inquiry directly.
+Help qualify their interest, answer questions about our services, and offer to schedule a consultation or connect with a specialist.
+If they need live human assistance, invite them to reply with 'AGENT'.
+Keep tone professional, prompt, and helpful. Avoid markdown bolding over-use.`;
 
 export async function handleAiInboundReply(
   fromPhone: string,
@@ -31,12 +31,12 @@ export async function handleAiInboundReply(
 
   if (!replyText) {
     const lower = customerText.toLowerCase();
-    if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing')) {
-      replyText = "Thanks for asking! Our plans start from $49/mo. Reply 'CATALOG' to view all products or 'AGENT' to speak with our sales team.";
-    } else if (lower.includes('order') || lower.includes('track') || lower.includes('status')) {
-      replyText = "We can help look up your order! Please share your order ID or email address, or reply 'AGENT' for a live representative.";
+    if (lower.includes('price') || lower.includes('cost') || lower.includes('pricing') || lower.includes('quote')) {
+      replyText = "Thanks for asking! Our service packages are tailored to your needs. Reply 'AGENT' to connect with a specialist or share your requirements.";
+    } else if (lower.includes('demo') || lower.includes('call') || lower.includes('meeting') || lower.includes('consult')) {
+      replyText = "We'd love to set up a consultation with you! Please share your preferred date/time or reply 'AGENT' to connect immediately.";
     } else {
-      replyText = "Hello! Thanks for reaching out to us on WhatsApp. How can we help you today? Reply 'CATALOG' to view products or 'HELP' for assistance.";
+      replyText = "Hello! Thank you for reaching out. How can we assist you today? Reply 'AGENT' if you would like to speak directly with our team.";
     }
   }
 

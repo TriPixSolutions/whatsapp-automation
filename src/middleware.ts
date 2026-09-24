@@ -4,26 +4,15 @@ import type { NextRequest } from 'next/server';
 // Public routes accessible without authentication
 const PUBLIC_PAGE_PREFIXES = [
   '/',
-  '/about',
-  '/products',
-  '/solutions',
-  '/integrations',
-  '/pricing',
-  '/contact',
   '/privacy-policy',
   '/terms-of-service',
-  '/data-deletion',
   '/auth/login',
   '/auth/signup',
-  '/admin/login',
 ];
 
 // Public API endpoints that must accept unauthenticated requests (webhooks, health checks, public callbacks)
 const PUBLIC_API_PREFIXES = [
   '/api/webhook/whatsapp',
-  '/api/webhooks/meta',
-  '/api/webhooks/shopify',
-  '/api/webhooks/woocommerce',
   '/api/meta/data-deletion',
   '/api/health',
   '/api/auth/login',
@@ -33,25 +22,24 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth/request-access',
 ];
 
-// Workspace page routes that require approved status
+// Workspace page routes that require authenticated status
 const WORKSPACE_PAGES = [
   '/dashboard',
-  '/inbox',
   '/campaigns',
   '/automations',
+  '/leads',
   '/contacts',
   '/settings',
   '/setup',
-  '/analytics',
 ];
 
 // Workspace API routes that perform Meta messaging or data mutations
 const WORKSPACE_API_PREFIXES = [
   '/api/messages',
   '/api/campaigns',
-  '/api/catalog',
   '/api/automations',
   '/api/contacts',
+  '/api/leads',
   '/api/settings',
   '/api/meta/stats',
   '/api/meta/oauth',
@@ -59,8 +47,6 @@ const WORKSPACE_API_PREFIXES = [
   '/api/meta/diagnostics',
   '/api/media',
   '/api/test-flow',
-  '/api/ecommerce',
-  '/api/integrations',
 ];
 
 /**
@@ -159,12 +145,20 @@ export function middleware(request: NextRequest) {
   const role = decodedSession?.role || roleCookie?.value || 'employee';
   const status = decodedSession?.status || statusCookie?.value || (isAuthenticated && (role === 'super_admin' || role === 'owner') ? 'approved' : 'pending_approval');
 
-  // 1. Backward compatibility & Route Aliasing
-  if (pathname === '/welcome' || pathname.startsWith('/welcome/') || pathname === '/onboarding' || pathname.startsWith('/onboarding/')) {
-    return createEdgeRedirect('/pending', request);
-  }
-  if (pathname === '/super-admin' || pathname.startsWith('/super-admin/')) {
-    return createEdgeRedirect('/admin', request);
+  // 1. Backward compatibility & Route Aliasing (redirect legacy routes cleanly)
+  if (
+    pathname === '/welcome' ||
+    pathname.startsWith('/welcome/') ||
+    pathname === '/onboarding' ||
+    pathname.startsWith('/onboarding/') ||
+    pathname === '/pending' ||
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/') ||
+    pathname === '/super-admin' ||
+    pathname.startsWith('/super-admin/') ||
+    pathname === '/super-admin-control'
+  ) {
+    return createEdgeRedirect(isAuthenticated ? '/dashboard' : '/auth/login', request);
   }
 
   // 2. Allow public APIs unconditionally
@@ -174,71 +168,28 @@ export function middleware(request: NextRequest) {
 
   // 3. Allow public pages if matched exactly
   const isPublicPage = PUBLIC_PAGE_PREFIXES.some((p) => pathname === p || (p !== '/' && pathname.startsWith(`${p}/`)));
-  if (isPublicPage && !pathname.startsWith('/admin') && !pathname.startsWith('/dashboard')) {
-    // If authenticated user visits login/signup, auto-redirect to destination
+  if (isPublicPage && !pathname.startsWith('/dashboard')) {
+    // If authenticated user visits login/signup, auto-redirect to dashboard
     if ((pathname === '/auth/login' || pathname === '/auth/signup') && isAuthenticated) {
-      if (role === 'super_admin') {
-        return createEdgeRedirect('/admin', request);
-      }
-      return createEdgeRedirect(status === 'approved' ? '/dashboard' : '/pending', request);
-    }
-    return NextResponse.next();
-  }
-
-  // 4. Super Admin Route Protection (/admin, /super-admin-control and /api/super-admin/*)
-  const isSuperAdminRoute = pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/super-admin-control' || pathname.startsWith('/super-admin-control/');
-  const isSuperAdminApi = pathname.startsWith('/api/super-admin');
-
-  if (isSuperAdminRoute || isSuperAdminApi) {
-    if (!isAuthenticated) {
-      if (isSuperAdminApi) {
-        return NextResponse.json({ error: 'Unauthorized: Authentication required.' }, { status: 401 });
-      }
-      return createEdgeRedirect('/auth/login', request, '/admin');
-    }
-    if (role !== 'super_admin' && role !== 'owner') {
-      if (isSuperAdminApi) {
-        return NextResponse.json({ error: 'Forbidden: Super Admin privileges required.' }, { status: 403 });
-      }
-      return createEdgeRedirect(status === 'approved' ? '/dashboard' : '/pending', request);
-    }
-    return NextResponse.next();
-  }
-
-  // 5. Pending Approval Route (/pending)
-  if (pathname === '/pending') {
-    if (!isAuthenticated) {
-      return createEdgeRedirect('/auth/login', request);
-    }
-    if (status === 'approved') {
       return createEdgeRedirect('/dashboard', request);
     }
     return NextResponse.next();
   }
 
-  // 6. Workspace API Protection
+  // 4. Workspace API Protection
   const isWorkspaceApi = WORKSPACE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isWorkspaceApi) {
     if (!isAuthenticated) {
       return NextResponse.json({ error: 'Unauthorized: Session required.' }, { status: 401 });
     }
-    if (status !== 'approved' && role !== 'super_admin' && role !== 'owner') {
-      return NextResponse.json(
-        { error: 'Forbidden: Workspace access requires account approval.' },
-        { status: 403 }
-      );
-    }
     return NextResponse.next();
   }
 
-  // 7. Workspace UI Pages Protection (/dashboard, /inbox, /campaigns, etc.)
+  // 5. Workspace UI Pages Protection (/dashboard, /campaigns, /automations, /leads, etc.)
   const isWorkspacePage = WORKSPACE_PAGES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   if (isWorkspacePage) {
     if (!isAuthenticated) {
       return createEdgeRedirect('/auth/login', request, pathname);
-    }
-    if (status !== 'approved' && role !== 'super_admin' && role !== 'owner') {
-      return createEdgeRedirect('/pending', request);
     }
     return NextResponse.next();
   }

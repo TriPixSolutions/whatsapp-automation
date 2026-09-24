@@ -8,11 +8,10 @@ import PassionFruitLogo from './PassionFruitLogo';
 import { cn } from '@/lib/utils';
 
 const navLinks = [
-  { name: 'Solutions', href: '/solutions' },
-  { name: 'Pricing', href: '/pricing' },
-  { name: 'Integrations', href: '/integrations' },
-  { name: 'About', href: '/about' },
-  { name: 'Contact', href: '/contact' },
+  { name: 'Features', href: '/#features' },
+  { name: 'How It Works', href: '/#workflow' },
+  { name: 'Pricing', href: '/#pricing' },
+  { name: 'FAQ', href: '/#faq' },
 ];
 
 export function PublicNav() {

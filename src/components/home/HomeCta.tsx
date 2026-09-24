@@ -33,10 +33,10 @@ export function HomeCta() {
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              href="/contact"
+              href="/#pricing"
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
             >
-              <span>Speak with an Specialist</span>
+              <span>View Plans &amp; Pricing</span>
             </Link>
           </div>
 

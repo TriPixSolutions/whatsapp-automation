@@ -40,11 +40,11 @@ export function HomeHero() {
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
-            href="/contact"
+            href="/#pricing"
             className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 font-bold text-sm shadow-2xs flex items-center justify-center gap-2 transition-colors"
           >
             <Play className="w-3.5 h-3.5 text-slate-500" />
-            <span>Book Live Demo</span>
+            <span>Explore Plans &amp; Demo</span>
           </Link>
         </div>
 
