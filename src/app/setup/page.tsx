@@ -22,17 +22,19 @@ import {
 import { cn } from '@/lib/utils';
 
 export default function SetupGuidePage() {
-  // Connection state
+  // Connection state - default to disconnected until verified by backend probe
   const [connectionStatus, setConnectionStatus] = useState<
     'connected' | 'disconnected' | 'needs_attention'
-  >('connected');
+  >('disconnected');
 
-  const [businessName, setBusinessName] = useState('My WhatsApp Business');
-  const [phoneNumber, setPhoneNumber] = useState('+1 (555) 019-2834');
+  const [businessName, setBusinessName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneId, setPhoneId] = useState('');
   const [wabaId, setWabaId] = useState('');
   const [accessToken, setAccessToken] = useState('');
-  const [verifyToken, setVerifyToken] = useState('passion_fruit_verify_token_2025');
+  const [verifyToken, setVerifyToken] = useState('');
+  const [appId, setAppId] = useState('');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Test message state
   const [testPhoneNumber, setTestPhoneNumber] = useState('');
@@ -44,26 +46,43 @@ export default function SetupGuidePage() {
   const [isSavingAdvanced, setIsSavingAdvanced] = useState(false);
   const [advancedSaved, setAdvancedSaved] = useState(false);
 
-  // Load existing configuration
-  useEffect(() => {
-    fetch('/api/settings')
-      .then((res) => res.json())
+  // Load existing configuration from REAL backend connection probe
+  const refreshConnection = () => {
+    fetch('/api/meta/connection')
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data.phoneNumberId) setPhoneId(data.phoneNumberId);
-        if (data.wabaId) setWabaId(data.wabaId);
-        if (data.accessToken) setAccessToken(data.accessToken);
-        if (data.verifyToken) setVerifyToken(data.verifyToken);
+        if (!data) {
+          setConnectionStatus('disconnected');
+          return;
+        }
 
-        if (data.phoneNumberId && data.accessToken) {
+        if (data.credentials?.phoneNumberId) setPhoneId(data.credentials.phoneNumberId);
+        if (data.credentials?.wabaId) setWabaId(data.credentials.wabaId);
+        if (data.credentials?.appId) setAppId(data.credentials.appId);
+
+        if (data.connectionStatus === 'connected') {
           setConnectionStatus('connected');
+          setPhoneNumber(data.phoneNumberHealth?.displayPhoneNumber || data.credentials?.phoneNumberId || '');
+          setBusinessName(data.phoneNumberHealth?.verifiedName || 'WhatsApp Business');
+          setConnectionError(null);
+        } else if (data.connectionStatus === 'error') {
+          setConnectionStatus('needs_attention');
+          setConnectionError(data.tokenHealth?.error || 'Connection failed Meta API verification');
         } else {
           setConnectionStatus('disconnected');
+          setPhoneNumber('');
+          setBusinessName('');
+          setConnectionError(null);
         }
       })
       .catch((err) => {
-        console.warn('Could not load settings:', err);
-        setConnectionStatus('needs_attention');
+        console.warn('Could not probe connection:', err);
+        setConnectionStatus('disconnected');
       });
+  };
+
+  useEffect(() => {
+    refreshConnection();
   }, []);
 
   // Send 1-Click Test WhatsApp Message
@@ -109,11 +128,14 @@ export default function SetupGuidePage() {
     }
   };
 
-  // Save manual advanced credentials if used
+  // Save manual advanced credentials and immediately test live against Meta Graph API
   const handleSaveAdvanced = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingAdvanced(true);
+    setConnectionError(null);
+
     try {
+      // 1. Save settings to DB
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -124,11 +146,32 @@ export default function SetupGuidePage() {
           verifyToken: verifyToken.trim(),
         }),
       });
-      setAdvancedSaved(true);
-      setConnectionStatus('connected');
-      setTimeout(() => setAdvancedSaved(false), 3000);
-    } catch (err) {
-      console.error(err);
+
+      // 2. Test live against Meta Graph API
+      const testRes = await fetch('/api/meta/connection/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumberId: phoneId.trim(),
+          wabaId: wabaId.trim(),
+          accessToken: accessToken.trim(),
+        }),
+      });
+
+      const testData = await testRes.json();
+      if (testRes.ok && testData.success && testData.verified) {
+        setAdvancedSaved(true);
+        setConnectionStatus('connected');
+        setPhoneNumber(testData.displayPhoneNumber || phoneId);
+        setBusinessName(testData.verifiedName || 'WhatsApp Business');
+        setTimeout(() => setAdvancedSaved(false), 3000);
+      } else {
+        setConnectionStatus('needs_attention');
+        setConnectionError(testData.error || 'Meta credentials could not be verified.');
+      }
+    } catch (err: any) {
+      setConnectionStatus('needs_attention');
+      setConnectionError(err.message || 'Error communicating with server.');
     } finally {
       setIsSavingAdvanced(false);
     }
@@ -180,22 +223,36 @@ export default function SetupGuidePage() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  {connectionStatus === 'connected'
-                    ? 'Your official Meta WhatsApp account is active. Automations and broadcasts are live.'
-                    : 'Connect your Meta WhatsApp Business number to start sending messages.'}
+                  {connectionStatus === 'connected' &&
+                    'Your official Meta WhatsApp account is active. Automations and broadcasts are live.'}
+                  {connectionStatus === 'needs_attention' &&
+                    (connectionError || 'Connection issue detected with Meta. Please check credentials.')}
+                  {connectionStatus === 'disconnected' &&
+                    'Connect your Meta WhatsApp Business number to start sending messages.'}
                 </p>
               </div>
             </div>
 
             {/* Quick Meta Connect Button */}
             <div className="flex items-center gap-3 w-full sm:w-auto">
-              <Link
-                href="/api/auth/google" // Meta Embedded Signup OAuth link
-                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
-              >
-                <Zap className="w-4 h-4" />
-                <span>{connectionStatus === 'connected' ? 'Reconnect with Meta' : 'Connect WhatsApp with Meta'}</span>
-              </Link>
+              {appId ? (
+                <a
+                  href={`https://www.facebook.com/v18.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin + '/api/meta/oauth/exchange' : '')}&scope=whatsapp_business_management,whatsapp_business_messaging`}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>{connectionStatus === 'connected' ? 'Reconnect with Meta' : 'Connect WhatsApp with Meta'}</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(true)}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>{connectionStatus === 'connected' ? 'Update Credentials' : 'Configure WhatsApp Keys'}</span>
+                </button>
+              )}
             </div>
           </div>
 

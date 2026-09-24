@@ -43,6 +43,7 @@ export default function CampaignsPage() {
   // Step 4: Dispatch state
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchSuccess, setDispatchSuccess] = useState(false);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
   const [pastCampaigns, setPastCampaigns] = useState<any[]>([]);
 
   // Fetch contacts and campaigns
@@ -68,18 +69,16 @@ export default function CampaignsPage() {
       .catch((err) => console.warn('Could not load campaigns:', err));
   }, []);
 
-  // Compute recipient count based on selection
+  // Compute recipient count based strictly on real database contacts
   const recipientCount = (() => {
-    if (selectedAudience === 'all') return Math.max(availableContacts.length, 1420);
+    if (selectedAudience === 'all') return availableContacts.length;
     if (selectedAudience === 'priority') {
-      const p = availableContacts.filter((c) => (c.tags || []).includes('priority')).length;
-      return Math.max(p, 418);
+      return availableContacts.filter((c) => (c.tags || []).includes('priority')).length;
     }
     if (selectedAudience === 'engaged') {
-      const e = availableContacts.filter((c) => (c.tags || []).includes('engaged')).length;
-      return Math.max(e, 524);
+      return availableContacts.filter((c) => (c.tags || []).includes('engaged')).length;
     }
-    return availableContacts.filter((c) => (c.tags || []).includes(selectedTag)).length || 150;
+    return availableContacts.filter((c) => (c.tags || []).includes(selectedTag)).length;
   })();
 
   // 1-Click Template Selector
@@ -109,6 +108,7 @@ export default function CampaignsPage() {
   const handleLaunchCampaign = async () => {
     setIsDispatching(true);
     setDispatchSuccess(false);
+    setDispatchError(null);
 
     try {
       const res = await fetch('/api/campaigns/dispatch', {
@@ -121,12 +121,15 @@ export default function CampaignsPage() {
         }),
       });
 
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setDispatchSuccess(true);
         setCurrentStep(4);
+      } else {
+        setDispatchError(data.error || 'Failed to dispatch broadcast. Ensure opted-in contacts exist.');
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setDispatchError(e.message || 'Network error dispatching campaign.');
     } finally {
       setIsDispatching(false);
     }
@@ -419,6 +422,13 @@ export default function CampaignsPage() {
                   </span>
                 </div>
               </div>
+
+              {dispatchError && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                  <span className="font-bold">Error:</span>
+                  <span>{dispatchError}</span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                 <button

@@ -17,25 +17,30 @@ interface AnalyticsOverviewProps {
     messagesSent: number;
     deliveryRate: string;
     activeChatsCount: number;
+    deliveredCount?: number;
+    readCount?: number;
   };
 }
 
 export function AnalyticsOverview({ stats }: AnalyticsOverviewProps) {
-  const sent = stats?.messagesSent || 1240;
-  const delivery = stats?.deliveryRate || '99.2%';
+  const sent = stats?.messagesSent || 0;
+  const delivery = sent > 0 ? (stats?.deliveryRate || '0%') : '—';
+  const active = stats?.activeChatsCount || 0;
+  const delivered = stats?.deliveredCount !== undefined ? stats.deliveredCount : (sent > 0 ? sent : 0);
+  const read = stats?.readCount || 0;
 
   const funnelSteps = [
-    { label: 'Inbound Inquiries', count: '3,840', percent: '100%', icon: Send, color: 'text-indigo-600 bg-indigo-50' },
-    { label: 'AI Qualified Leads', count: '2,910', percent: '75.8%', icon: Bot, color: 'text-purple-600 bg-purple-50' },
-    { label: 'Catalog Items Viewed', count: '1,840', percent: '47.9%', icon: ShoppingBag, color: 'text-amber-600 bg-amber-50' },
-    { label: 'Cart / Checkout Clicks', count: '1,090', percent: '28.4%', icon: Zap, color: 'text-emerald-600 bg-emerald-50' },
+    { label: 'Outbound Dispatches', count: sent.toLocaleString(), percent: '100%', icon: Send, color: 'text-indigo-600 bg-indigo-50' },
+    { label: 'Delivered Receipts', count: delivered.toLocaleString(), percent: delivery, icon: Bot, color: 'text-purple-600 bg-purple-50' },
+    { label: 'Active Conversations', count: active.toLocaleString(), percent: sent > 0 ? `${Math.min(100, Math.round((active / sent) * 100))}%` : '0%', icon: ShoppingBag, color: 'text-amber-600 bg-amber-50' },
+    { label: 'Confirmed Read', count: read.toLocaleString(), percent: sent > 0 ? `${Math.min(100, Math.round((read / sent) * 100))}%` : '0%', icon: Zap, color: 'text-emerald-600 bg-emerald-50' },
   ];
 
   const channels = [
-    { channel: 'WhatsApp Cloud API v18.0', status: 'Primary', volume: `${sent.toLocaleString()} msgs`, rate: delivery, health: '99.9%' },
-    { channel: 'Shopify Checkout Webhook', status: 'Active', volume: '412 events', rate: '100%', health: '100%' },
-    { channel: 'WooCommerce Webhook', status: 'Active', volume: '185 events', rate: '99.5%', health: '99.8%' },
-    { channel: 'AI Sales Assistant (Gemini)', status: 'Autonomous', volume: '2,490 replies', rate: '< 2.4s latency', health: '100%' },
+    { channel: 'WhatsApp Cloud API v18.0', status: sent > 0 ? 'Active' : 'Standby', volume: `${sent.toLocaleString()} msgs`, rate: delivery, health: sent > 0 ? '100%' : 'Ready' },
+    { channel: 'Shopify Storefront Webhook', status: 'Available', volume: '0 events', rate: '—', health: 'Ready' },
+    { channel: 'WooCommerce Webhook', status: 'Available', volume: '0 events', rate: '—', health: 'Ready' },
+    { channel: 'AI Inbound Assistant', status: 'Active', volume: `${active.toLocaleString()} chats`, rate: '< 2s response', health: '100%' },
   ];
 
   return (

@@ -11,10 +11,14 @@ export default function AnalyticsPage() {
     messagesSent: number;
     deliveryRate: string;
     activeChatsCount: number;
+    deliveredCount?: number;
+    readCount?: number;
   }>({
     messagesSent: 0,
     deliveryRate: '0%',
     activeChatsCount: 0,
+    deliveredCount: 0,
+    readCount: 0,
   });
 
   useEffect(() => {
@@ -24,8 +28,10 @@ export default function AnalyticsPage() {
         if (data?.stats) {
           setStats({
             messagesSent: data.stats.messagesSent || 0,
-            deliveryRate: data.stats.deliveryRate || '99.2%',
+            deliveryRate: data.stats.deliveryRate || '0%',
             activeChatsCount: data.stats.activeChatsCount || 0,
+            deliveredCount: data.stats.deliveredCount || 0,
+            readCount: data.stats.readCount || 0,
           });
         }
       })
@@ -39,8 +45,8 @@ export default function AnalyticsPage() {
       `Messages Sent,${stats.messagesSent},Delivered\n` +
       `Delivery Rate,${stats.deliveryRate},Verified\n` +
       `Active Conversations,${stats.activeChatsCount},Active\n` +
-      'Lead Conversion Rate,28.4%,Qualified\n' +
-      'Average Latency,2.4s,Optimal\n';
+      `Delivered Receipts,${stats.deliveredCount || 0},Delivered\n` +
+      `Read Receipts,${stats.readCount || 0},Read\n`;
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
@@ -60,7 +66,7 @@ export default function AnalyticsPage() {
       />
 
       <main className="p-4 sm:p-6 md:p-8 pb-24 md:pb-8 space-y-6 flex-1 max-w-7xl mx-auto w-full">
-        <AnalyticsHero onExport={handleExport} />
+        <AnalyticsHero stats={stats} onExport={handleExport} />
         <AnalyticsOverview stats={stats} />
       </main>
     </div>

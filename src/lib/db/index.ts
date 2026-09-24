@@ -481,13 +481,16 @@ export const MessagesDB = {
   },
 
   getStats(workspaceId: string = DEFAULT_WORKSPACE_ID) {
-    const total = memoryState.messages.length;
-    const delivered = memoryState.messages.filter((m) => ['delivered', 'read'].includes(m.status)).length;
-    const read = memoryState.messages.filter((m) => m.status === 'read').length;
-    const failed = memoryState.messages.filter((m) => m.status === 'failed').length;
-    const activeChatsCount = new Set(memoryState.messages.map((m) => m.phoneNumber)).size;
+    const wsMessages = memoryState.messages.filter(
+      (m) => !m.workspaceId || m.workspaceId === workspaceId
+    );
+    const total = wsMessages.length;
+    const delivered = wsMessages.filter((m) => ['delivered', 'read'].includes(m.status)).length;
+    const read = wsMessages.filter((m) => m.status === 'read').length;
+    const failed = wsMessages.filter((m) => m.status === 'failed').length;
+    const activeChatsCount = new Set(wsMessages.map((m) => m.phoneNumber)).size;
 
-    const rate = total > 0 ? `${Math.round((delivered / total) * 100)}%` : '98.4%';
+    const rate = total > 0 ? `${Math.round((delivered / total) * 100)}%` : '0%';
 
     return {
       messagesSent: total,

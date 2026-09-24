@@ -29,7 +29,7 @@ export default function DashboardPage() {
     try {
       const [msgRes, setRes, storeRes, contactRes] = await Promise.all([
         fetch('/api/messages'),
-        fetch('/api/settings'),
+        fetch('/api/meta/connection'),
         fetch('/api/ecommerce/settings').catch(() => null),
         fetch('/api/contacts').catch(() => null),
       ]);
@@ -60,14 +60,8 @@ export default function DashboardPage() {
       }
 
       if (setRes?.ok) {
-        const settings = await setRes.json();
-        if (
-          settings.phoneNumberId &&
-          settings.accessToken &&
-          !settings.accessToken.includes('SAMPLE_TOKEN')
-        ) {
-          setMetaConfigured(true);
-        }
+        const conn = await setRes.json();
+        setMetaConfigured(conn.connectionStatus === 'connected');
       }
 
       if (storeRes?.ok) {

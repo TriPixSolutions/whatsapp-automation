@@ -31,27 +31,28 @@ export async function GET(request: NextRequest) {
       phoneNumberId &&
       accessToken &&
       !accessToken.includes('SAMPLE_TOKEN') &&
-      !accessToken.startsWith('MOCK_')
+      !accessToken.startsWith('MOCK_') &&
+      !accessToken.startsWith('TEST_')
     );
 
-    // Initial Health Payload
+    // Initial Health Payload - Status must come from actual backend verification
     const healthReport: any = {
-      connectionStatus: isConfigured ? 'connected' : 'disconnected',
+      connectionStatus: 'disconnected',
       isLive: isConfigured,
       workspaceId,
       credentials: {
-        businessId: settings.adAccountId || 'default_business',
+        businessId: settings.adAccountId || '',
         wabaId: wabaId || '',
         phoneNumberId: phoneNumberId || '',
         appId: appId || '',
         accessTokenMasked: accessToken
-          ? `${accessToken.substring(0, 7)}...${accessToken.substring(accessToken.length - 4)}`
+          ? `${accessToken.substring(0, Math.min(7, accessToken.length))}...${accessToken.substring(Math.max(0, accessToken.length - 4))}`
           : 'None',
         webhookUrl: webhookUrl || `${process.env.NEXT_PUBLIC_APP_URL || ''}/api/webhook/whatsapp`,
       },
       tokenHealth: {
-        status: isConfigured ? 'valid' : 'unconfigured',
-        error: isConfigured ? null : 'Access token is missing or sample placeholder',
+        status: isConfigured ? 'pending_verification' : 'unconfigured',
+        error: isConfigured ? null : 'Access token is missing, mock, or placeholder',
       },
       webhookHealth: {
         status: verifyToken ? 'healthy' : 'pending_configuration',
@@ -59,9 +60,9 @@ export async function GET(request: NextRequest) {
         webhookUrl: webhookUrl || '/api/webhook/whatsapp',
       },
       phoneNumberHealth: {
-        status: isConfigured ? 'active' : 'unconfigured',
-        displayPhoneNumber: isConfigured ? '+1 (Verified)' : 'None',
-        qualityRating: 'GREEN',
+        status: isConfigured ? 'pending_verification' : 'unconfigured',
+        displayPhoneNumber: phoneNumberId || 'None',
+        qualityRating: 'UNKNOWN',
         verifiedName: 'WhatsApp Business',
       },
       wabaHealth: {
@@ -83,6 +84,7 @@ export async function GET(request: NextRequest) {
         });
 
         const pData = phoneRes.data;
+        healthReport.connectionStatus = 'connected';
         healthReport.phoneNumberHealth = {
           status: 'verified',
           displayPhoneNumber: pData.display_phone_number || phoneNumberId,
@@ -105,6 +107,14 @@ export async function GET(request: NextRequest) {
         };
         healthReport.phoneNumberHealth.status = 'error';
       }
+    } else if (accessToken && accessToken.startsWith('TEST_')) {
+      healthReport.connectionStatus = 'sandbox';
+      healthReport.tokenHealth = {
+        status: 'sandbox',
+        error: 'Test token detected. Connect live Meta credentials.',
+      };
+    } else {
+      healthReport.connectionStatus = 'disconnected';
     }
 
     return NextResponse.json(healthReport);

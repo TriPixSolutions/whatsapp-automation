@@ -11,14 +11,27 @@ import {
   Download,
   Calendar,
   CheckCircle2,
+  Send,
 } from 'lucide-react';
 
 interface AnalyticsHeroProps {
   dateRange?: string;
+  stats?: {
+    messagesSent: number;
+    deliveryRate: string;
+    activeChatsCount: number;
+    deliveredCount?: number;
+    readCount?: number;
+  };
   onExport?: () => void;
 }
 
-export function AnalyticsHero({ dateRange = 'Last 30 Days', onExport }: AnalyticsHeroProps) {
+export function AnalyticsHero({ dateRange = 'Last 30 Days', stats, onExport }: AnalyticsHeroProps) {
+  const sent = stats?.messagesSent || 0;
+  const delivery = sent > 0 ? stats?.deliveryRate || '0%' : '0%';
+  const active = stats?.activeChatsCount || 0;
+  const readPct = sent > 0 ? `${Math.min(100, Math.round(((stats?.readCount || 0) / sent) * 100))}%` : '0%';
+
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-[#0B0F19] to-indigo-950 text-white p-6 md:p-8 shadow-xl border border-slate-800">
       {/* Glow Effects */}
@@ -47,24 +60,33 @@ export function AnalyticsHero({ dateRange = 'Last 30 Days', onExport }: Analytic
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
             <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Attributed Sales</span>
+                <Send className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Messages Sent</span>
               </div>
-              <p className="text-lg font-bold text-white mt-1">$142,850</p>
-              <p className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5 mt-0.5">
-                <TrendingUp className="w-3 h-3" /> +24.8% vs last mo
+              <p className="text-lg font-bold text-white mt-1">{sent.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-400 font-semibold flex items-center gap-0.5 mt-0.5">
+                Total outbound
               </p>
             </div>
 
             <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
               <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                 <Users className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Conversion Rate</span>
+                <span>Active Chats</span>
               </div>
-              <p className="text-lg font-bold text-white mt-1">28.4%</p>
+              <p className="text-lg font-bold text-white mt-1">{active.toLocaleString()}</p>
               <p className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5 mt-0.5">
-                <TrendingUp className="w-3 h-3" /> +4.2% uplift
+                Conversations
               </p>
+            </div>
+
+            <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Delivery Rate</span>
+              </div>
+              <p className="text-lg font-bold text-white mt-1">{delivery}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Confirmed receipts</p>
             </div>
 
             <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
@@ -72,17 +94,8 @@ export function AnalyticsHero({ dateRange = 'Last 30 Days', onExport }: Analytic
                 <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
                 <span>Read Rate</span>
               </div>
-              <p className="text-lg font-bold text-white mt-1">96.2%</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Industry avg: 22%</p>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 p-3 rounded-2xl">
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Avg. Resolution</span>
-              </div>
-              <p className="text-lg font-bold text-white mt-1">2m 14s</p>
-              <p className="text-[10px] text-emerald-400 font-semibold mt-0.5">85% faster</p>
+              <p className="text-lg font-bold text-white mt-1">{readPct}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Customer read</p>
             </div>
           </div>
         </div>
