@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   ExternalLink,
   ShoppingBag,
+  Smartphone,
 } from 'lucide-react';
 import { clearClientAuthCookies } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -101,15 +102,6 @@ export function Header({ title, subtitle }: HeaderProps) {
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span>Meta Cloud API v18.0 Connected</span>
         </div>
-
-        {/* E-Commerce Shortcut */}
-        <Link
-          href="/dashboard/integrations"
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 transition-colors"
-        >
-          <ShoppingBag className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Stores</span>
-        </Link>
 
         {/* New Broadcast CTA */}
         <Link
@@ -206,26 +198,6 @@ export function Header({ title, subtitle }: HeaderProps) {
 
               {/* Navigation Links */}
               <div className="space-y-1 pt-1 border-t border-slate-100 text-xs font-medium text-slate-700">
-                {isSuperAdmin && (
-                  <Link
-                    href="/super-admin-control"
-                    onClick={() => setMenuOpen(false)}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
-                  >
-                    <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    <span className="font-bold">Super Admin Control</span>
-                  </Link>
-                )}
-
-                <Link
-                  href="/dashboard/integrations"
-                  onClick={() => setMenuOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
-                >
-                  <ShoppingBag className="w-4 h-4 text-slate-400" />
-                  <span>Shopify &amp; WooCommerce Stores</span>
-                </Link>
-
                 <Link
                   href="/settings"
                   onClick={() => setMenuOpen(false)}
@@ -240,8 +212,8 @@ export function Header({ title, subtitle }: HeaderProps) {
                   onClick={() => setMenuOpen(false)}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
                 >
-                  <BookOpen className="w-4 h-4 text-slate-400" />
-                  <span>API Setup Guide</span>
+                  <Smartphone className="w-4 h-4 text-slate-400" />
+                  <span>Connect WhatsApp Wizard</span>
                 </Link>
               </div>
 
