@@ -168,9 +168,8 @@ export default function WhatsAppConnectionWizardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: testPhoneNumber.trim(),
-          type: 'template',
-          templateName: 'teaser_alert',
-          text: 'Hello from your official WhatsApp Automation SaaS! Connection verified successfully. 🚀',
+          type: 'text',
+          text: 'WhatsApp connection successful. Test message from TriPix SaaS.',
           bypassWindowCheck: true,
         }),
       });
@@ -570,7 +569,7 @@ export default function WhatsAppConnectionWizardPage() {
                 <div>
                   <h2 className="text-base font-bold text-slate-950">Step 5: Send Real Test Message</h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Send a real outbound WhatsApp message to your personal mobile phone to verify message dispatch.
+                    Send a real outbound WhatsApp test message to verify connection. Dispatches directly via Meta Cloud API text message.
                   </p>
                 </div>
               </div>
@@ -578,18 +577,18 @@ export default function WhatsAppConnectionWizardPage() {
               <form onSubmit={handleSendTestMessage} className="space-y-4">
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Your Personal WhatsApp Phone Number *
+                    Recipient WhatsApp Phone Number (Test or Production) *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="+15551234567 (with country code)"
+                    placeholder="+15551234567 or 15551234567"
                     value={testPhoneNumber}
                     onChange={(e) => setTestPhoneNumber(e.target.value)}
                     className="w-full text-xs px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-mono"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    Ensure the phone number includes the international country code (e.g. +1 for US, +44 for UK, +91 for India).
+                    Works with Meta Developer sandbox test recipient numbers or live production numbers. Ensure international country code is included.
                   </p>
                 </div>
 

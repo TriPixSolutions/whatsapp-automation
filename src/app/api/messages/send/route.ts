@@ -22,6 +22,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Recipient phone number is required' }, { status: 400 });
     }
 
+    console.log(`[Send Message API] Dispatching message to: ${toPhone} (Type: ${messageType}, BypassWindow: ${Boolean(body.bypassWindowCheck)})`);
+    if (messageType === 'template' || body.templateName) {
+      console.log('[Send Message API] Template Params:', {
+        templateName: body.templateName,
+        languageCode: body.languageCode || 'en_US',
+        components: body.components,
+      });
+    }
+
     const result = await WhatsAppMessageService.send({
       workspaceId: body.workspaceId || DEFAULT_WORKSPACE_ID,
       to: toPhone,
@@ -48,6 +57,13 @@ export async function POST(request: NextRequest) {
     });
 
     if (!result.success) {
+      console.error('[Send Message API] Dispatch failed:', {
+        to: toPhone,
+        type: messageType,
+        error: result.error,
+        errorCode: result.errorCode,
+        windowClosed: result.windowClosed,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -59,6 +75,8 @@ export async function POST(request: NextRequest) {
         { status: result.windowClosed ? 422 : 400 }
       );
     }
+
+    console.log(`[Send Message API] Dispatch succeeded for ${toPhone}. Meta ID: ${result.metaMessageId}`);
 
     return NextResponse.json({
       success: true,

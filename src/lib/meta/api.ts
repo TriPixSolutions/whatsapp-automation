@@ -96,6 +96,8 @@ export class MetaWhatsAppClient {
         humanMessage = 'Rate Limit Hit (#130429): Cloud API messaging throughput limit reached. Slow down broadcasts.';
       } else if (code === 100) {
         humanMessage = `Invalid Parameter (#100): ${err.error_data?.details || err.message}`;
+      } else if (code === 132001) {
+        humanMessage = `Template Does Not Exist (#132001): Template name does not exist in the translation. The requested template was not found or has not been approved in Meta WhatsApp Manager for the specified language. For connection verification, use a simple text message.`;
       }
 
       return { message: humanMessage, code, subcode };
@@ -124,6 +126,9 @@ export class MetaWhatsAppClient {
       },
     };
 
+    console.log(`[Meta Client] POST ${url}`);
+    console.log('[Meta Client] Outbound API Payload:', JSON.stringify(payload, null, 2));
+
     try {
       const res = await axios.post(url, payload, {
         headers: {
@@ -133,10 +138,13 @@ export class MetaWhatsAppClient {
         timeout: 12000,
       });
 
+      console.log(`[Meta Client] Meta API HTTP ${res.status} Full Response:`, JSON.stringify(res.data, null, 2));
+
       const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
+      console.error(`[Meta Client] Meta API HTTP ${err.response?.status || 'ERR'} Full Error Response:`, JSON.stringify(err.response?.data || err.message, null, 2));
       console.error('[Meta Client] sendText error:', parsed);
       return {
         success: false,
@@ -384,6 +392,14 @@ export class MetaWhatsAppClient {
       payload.template.components = components;
     }
 
+    console.log(`[Meta Client] POST ${url}`);
+    console.log('[Meta Client] Template Debug Details:', {
+      templateName,
+      languageCode,
+      recipient,
+    });
+    console.log('[Meta Client] Outbound API Payload:', JSON.stringify(payload, null, 2));
+
     try {
       const res = await axios.post(url, payload, {
         headers: {
@@ -393,10 +409,13 @@ export class MetaWhatsAppClient {
         timeout: 12000,
       });
 
+      console.log(`[Meta Client] Meta API HTTP ${res.status} Full Response:`, JSON.stringify(res.data, null, 2));
+
       const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
+      console.error(`[Meta Client] Meta API HTTP ${err.response?.status || 'ERR'} Full Error Response:`, JSON.stringify(err.response?.data || err.message, null, 2));
       console.error('[Meta Client] sendTemplate error:', parsed);
       return {
         success: false,

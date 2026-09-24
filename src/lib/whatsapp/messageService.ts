@@ -106,6 +106,7 @@ export class WhatsAppMessageService {
       phoneNumberId &&
       accessToken &&
       !accessToken.includes('SAMPLE_TOKEN') &&
+      !accessToken.includes('AI_GENERATED') &&
       !accessToken.startsWith('MOCK_') &&
       !accessToken.startsWith('TEST_') &&
       process.env.META_SANDBOX !== 'true'

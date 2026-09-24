@@ -434,11 +434,11 @@ async function runVerification() {
     const retrieved = SettingsDB.get(DEFAULT_WORKSPACE_ID);
     assert(retrieved.accessToken === 'TEST_EAAB_VERIFIED_ACCESS_TOKEN', 'Token decrypted accurately');
 
-    // Test message send verification (Template or bypass window check)
+    // Test message send verification (Text message API call without templates)
     const testSend = await WhatsAppMessageService.send({
       to: '+15551112233',
-      type: 'template',
-      templateName: 'teaser_alert',
+      type: 'text',
+      text: 'WhatsApp connection successful. Test message from TriPix SaaS.',
       bypassWindowCheck: true,
     });
     assert(testSend.success === true, 'Test verification message dispatched');

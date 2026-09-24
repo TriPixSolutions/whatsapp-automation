@@ -140,10 +140,16 @@ memoryState.automations.set(defaultFlow.id, defaultFlow);
 export const SettingsDB = {
   get(workspaceId: string = DEFAULT_WORKSPACE_ID): WorkspaceSettings {
     const s = memoryState.settings;
+    const rawToken = s.accessToken || process.env.META_ACCESS_TOKEN || '';
+    const rawSecret = s.appSecret || process.env.META_APP_SECRET || '';
     return {
       ...s,
-      accessToken: decryptToken(s.accessToken),
-      appSecret: decryptToken(s.appSecret || ''),
+      wabaId: s.wabaId || process.env.META_WABA_ID || '',
+      phoneNumberId: s.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '',
+      accessToken: decryptToken(rawToken),
+      appSecret: decryptToken(rawSecret),
+      verifyToken: s.verifyToken || process.env.META_WEBHOOK_VERIFY_TOKEN || 'tripix_verify_token_2026',
+      appId: s.appId || process.env.META_APP_ID || '',
     };
   },
 
