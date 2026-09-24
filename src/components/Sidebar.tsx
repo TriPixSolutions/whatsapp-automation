@@ -11,7 +11,27 @@ import { SidebarProfile } from './sidebar/SidebarProfile';
 import { MobileBottomNav } from './MobileBottomNav';
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('sidebar_collapsed') === 'true';
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  });
+
+  const toggleCollapsed = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sidebar_collapsed', String(next));
+        window.dispatchEvent(new CustomEvent('sidebar-collapse', { detail: { collapsed: next } }));
+      } catch {}
+    }
+  };
 
   return (
     <>
@@ -36,7 +56,7 @@ export function Sidebar() {
             </Link>
             <button
               type="button"
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={toggleCollapsed}
               className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer hidden md:flex"
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >

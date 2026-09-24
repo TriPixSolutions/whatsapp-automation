@@ -117,6 +117,8 @@ export interface Contact {
   tags: string[];
   optinStatus: boolean;
   optin_status?: boolean;
+  leadStatus?: string;
+  lead_status?: string;
   metadata?: Record<string, any>;
   createdAt: string;
   created_at?: string;

@@ -308,11 +308,11 @@ export function autoArrangeDAG(
     rankGroups.get(rank)!.push(id);
   });
 
-  // 5. Position nodes with clean spacing
-  const xSpacing = 340;
-  const ySpacing = 180;
+  // 5. Position nodes with clean, non-overlapping spacing
+  const xSpacing = 380;
+  const ySpacing = 240;
   const startX = 80;
-  const startY = 120;
+  const startY = 180;
 
   const arrangedNodes: WorkflowNode[] = [];
 
@@ -323,7 +323,7 @@ export function autoArrangeDAG(
     nodeIds.forEach((id, index) => {
       const original = nodeMap.get(id)!;
       let posX = startX + rank * xSpacing;
-      let posY = startY + index * ySpacing - (totalInRank > 1 ? yCenterOffset * 0.4 : 0);
+      let posY = startY + index * ySpacing - (totalInRank > 1 ? yCenterOffset : 0);
 
       // Handle TB vs LR direction
       if (direction === 'TB') {

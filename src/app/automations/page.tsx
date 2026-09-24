@@ -422,8 +422,33 @@ export default function AutomationsPage() {
     }
   };
 
+  // Responsive Navigation Sidebar Collapse State
+  const [isNavSidebarCollapsed, setIsNavSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sidebar_collapsed') === 'true';
+      setIsNavSidebarCollapsed(saved);
+    } catch {}
+
+    const handleCollapse = (e: any) => {
+      setIsNavSidebarCollapsed(Boolean(e.detail?.collapsed));
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+    };
+
+    window.addEventListener('sidebar-collapse', handleCollapse);
+    return () => window.removeEventListener('sidebar-collapse', handleCollapse);
+  }, []);
+
   return (
-    <div className="flex h-screen bg-slate-950 text-white overflow-hidden pl-0 md:pl-60 select-none">
+    <div
+      className={cn(
+        'flex h-screen bg-slate-950 text-white overflow-hidden select-none transition-all duration-200 ease-in-out',
+        isNavSidebarCollapsed ? 'pl-0 md:pl-[68px]' : 'pl-0 md:pl-60'
+      )}
+    >
       {/* Sidebar Navigation */}
       <Sidebar />
 

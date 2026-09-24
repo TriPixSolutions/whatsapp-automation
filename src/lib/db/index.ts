@@ -405,6 +405,8 @@ export const ContactsDB = {
       leadSource: contactData.leadSource !== undefined ? contactData.leadSource : existing?.leadSource || 'WhatsApp Direct',
       leadScore: contactData.leadScore !== undefined ? contactData.leadScore : existing?.leadScore ?? 50,
       stage: contactData.stage !== undefined ? contactData.stage : existing?.stage || 'lead',
+      leadStatus: contactData.leadStatus !== undefined ? contactData.leadStatus : (existing as any)?.leadStatus || 'new',
+      lead_status: contactData.leadStatus !== undefined ? contactData.leadStatus : (existing as any)?.leadStatus || 'new',
       assignedAgent: contactData.assignedAgent !== undefined ? contactData.assignedAgent : existing?.assignedAgent || 'Unassigned',
       notes: contactData.notes || existing?.notes || [],
       customFields: { ...(existing?.customFields || {}), ...(contactData.customFields || {}) },

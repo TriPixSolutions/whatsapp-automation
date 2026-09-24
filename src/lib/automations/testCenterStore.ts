@@ -251,6 +251,43 @@ export const TestCenterStore = {
     return false;
   },
 
+  duplicateWorkflow(id: string): WorkflowDefinition | null {
+    const original = globalState.workflows[id];
+    if (!original) return null;
+    const newId = `wf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const copy: WorkflowDefinition = JSON.parse(JSON.stringify(original));
+    copy.id = newId;
+    copy.name = `${original.name} (Copy)`;
+    copy.createdAt = new Date().toISOString();
+    copy.updatedAt = new Date().toISOString();
+    copy.executionCount = 0;
+    if (copy.stats) {
+      copy.stats = {
+        enteredCount: 0,
+        completedCount: 0,
+        droppedCount: 0,
+        sentCount: 0,
+        deliveredCount: 0,
+        readCount: 0,
+        clickedCount: 0,
+        repliedCount: 0,
+      };
+    }
+    globalState.workflows[newId] = copy;
+    persistStore();
+    return copy;
+  },
+
+  createWorkflowVersion(id: string): WorkflowDefinition | null {
+    const current = globalState.workflows[id];
+    if (!current) return null;
+    const versionNum = ((current as any).version || 1) + 1;
+    (current as any).version = versionNum;
+    current.updatedAt = new Date().toISOString();
+    persistStore();
+    return current;
+  },
+
   // EXECUTION LOGS
   recordExecutionLog(log: WorkflowExecutionLog): WorkflowExecutionLog {
     globalState.executionLogs.unshift(log);

@@ -50,6 +50,9 @@ import {
   Zap,
   ChevronDown,
   Plus,
+  PanelLeft,
+  PanelRight,
+  Focus,
 } from 'lucide-react';
 
 interface VisualAutomationCanvasProps {
@@ -648,6 +651,54 @@ function VisualCanvasInner({
 
           <div className="w-px h-4 bg-slate-800 my-auto mx-1" />
 
+          {/* Fit View / Center */}
+          <button
+            onClick={() => reactFlowInstance?.fitView({ padding: 0.25, duration: 400 })}
+            title="Recenter and Fit View"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <Focus className="w-4 h-4" />
+          </button>
+
+          {/* Panel Toggles */}
+          <button
+            onClick={() => {
+              const next = !isLeftPanelOpen;
+              setIsLeftPanelOpen(next);
+              setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                reactFlowInstance?.fitView({ padding: 0.25, duration: 300 });
+              }, 150);
+            }}
+            title={isLeftPanelOpen ? "Collapse Nodes Panel" : "Expand Nodes Panel"}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors",
+              isLeftPanelOpen ? "text-emerald-400 bg-slate-800" : "text-slate-400 hover:text-white"
+            )}
+          >
+            <PanelLeft className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => {
+              const next = !isRightPanelOpen;
+              setIsRightPanelOpen(next);
+              setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                reactFlowInstance?.fitView({ padding: 0.25, duration: 300 });
+              }, 150);
+            }}
+            title={isRightPanelOpen ? "Collapse Inspector Panel" : "Expand Inspector Panel"}
+            className={cn(
+              "p-1.5 rounded-lg transition-colors",
+              isRightPanelOpen ? "text-emerald-400 bg-slate-800" : "text-slate-400 hover:text-white"
+            )}
+          >
+            <PanelRight className="w-4 h-4" />
+          </button>
+
+          <div className="w-px h-4 bg-slate-800 my-auto mx-1" />
+
           {selectedNodeId && (
             <>
               <button
@@ -753,9 +804,10 @@ function VisualCanvasInner({
             selectNodesOnDrag={false}
             fitView
             fitViewOptions={{ padding: 0.2 }}
-            minZoom={0.2}
-            maxZoom={2.0}
+            minZoom={0.15}
+            maxZoom={2.5}
             defaultEdgeOptions={{
+              type: 'smoothstep',
               animated: true,
               style: { stroke: '#10b981', strokeWidth: 2.5 },
               markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981' },

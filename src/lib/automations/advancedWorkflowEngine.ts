@@ -223,7 +223,8 @@ export class AdvancedWorkflowEngine {
             const sendResult = await this.dispatchNodeMessage(
               currentNode,
               context,
-              executionVariables
+              executionVariables,
+              contact
             );
 
             traceStep.outputResult = sendResult;
@@ -249,14 +250,42 @@ export class AdvancedWorkflowEngine {
           case 'delay': {
             const amount = currentNode.config.delayAmount || 1;
             const unit = currentNode.config.delayUnit || 'minutes';
+            const multiplier = unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : unit === 'hours' ? 3600000 : 86400000;
+            const scheduledDelayMs = amount * multiplier;
+            const scheduledFor = new Date(Date.now() + scheduledDelayMs).toISOString();
 
             if (context.isTestSimulation) {
-              const simDelayMs = Math.min(amount * 400, 1500);
+              const simDelayMs = Math.min(amount * 200, 1000);
               await new Promise((r) => setTimeout(r, simDelayMs));
-              traceStep.outputResult = { simulatedDelay: `${amount} ${unit}`, waitedMs: simDelayMs };
+              traceStep.outputResult = {
+                simulatedDelay: `${amount} ${unit}`,
+                scheduledFor,
+                resumedAt: new Date().toISOString(),
+                waitedMs: simDelayMs,
+              };
             } else {
-              traceStep.outputResult = { scheduledDelay: `${amount} ${unit}` };
+              traceStep.outputResult = {
+                scheduledDelay: `${amount} ${unit}`,
+                scheduledFor,
+                queueState: 'scheduled',
+              };
             }
+            traceStep.status = 'node_executed';
+            break;
+          }
+
+          case 'set_variable':
+          case 'variable': {
+            const conf = currentNode.config || {};
+            const key = conf.variableKey || conf.key || 'custom_var';
+            const rawVal = conf.variableValue || conf.value || '';
+            const val = this.interpolateVariables(rawVal, executionVariables, contact);
+            executionVariables[key] = val;
+            traceStep.outputResult = {
+              variableSet: key,
+              value: val,
+              currentContextVariables: { ...executionVariables },
+            };
             traceStep.status = 'node_executed';
             break;
           }
@@ -495,12 +524,38 @@ export class AdvancedWorkflowEngine {
   }
 
   /**
+   * Replaces dynamic template variables like {{contact.firstName}}, {{contact.phoneNumber}}, {{variables.*}}
+   */
+  static interpolateVariables(
+    text: string | undefined,
+    variables: Record<string, any>,
+    contact?: any
+  ): string {
+    if (!text) return '';
+    let result = text;
+    const lookup: Record<string, any> = {
+      ...variables,
+      'contact.firstName': contact?.firstName || 'Friend',
+      'contact.lastName': contact?.lastName || '',
+      'contact.name': [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') || 'Friend',
+      'contact.phoneNumber': contact?.phoneNumber || variables.phoneNumber || '',
+      'contact.leadStatus': contact?.leadStatus || 'new',
+      phoneNumber: variables.phoneNumber || contact?.phoneNumber || '',
+    };
+    return result.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (match, key) => {
+      if (lookup[key] !== undefined) return String(lookup[key]);
+      return match;
+    });
+  }
+
+  /**
    * Dispatches WhatsApp Message for Message, Button, or Carousel Nodes
    */
   private static async dispatchNodeMessage(
     node: WorkflowNode,
     context: WorkflowExecutionContext,
-    variables: Record<string, any>
+    variables: Record<string, any>,
+    contact?: any
   ): Promise<{
     success: boolean;
     messageId?: string;
@@ -522,12 +577,17 @@ export class AdvancedWorkflowEngine {
       context.isTestSimulation && (!settings.accessToken || settings.accessToken.includes('SAMPLE_TOKEN') || settings.accessToken.startsWith('MOCK_'))
     );
 
+    const rawBody = config.bodyText || config.text;
+    const interpolatedBody = this.interpolateVariables(rawBody, variables, contact);
+    const interpolatedHeader = this.interpolateVariables(config.headerText, variables, contact);
+    const interpolatedFooter = this.interpolateVariables(config.footerText, variables, contact);
+
     const callPayload: any = {
       type: messageType,
       to: cleanTo,
-      header: config.headerText,
-      body: config.bodyText || config.text,
-      footer: config.footerText,
+      header: interpolatedHeader,
+      body: interpolatedBody,
+      footer: interpolatedFooter,
       buttons: config.buttons,
       cards: config.cards,
       templateName: config.templateName,
