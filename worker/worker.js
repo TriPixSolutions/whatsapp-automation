@@ -40,6 +40,42 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
+const crypto = require('crypto');
+
+// AES-256-GCM Decryption Helper
+const ALGORITHM = 'aes-256-gcm';
+function getEncryptionKey() {
+  const envKey =
+    process.env.ENCRYPTION_KEY ||
+    process.env.JWT_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    'production_secure_tripix_aes256_key_32bytes_min';
+  return crypto.createHash('sha256').update(envKey).digest();
+}
+
+function decryptToken(cipherString) {
+  if (!cipherString) return '';
+  if (!cipherString.startsWith('enc:gcm:')) {
+    return cipherString;
+  }
+  try {
+    const parts = cipherString.split(':');
+    if (parts.length !== 5) return cipherString;
+    const [, , ivHex, tagHex, encryptedHex] = parts;
+    const key = getEncryptionKey();
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(tagHex, 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.error('[Worker Crypto] Decryption failed:', error.message);
+    return cipherString;
+  }
+}
+
 // Helper: Sleep to respect Meta API rate limits (60ms per request = ~16 req/s)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -129,9 +165,8 @@ const campaignWorker = new Worker(
       .eq('id', workspaceId)
       .maybeSingle();
 
-    if (wsError || !workspace) {
-      console.error(`[Worker] Workspace not found: ${workspaceId}`, wsError);
-      throw new Error(`Workspace not found: ${workspaceId}`);
+    if (wsError) {
+      console.warn(`[Worker] Workspace lookup warning for ${workspaceId}:`, wsError.message);
     }
 
     const { data: metaConn } = await supabase
@@ -140,7 +175,8 @@ const campaignWorker = new Worker(
       .eq('workspace_id', workspaceId)
       .maybeSingle();
 
-    const accessToken = metaConn?.access_token_encrypted || process.env.META_ACCESS_TOKEN;
+    const rawToken = metaConn?.access_token_encrypted || process.env.META_ACCESS_TOKEN || '';
+    const accessToken = decryptToken(rawToken);
     const phoneNumberId = metaConn?.phone_number_id || process.env.META_PHONE_NUMBER_ID;
 
     // 2. Update Campaign status to 'processing'

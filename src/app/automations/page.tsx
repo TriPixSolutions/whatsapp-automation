@@ -1,366 +1,233 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Header } from '@/components/Header';
+import { PhoneMockup } from '@/components/PhoneMockup';
 import {
   Bot,
   Plus,
-  Zap,
+  Play,
   CheckCircle2,
   Trash2,
-  MessageSquare,
-  ArrowRight,
-  Clock,
-  Layers,
-  ChevronRight,
-  ChevronDown,
-  Copy,
   ArrowDown,
-  Sparkles,
+  Clock,
+  ArrowUp,
   Image as ImageIcon,
   FileText,
-  Tag as TagIcon,
-  HelpCircle,
-  Play,
-  RotateCcw,
-  Check,
-  Smartphone,
-  Eye,
-  Send,
   Video,
-  Split,
-  GitBranch,
-  ShieldCheck,
-  TrendingUp,
-  Filter,
-  Users,
+  MessageSquare,
+  Sparkles,
+  AlertCircle,
+  Smartphone,
+  Send,
+  RefreshCw,
+  Eye,
+  Check,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PhoneMockup } from '@/components/PhoneMockup';
 
-// Block types supported in Visual Builder
-export type BlockType =
+export type StepType =
   | 'trigger'
   | 'message'
   | 'image'
+  | 'document'
+  | 'video'
   | 'template'
-  | 'wait'
-  | 'condition'
-  | 'tag'
+  | 'delay'
   | 'end';
 
-export interface WorkflowBlock {
+export interface AutomationStep {
   id: string;
-  type: BlockType;
+  type: StepType;
   title: string;
   description: string;
-  config: {
-    text?: string;
-    mediaUrl?: string;
-    templateName?: string;
-    waitDuration?: number;
-    waitUnit?: 'minutes' | 'hours' | 'days';
-    conditionField?: string;
-    conditionValue?: string;
-    tagName?: string;
-    buttons?: string[];
-  };
-}
-
-export interface FollowUpStep {
-  id: string;
-  stepNumber: number;
-  type: 'message' | 'wait';
-  title: string;
-  messageText?: string;
+  text?: string;
+  mediaUrl?: string;
+  caption?: string;
+  fileName?: string;
+  templateName?: string;
   delayAmount?: number;
   delayUnit?: 'minutes' | 'hours' | 'days';
 }
 
-export interface ChatbotNode {
+export interface ExecutionLog {
   id: string;
-  prompt: string;
-  mediaType?: 'text' | 'image' | 'video' | 'document';
-  mediaUrl?: string;
-  options: {
-    id: string;
-    label: string;
-    actionType: 'reply' | 'branch';
-    replyText: string;
-  }[];
+  timestamp: string;
+  phoneNumber: string;
+  stepName: string;
+  status: 'sent' | 'delivered' | 'read' | 'failed' | 'scheduled';
+  details: string;
 }
 
-export interface LeadFunnelStage {
-  id: string;
-  title: string;
-  subtitle: string;
-  leadsCount: number;
-  conversionRate: string;
-  icon: string;
-  status: 'active' | 'completed' | 'pending';
-}
+const DEFAULT_WORKFLOW: AutomationStep[] = [
+  {
+    id: 'step_1',
+    type: 'trigger',
+    title: 'Meta Lead Arrives',
+    description: 'Triggered automatically when a lead form is submitted on Facebook or Instagram',
+  },
+  {
+    id: 'step_2',
+    type: 'image',
+    title: 'Send Welcome Image',
+    description: 'Instant greeting with high-resolution visual catalog image',
+    mediaUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&auto=format&fit=crop&q=80',
+    caption: 'Hello! Welcome to our store. Here is our exclusive featured collection! 🌟',
+  },
+  {
+    id: 'step_3',
+    type: 'delay',
+    title: 'Wait 1 Hour',
+    description: 'Allow customer time to view welcome image',
+    delayAmount: 1,
+    delayUnit: 'hours',
+  },
+  {
+    id: 'step_4',
+    type: 'message',
+    title: 'Send Product Details',
+    description: 'Detailed benefits, warranty, and available stock specifications',
+    text: 'Here are the key specifications and details regarding the item you viewed. We provide free doorstep delivery and 1-year warranty.',
+  },
+  {
+    id: 'step_5',
+    type: 'delay',
+    title: 'Wait 2 Hours',
+    description: 'Give customer time to consider details',
+    delayAmount: 2,
+    delayUnit: 'hours',
+  },
+  {
+    id: 'step_6',
+    type: 'message',
+    title: 'Send Pricing & Offer',
+    description: 'Transparent pricing with limited-time 10% WhatsApp voucher',
+    text: 'Exclusive WhatsApp Offer: Complete your order today for 10% off using promo code SAVE10. Would you like us to reserve one for you?',
+  },
+  {
+    id: 'step_7',
+    type: 'delay',
+    title: 'Wait 5 Hours',
+    description: 'Final nurture reminder window',
+    delayAmount: 5,
+    delayUnit: 'hours',
+  },
+  {
+    id: 'step_8',
+    type: 'message',
+    title: 'Send Reminder',
+    description: 'Gentle final nudge before closing inquiry',
+    text: 'Quick reminder: Your 10% discount expires tonight! Let us know if you have any questions or reply to talk to our specialist.',
+  },
+  {
+    id: 'step_9',
+    type: 'end',
+    title: 'End Sequence',
+    description: 'Sequence completed. Awaiting inbound customer reply or priority escalation.',
+  },
+];
 
 export default function AutomationsPage() {
-  // Navigation tabs for the 5 visual builders
-  const [activeTab, setActiveTab] = useState<
-    'automation' | 'followup' | 'chatbot' | 'buttonflow' | 'leadfunnel'
-  >('automation');
-
-  const [savedFlows, setSavedFlows] = useState<any[]>([]);
+  const [steps, setSteps] = useState<AutomationStep[]>(DEFAULT_WORKFLOW);
+  const [selectedStepId, setSelectedStepId] = useState<string>('step_2');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [activePreviewDevice, setActivePreviewDevice] = useState(true);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
-  // ---------------------------------------------------------------------------
-  // MODULE 1: VISUAL AUTOMATION BUILDER STATE
-  // ---------------------------------------------------------------------------
-  const [workflowBlocks, setWorkflowBlocks] = useState<WorkflowBlock[]>([
-    {
-      id: 'block_1',
-      type: 'trigger',
-      title: 'Lead Arrives',
-      description: 'Triggered when customer submits Facebook/Instagram ad form',
-      config: { text: 'Meta Lead Gen Inbound' },
-    },
-    {
-      id: 'block_2',
-      type: 'image',
-      title: 'Send Welcome Image',
-      description: 'Send high-resolution visual catalog preview',
-      config: {
-        mediaUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2',
-        text: 'Welcome to our store! Here is our featured collection.',
-      },
-    },
-    {
-      id: 'block_3',
-      type: 'wait',
-      title: 'Wait 1 Hour',
-      description: 'Allow customer to review welcome message',
-      config: { waitDuration: 1, waitUnit: 'hours' },
-    },
-    {
-      id: 'block_4',
-      type: 'message',
-      title: 'Send Product Details',
-      description: 'Explain core benefits and available stock',
-      config: { text: 'Here are the key specifications and warranty information.' },
-    },
-    {
-      id: 'block_5',
-      type: 'wait',
-      title: 'Wait 2 Hours',
-      description: 'Give time before pricing discussion',
-      config: { waitDuration: 2, waitUnit: 'hours' },
-    },
-    {
-      id: 'block_6',
-      type: 'message',
-      title: 'Send Pricing & Offer',
-      description: 'Send transparent pricing with limited 10% coupon',
-      config: { text: 'Exclusive WhatsApp Offer: Complete your order today for 10% off with code SAVE10.' },
-    },
-    {
-      id: 'block_7',
-      type: 'wait',
-      title: 'Wait 5 Hours',
-      description: 'Final nurture delay',
-      config: { waitDuration: 5, waitUnit: 'hours' },
-    },
-    {
-      id: 'block_8',
-      type: 'message',
-      title: 'Send Friendly Reminder',
-      description: 'Ask if they have questions before closing offer',
-      config: { text: 'Quick reminder: Your 10% coupon expires tonight. Would you like assistance?' },
-    },
-    {
-      id: 'block_9',
-      type: 'end',
-      title: 'End Automation',
-      description: 'Flow complete. Hand off to Live Team Inbox.',
-      config: {},
-    },
-  ]);
+  // Testing dispatch
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const [selectedBlockId, setSelectedBlockId] = useState<string>('block_2');
+  // Execution logs
+  const [logs, setLogs] = useState<ExecutionLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
-  // ---------------------------------------------------------------------------
-  // MODULE 2: FOLLOW-UP BUILDER STATE
-  // ---------------------------------------------------------------------------
-  const [followUpSteps, setFollowUpSteps] = useState<FollowUpStep[]>([
-    {
-      id: 'fu_1',
-      stepNumber: 1,
-      type: 'message',
-      title: 'Step 1: Welcome Message',
-      messageText: 'Hello! Thank you for contacting us. How can we help you today?',
-    },
-    {
-      id: 'fu_2',
-      stepNumber: 2,
-      type: 'wait',
-      title: 'Step 2: Wait 1 Hour',
-      delayAmount: 1,
-      delayUnit: 'hours',
-    },
-    {
-      id: 'fu_3',
-      stepNumber: 3,
-      type: 'message',
-      title: 'Step 3: Follow-Up Message',
-      messageText: 'Did you get a chance to see our catalog? Let us know if you need sizing or pricing details.',
-    },
-    {
-      id: 'fu_4',
-      stepNumber: 4,
-      type: 'wait',
-      title: 'Step 4: Wait 2 Hours',
-      delayAmount: 2,
-      delayUnit: 'hours',
-    },
-    {
-      id: 'fu_5',
-      stepNumber: 5,
-      type: 'message',
-      title: 'Step 5: Follow-Up Message',
-      messageText: 'We have reserved your item for the next 24 hours. Would you like free doorstep delivery?',
-    },
-    {
-      id: 'fu_6',
-      stepNumber: 6,
-      type: 'wait',
-      title: 'Step 6: Wait 5 Hours',
-      delayAmount: 5,
-      delayUnit: 'hours',
-    },
-    {
-      id: 'fu_7',
-      stepNumber: 7,
-      type: 'message',
-      title: 'Step 7: Final Reminder',
-      messageText: 'Final notice: Your inquiry will close shortly. Tap reply to speak with our product specialist.',
-    },
-  ]);
+  // Fetch saved flow and execution logs from backend
+  const loadFlowAndLogs = useCallback(async () => {
+    try {
+      setLoadingLogs(true);
+      const [flowRes, msgRes] = await Promise.all([
+        fetch('/api/automations').catch(() => null),
+        fetch('/api/messages').catch(() => null),
+      ]);
 
-  // ---------------------------------------------------------------------------
-  // MODULE 3 & 4: CHATBOT & BUTTON FLOW STATE
-  // ---------------------------------------------------------------------------
-  const [chatbotNodes, setChatbotNodes] = useState<ChatbotNode[]>([
-    {
-      id: 'cb_root',
-      prompt: 'Welcome to our company! Are you interested in our new collection?',
-      mediaType: 'text',
-      options: [
-        {
-          id: 'opt_yes',
-          label: 'Yes, Show Details',
-          actionType: 'reply',
-          replyText: 'Awesome! Here are our bestsellers with direct 1-tap ordering link.',
-        },
-        {
-          id: 'opt_no',
-          label: 'No, Not Right Now',
-          actionType: 'reply',
-          replyText: 'No problem at all! Feel free to reach out anytime you need assistance. Have a great day!',
-        },
-      ],
-    },
-  ]);
+      if (flowRes?.ok) {
+        const flows = await flowRes.json();
+        if (Array.isArray(flows) && flows.length > 0) {
+          const first = flows[0];
+          const payloadBlocks = first.actionPayload?.blocks;
+          if (Array.isArray(payloadBlocks) && payloadBlocks.length >= 2) {
+            setSteps(payloadBlocks);
+            setSelectedStepId(payloadBlocks[1]?.id || payloadBlocks[0]?.id);
+          }
+        }
+      }
 
-  // ---------------------------------------------------------------------------
-  // MODULE 5: LEAD FUNNEL JOURNEY
-  // ---------------------------------------------------------------------------
-  const [funnelStages, setFunnelStages] = useState<LeadFunnelStage[]>([
-    {
-      id: 'fn_1',
-      title: '1. Meta Lead Arrives',
-      subtitle: 'Customer clicks Instagram/Facebook Ad',
-      leadsCount: 1420,
-      conversionRate: '100%',
-      icon: '🎯',
-      status: 'completed',
-    },
-    {
-      id: 'fn_2',
-      title: '2. Welcome Message Sent',
-      subtitle: 'Dispatched via WhatsApp in under 3 seconds',
-      leadsCount: 1412,
-      conversionRate: '99.4%',
-      icon: '⚡',
-      status: 'completed',
-    },
-    {
-      id: 'fn_3',
-      title: '3. Follow-Up 1 (T+1 Hour)',
-      subtitle: 'Automated gentle nudge sent',
-      leadsCount: 980,
-      conversionRate: '69.4%',
-      icon: '⏱️',
-      status: 'active',
-    },
-    {
-      id: 'fn_4',
-      title: '4. Follow-Up 2 (T+6 Hours)',
-      subtitle: 'Special limited voucher sent',
-      leadsCount: 710,
-      conversionRate: '50.3%',
-      icon: '🎁',
-      status: 'active',
-    },
-    {
-      id: 'fn_5',
-      title: '5. Customer Reply Detected',
-      subtitle: '24-hour conversational window unlocked',
-      leadsCount: 524,
-      conversionRate: '37.1%',
-      icon: '💬',
-      status: 'active',
-    },
-    {
-      id: 'fn_6',
-      title: '6. Moved to Priority Leads',
-      subtitle: 'Assigned to sales agent for closing',
-      leadsCount: 418,
-      conversionRate: '29.6%',
-      icon: '🔥',
-      status: 'active',
-    },
-  ]);
-
-  // Load existing flows from backend
-  useEffect(() => {
-    fetch('/api/automations')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        if (Array.isArray(data)) setSavedFlows(data);
-      })
-      .catch((err) => console.warn('Could not load automations:', err));
+      if (msgRes?.ok) {
+        const msgData = await msgRes.json();
+        const rawMessages = msgData.messages || [];
+        const mappedLogs: ExecutionLog[] = rawMessages.slice(0, 15).map((m: any) => ({
+          id: m.id,
+          timestamp: m.createdAt || new Date().toISOString(),
+          phoneNumber: m.phoneNumber,
+          stepName: m.type === 'image' ? 'Welcome Image' : (m.content?.substring(0, 24) || 'Follow-Up Step'),
+          status: m.status || 'delivered',
+          details: m.content || `[${m.type.toUpperCase()}]`,
+        }));
+        setLogs(mappedLogs);
+      }
+    } catch (e) {
+      console.warn('Error loading automation data:', e);
+    } finally {
+      setLoadingLogs(false);
+    }
   }, []);
 
-  // Save current flow to backend
-  const handleSaveAutomation = async () => {
+  useEffect(() => {
+    loadFlowAndLogs();
+  }, [loadFlowAndLogs]);
+
+  // Validation function
+  const validateWorkflow = (): boolean => {
+    const errors: string[] = [];
+    steps.forEach((step, idx) => {
+      if (step.type === 'message' && (!step.text || !step.text.trim())) {
+        errors.push(`Step ${idx + 1} (${step.title}): Message text cannot be empty.`);
+      }
+      if (step.type === 'image' && (!step.mediaUrl || !step.mediaUrl.trim())) {
+        errors.push(`Step ${idx + 1} (${step.title}): Image URL cannot be empty.`);
+      }
+      if (step.type === 'delay') {
+        if (!step.delayAmount || step.delayAmount <= 0) {
+          errors.push(`Step ${idx + 1} (${step.title}): Delay duration must be greater than 0.`);
+        }
+      }
+      if (step.type === 'template' && (!step.templateName || !step.templateName.trim())) {
+        errors.push(`Step ${idx + 1} (${step.title}): Template name is required.`);
+      }
+    });
+
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
+  // Save workflow to backend
+  const handleSaveWorkflow = async () => {
+    if (!validateWorkflow()) return;
+
     setIsSaving(true);
     setSaveSuccess(false);
     try {
       const payload = {
-        name: activeTab === 'automation'
-          ? 'Visual Lead Nurture Flow'
-          : activeTab === 'followup'
-          ? 'Multi-Step Follow-Up Sequence'
-          : activeTab === 'chatbot'
-          ? 'Customer Service Chatbot'
-          : activeTab === 'buttonflow'
-          ? 'Interactive Button Flow'
-          : 'Meta Lead Funnel Flow',
-        triggerKeyword: activeTab === 'followup' ? 'lead_inbound' : 'start',
+        name: 'Meta Lead Follow-Up Sequence',
+        triggerKeyword: 'lead_inbound',
+        triggerType: 'keyword',
         actionType: 'buttons',
         actionPayload: {
-          blocks: workflowBlocks,
-          followUpSteps,
-          chatbotNodes,
-          funnelStages,
+          blocks: steps,
         },
       };
 
@@ -371,779 +238,639 @@ export default function AutomationsPage() {
       });
 
       if (res.ok) {
-        const created = await res.json();
-        setSavedFlows((prev) => [created, ...prev]);
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Failed to save workflow.');
       }
-    } catch (e) {
-      console.error('Failed to save automation:', e);
+    } catch (e: any) {
+      alert(e.message || 'Error communicating with server.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Add a block to Visual Workflow
-  const handleAddBlock = (type: BlockType) => {
-    const newId = `block_${Date.now()}`;
-    const titles: Record<BlockType, string> = {
-      trigger: 'New Trigger',
-      message: 'Send WhatsApp Message',
-      image: 'Send Image & Caption',
-      template: 'Send Meta Template',
-      wait: 'Wait Duration',
-      condition: 'Check Condition',
-      tag: 'Add Customer Tag',
-      end: 'End Automation',
-    };
-
-    const newBlock: WorkflowBlock = {
-      id: newId,
-      type,
-      title: titles[type],
-      description: `Automated action for ${type}`,
-      config: {
-        text: type === 'message' ? 'Hello! Here is an update.' : undefined,
-        waitDuration: type === 'wait' ? 1 : undefined,
-        waitUnit: type === 'wait' ? 'hours' : undefined,
-        tagName: type === 'tag' ? 'interested' : undefined,
-      },
-    };
-
-    setWorkflowBlocks((prev) => [...prev.slice(0, -1), newBlock, prev[prev.length - 1]]);
-    setSelectedBlockId(newId);
-  };
-
-  // Delete a block
-  const handleDeleteBlock = (id: string) => {
-    if (workflowBlocks.length <= 2) return;
-    setWorkflowBlocks((prev) => prev.filter((b) => b.id !== id));
-    if (selectedBlockId === id) {
-      setSelectedBlockId(workflowBlocks[0]?.id || '');
-    }
-  };
-
-  // Add Follow-Up Step
-  const handleAddFollowUpStep = () => {
-    const nextStepNum = followUpSteps.length + 1;
-    const isWait = followUpSteps[followUpSteps.length - 1]?.type === 'message';
-
-    const newStep: FollowUpStep = isWait
-      ? {
-          id: `fu_${Date.now()}`,
-          stepNumber: nextStepNum,
-          type: 'wait',
-          title: `Step ${nextStepNum}: Wait 3 Hours`,
-          delayAmount: 3,
-          delayUnit: 'hours',
-        }
-      : {
-          id: `fu_${Date.now()}`,
-          stepNumber: nextStepNum,
-          type: 'message',
-          title: `Step ${nextStepNum}: Follow-Up Message`,
-          messageText: 'Just checking back! Would you like me to reserve your selection?',
-        };
-
-    setFollowUpSteps((prev) => [...prev, newStep]);
-  };
-
-  // Delete Follow-Up Step
-  const handleDeleteFollowUp = (id: string) => {
-    setFollowUpSteps((prev) => prev.filter((s) => s.id !== id));
-  };
-
-  // Reorder Follow-Up Steps
-  const handleMoveFollowUp = (index: number, direction: 'up' | 'down') => {
+  // Reorder steps (drag & drop / up & down)
+  const handleMoveStep = (index: number, direction: 'up' | 'down') => {
     if (
-      (direction === 'up' && index === 0) ||
-      (direction === 'down' && index === followUpSteps.length - 1)
+      (direction === 'up' && index <= 1) ||
+      (direction === 'down' && index >= steps.length - 2)
     ) {
-      return;
+      return; // Do not move trigger (0) or end (last)
     }
+
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    const copy = [...followUpSteps];
+    const copy = [...steps];
     const temp = copy[index];
     copy[index] = copy[targetIndex];
     copy[targetIndex] = temp;
-    setFollowUpSteps(copy);
+    setSteps(copy);
   };
 
-  // Quick 1-Click Starter Template
-  const handleApplyTemplate = (templateType: 'ecommerce' | 'leads' | 'appointment') => {
-    if (templateType === 'ecommerce') {
-      setFollowUpSteps([
-        { id: 'f1', stepNumber: 1, type: 'message', title: 'Step 1: Abandoned Cart Alert', messageText: 'Hi {{name}}! You left items in your cart. Complete now for 10% off with code CART10.' },
-        { id: 'f2', stepNumber: 2, type: 'wait', title: 'Step 2: Wait 1 Hour', delayAmount: 1, delayUnit: 'hours' },
-        { id: 'f3', stepNumber: 3, type: 'message', title: 'Step 3: Low Stock Alert', messageText: 'Hurry! Items in your cart are low in stock. Tap below to finish order.' },
-        { id: 'f4', stepNumber: 4, type: 'wait', title: 'Step 4: Wait 4 Hours', delayAmount: 4, delayUnit: 'hours' },
-        { id: 'f5', stepNumber: 5, type: 'message', title: 'Step 5: Final Call Reminder', messageText: 'Your 10% cart discount expires in 1 hour. Do you need help checking out?' },
-      ]);
-    } else if (templateType === 'leads') {
-      setFollowUpSteps([
-        { id: 'l1', stepNumber: 1, type: 'message', title: 'Step 1: Instant Lead Welcome', messageText: 'Thank you for your interest! Here is our complete brochure.' },
-        { id: 'l2', stepNumber: 2, type: 'wait', title: 'Step 2: Wait 30 Minutes', delayAmount: 30, delayUnit: 'minutes' },
-        { id: 'l3', stepNumber: 3, type: 'message', title: 'Step 3: Schedule Consultation', messageText: 'Would you like to speak with our product expert today?' },
-        { id: 'l4', stepNumber: 4, type: 'wait', title: 'Step 4: Wait 1 Day', delayAmount: 1, delayUnit: 'days' },
-        { id: 'l5', stepNumber: 5, type: 'message', title: 'Step 5: Follow-Up Nudge', messageText: 'We have 2 consultation spots open this week. Would 3 PM work for you?' },
-      ]);
+  // Add a new step
+  const handleAddStep = (type: StepType) => {
+    const newId = `step_${Date.now()}`;
+    const titles: Record<StepType, string> = {
+      trigger: 'Trigger',
+      message: 'Send WhatsApp Message',
+      image: 'Send Image',
+      document: 'Send Document',
+      video: 'Send Video',
+      template: 'Send Template',
+      delay: 'Wait Delay',
+      end: 'End',
+    };
+
+    const newStep: AutomationStep = {
+      id: newId,
+      type,
+      title: titles[type],
+      description: `Step action for ${type}`,
+      text: type === 'message' ? 'Hello! Here is an update.' : undefined,
+      mediaUrl: type === 'image' ? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800' : undefined,
+      delayAmount: type === 'delay' ? 2 : undefined,
+      delayUnit: type === 'delay' ? 'hours' : undefined,
+      templateName: type === 'template' ? 'welcome_lead' : undefined,
+    };
+
+    // Insert right before the last 'end' step
+    const updated = [...steps.slice(0, -1), newStep, steps[steps.length - 1]];
+    setSteps(updated);
+    setSelectedStepId(newId);
+  };
+
+  // Delete a step
+  const handleDeleteStep = (id: string) => {
+    if (steps.length <= 3) return;
+    setSteps(steps.filter((s) => s.id !== id));
+    if (selectedStepId === id) {
+      setSelectedStepId(steps[1]?.id || steps[0]?.id);
     }
   };
 
-  const selectedBlock = workflowBlocks.find((b) => b.id === selectedBlockId);
+  // Execute a real diagnostic test run
+  const handleTestRunFlow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testPhoneNumber) return;
+
+    setIsTesting(true);
+    setTestResult(null);
+
+    try {
+      const res = await fetch('/api/test-flow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: testPhoneNumber }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: 'Test flow executed successfully! Message dispatched to your phone.',
+        });
+        loadFlowAndLogs();
+      } else {
+        setTestResult({
+          success: false,
+          message: data.error || 'Failed to trigger test flow.',
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Error triggering test execution.',
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const selectedStep = steps.find((s) => s.id === selectedStepId);
 
   return (
     <div className="min-h-screen bg-slate-50/60 pb-20 md:pb-8 flex flex-col font-sans">
       <Sidebar />
       <div className="md:pl-60 flex-1 flex flex-col">
         <Header
-          title="Automations & Flows"
-          subtitle="Build visual WhatsApp automations, follow-ups, chatbots, and lead funnels in minutes"
+          title="Meta Lead Follow-Up Automation"
+          subtitle="Automatically nurture new Meta Leads with multi-step WhatsApp messages and timed delays"
         />
 
         <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-          {/* Top Bar: Tabs + Save Action */}
-          <div className="bg-white rounded-2xl p-2 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-            {/* 5 Visual Builder Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto p-1 scrollbar-none">
-              <button
-                type="button"
-                onClick={() => setActiveTab('automation')}
-                className={cn(
-                  'px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 min-h-[40px]',
-                  activeTab === 'automation'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                )}
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>Visual Flow</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('followup')}
-                className={cn(
-                  'px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 min-h-[40px]',
-                  activeTab === 'followup'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                )}
-              >
-                <Clock className="w-3.5 h-3.5 text-blue-400" />
-                <span>Follow-Up Sequence</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('chatbot')}
-                className={cn(
-                  'px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 min-h-[40px]',
-                  activeTab === 'chatbot'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                )}
-              >
-                <Bot className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Chatbot Builder</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('buttonflow')}
-                className={cn(
-                  'px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 min-h-[40px]',
-                  activeTab === 'buttonflow'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                )}
-              >
-                <Split className="w-3.5 h-3.5 text-purple-400" />
-                <span>Button Flows</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('leadfunnel')}
-                className={cn(
-                  'px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-2 min-h-[40px]',
-                  activeTab === 'leadfunnel'
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
-                )}
-              >
-                <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
-                <span>Lead Journey</span>
-              </button>
+          {/* Top Control Bar: Save & Actions */}
+          <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-slate-950">Follow-Up Workflow Builder</h2>
+                <p className="text-xs text-slate-500">
+                  {steps.length} sequential steps • Minutes, Hours &amp; Days delay scheduler
+                </p>
+              </div>
             </div>
 
-            {/* Quick Actions */}
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               <button
                 type="button"
-                onClick={handleSaveAutomation}
+                onClick={handleSaveWorkflow}
                 disabled={isSaving}
-                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer min-h-[40px]"
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer min-h-[42px]"
               >
                 {saveSuccess ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-white" />
-                    <span>Saved!</span>
+                    <span>Workflow Saved!</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>{isSaving ? 'Saving...' : 'Save & Activate'}</span>
+                    <Check className="w-4 h-4" />
+                    <span>{isSaving ? 'Saving Workflow...' : 'Save & Activate Workflow'}</span>
                   </>
                 )}
               </button>
             </div>
           </div>
 
-          {/* ---------------------------------------------------------------- */}
-          {/* TAB 1: MODULE 1 - VISUAL AUTOMATION BUILDER                     */}
-          {/* ---------------------------------------------------------------- */}
-          {activeTab === 'automation' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Flowchart Canvas */}
-              <div className="lg:col-span-8 bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-950 flex items-center gap-2">
-                      <span>Visual Automation Steps</span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-mono">
-                        {workflowBlocks.length} Blocks
-                      </span>
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                      Sequential workflow executed when a new lead arrives
-                    </p>
-                  </div>
-
-                  {/* Add Block Dropdown */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleAddBlock('wait')}
-                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Wait</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddBlock('message')}
-                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Add Message</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Vertical Block Flow */}
-                <div className="space-y-3 pt-2">
-                  {workflowBlocks.map((block, idx) => {
-                    const isSelected = selectedBlockId === block.id;
-
-                    return (
-                      <React.Fragment key={block.id}>
-                        {/* Step Card */}
-                        <div
-                          onClick={() => setSelectedBlockId(block.id)}
-                          className={cn(
-                            'p-4 rounded-xl border transition-all cursor-pointer relative group flex items-start gap-3.5',
-                            isSelected
-                              ? 'border-emerald-500 bg-emerald-50/20 shadow-xs ring-1 ring-emerald-500/20'
-                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/40'
-                          )}
-                        >
-                          {/* Step Icon Badge */}
-                          <div
-                            className={cn(
-                              'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold',
-                              block.type === 'trigger' && 'bg-amber-100 text-amber-700',
-                              block.type === 'message' && 'bg-emerald-100 text-emerald-700',
-                              block.type === 'image' && 'bg-purple-100 text-purple-700',
-                              block.type === 'wait' && 'bg-blue-100 text-blue-700',
-                              block.type === 'end' && 'bg-slate-200 text-slate-700'
-                            )}
-                          >
-                            {block.type === 'trigger' && '⚡'}
-                            {block.type === 'message' && '💬'}
-                            {block.type === 'image' && '🖼️'}
-                            {block.type === 'wait' && '⏱️'}
-                            {block.type === 'end' && '🏁'}
-                          </div>
-
-                          {/* Block Details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900 truncate">
-                                {block.title}
-                              </span>
-                              <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">
-                                {block.type}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                              {block.config.text || block.description}
-                            </p>
-
-                            {block.config.waitDuration && (
-                              <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium">
-                                <Clock className="w-3 h-3" />
-                                <span>
-                                  Wait {block.config.waitDuration} {block.config.waitUnit}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Delete action */}
-                          {block.type !== 'trigger' && block.type !== 'end' && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteBlock(block.id);
-                              }}
-                              className="text-slate-400 hover:text-rose-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Delete Step"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Connector Arrow */}
-                        {idx < workflowBlocks.length - 1 && (
-                          <div className="flex justify-center py-0.5">
-                            <div className="w-0.5 h-4 bg-slate-200 flex items-center justify-center">
-                              <ArrowDown className="w-3 h-3 text-slate-400" />
-                            </div>
-                          </div>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
+          {/* Validation Errors Box if any */}
+          {validationErrors.length > 0 && (
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Workflow Validation Issues:</span>
               </div>
-
-              {/* Step Editor & Settings Panel */}
-              <div className="lg:col-span-4 space-y-4">
-                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-4">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Block Settings</span>
-                  </h3>
-
-                  {selectedBlock ? (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-xs font-medium text-slate-700 block mb-1">
-                          Step Title
-                        </label>
-                        <input
-                          type="text"
-                          value={selectedBlock.title}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setWorkflowBlocks((prev) =>
-                              prev.map((b) => (b.id === selectedBlock.id ? { ...b, title: val } : b))
-                            );
-                          }}
-                          className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                        />
-                      </div>
-
-                      {selectedBlock.type === 'wait' && (
-                        <div className="space-y-3">
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1">
-                              Wait Duration
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={selectedBlock.config.waitDuration || 1}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value, 10) || 1;
-                                setWorkflowBlocks((prev) =>
-                                  prev.map((b) =>
-                                    b.id === selectedBlock.id
-                                      ? { ...b, config: { ...b.config, waitDuration: val } }
-                                      : b
-                                  )
-                                );
-                              }}
-                              className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="text-xs font-medium text-slate-700 block mb-1">
-                              Time Unit
-                            </label>
-                            <select
-                              value={selectedBlock.config.waitUnit || 'hours'}
-                              onChange={(e) => {
-                                const val = e.target.value as any;
-                                setWorkflowBlocks((prev) =>
-                                  prev.map((b) =>
-                                    b.id === selectedBlock.id
-                                      ? { ...b, config: { ...b.config, waitUnit: val } }
-                                      : b
-                                  )
-                                );
-                              }}
-                              className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 cursor-pointer"
-                            >
-                              <option value="minutes">Minutes</option>
-                              <option value="hours">Hours</option>
-                              <option value="days">Days</option>
-                            </select>
-                          </div>
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'message' || selectedBlock.type === 'image') && (
-                        <div>
-                          <label className="text-xs font-medium text-slate-700 block mb-1">
-                            WhatsApp Message Text
-                          </label>
-                          <textarea
-                            rows={4}
-                            value={selectedBlock.config.text || ''}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setWorkflowBlocks((prev) =>
-                                prev.map((b) =>
-                                  b.id === selectedBlock.id
-                                    ? { ...b, config: { ...b.config, text: val } }
-                                    : b
-                                )
-                              );
-                            }}
-                            className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                            placeholder="Type the message sent to the customer..."
-                          />
-                          <p className="text-[11px] text-slate-400 mt-1">
-                            Use variables like &#123;&#123;first_name&#125;&#125; for automatic personalization.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400">Select any block from the canvas to edit.</p>
-                  )}
-                </div>
-
-                {/* 1-Click Starter Templates */}
-                <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs space-y-3">
-                  <h4 className="text-xs font-bold text-slate-900">1-Click Starter Templates</h4>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyTemplate('ecommerce')}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-emerald-50/20 text-left transition-colors cursor-pointer"
-                    >
-                      <div className="text-xs font-bold text-slate-900">🛍️ E-Commerce Abandoned Cart</div>
-                      <div className="text-[11px] text-slate-500">10m, 1h, 4h reminder sequences with coupon</div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleApplyTemplate('leads')}
-                      className="w-full p-2.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-emerald-50/20 text-left transition-colors cursor-pointer"
-                    >
-                      <div className="text-xs font-bold text-slate-900">🎯 Meta Ads Lead Nurture</div>
-                      <div className="text-[11px] text-slate-500">Instant welcome + 3-day appointment follow-up</div>
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-700 pt-1">
+                {validationErrors.map((err, i) => (
+                  <li key={i}>{err}</li>
+                ))}
+              </ul>
             </div>
           )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* TAB 2: MODULE 2 - DEDICATED FOLLOW-UP BUILDER                   */}
-          {/* ---------------------------------------------------------------- */}
-          {activeTab === 'followup' && (
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-                  <div>
-                    <h2 className="text-sm font-bold text-slate-950 flex items-center gap-2">
-                      <span>Automated Follow-Up Sequence</span>
-                      <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold">
-                        Auto-Cancels on Reply
-                      </span>
-                    </h2>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Messages scheduled in advance. When the customer replies, all remaining follow-ups cancel instantly.
-                    </p>
-                  </div>
+          {/* Main 3-Column Layout: Flowchart + Step Settings + Real-Time Phone Preview */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* COLUMN 1: Workflow Steps Canvas (6 Cols) */}
+            <div className="lg:col-span-6 bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Sequence Steps
+                </h3>
 
+                {/* Add Step Quick Buttons */}
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={handleAddFollowUpStep}
-                    className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    onClick={() => handleAddStep('delay')}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
                   >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Follow-Up Step</span>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Delay</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddStep('message')}
+                    className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Message</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddStep('image')}
+                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Image</span>
                   </button>
                 </div>
+              </div>
 
-                {/* Timeline Preview List */}
-                <div className="space-y-4 pt-6">
-                  {followUpSteps.map((step, idx) => (
-                    <div
-                      key={step.id}
-                      className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                    >
-                      <div className="flex items-start sm:items-center gap-3 w-full sm:w-auto">
+              {/* Vertical Step Flow */}
+              <div className="space-y-3 pt-1">
+                {steps.map((step, idx) => {
+                  const isSelected = selectedStepId === step.id;
+                  const isTrigger = step.type === 'trigger';
+                  const isEnd = step.type === 'end';
+                  const isDelay = step.type === 'delay';
+
+                  return (
+                    <React.Fragment key={step.id}>
+                      <div
+                        onClick={() => setSelectedStepId(step.id)}
+                        className={cn(
+                          'p-4 rounded-2xl border transition-all cursor-pointer relative group flex items-start gap-3.5',
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-50/20 shadow-xs ring-1 ring-emerald-500/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/40'
+                        )}
+                      >
+                        {/* Step Type Icon Badge */}
                         <div
                           className={cn(
-                            'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
-                            step.type === 'message'
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'bg-blue-100 text-blue-700'
+                            'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-sm font-bold shadow-2xs',
+                            isTrigger && 'bg-amber-100 text-amber-800',
+                            step.type === 'message' && 'bg-emerald-100 text-emerald-800',
+                            step.type === 'image' && 'bg-purple-100 text-purple-800',
+                            step.type === 'document' && 'bg-blue-100 text-blue-800',
+                            step.type === 'video' && 'bg-rose-100 text-rose-800',
+                            step.type === 'template' && 'bg-indigo-100 text-indigo-800',
+                            isDelay && 'bg-blue-100 text-blue-800',
+                            isEnd && 'bg-slate-200 text-slate-800'
                           )}
                         >
-                          {idx + 1}
+                          {isTrigger && '⚡'}
+                          {step.type === 'message' && '💬'}
+                          {step.type === 'image' && '🖼️'}
+                          {step.type === 'document' && '📄'}
+                          {step.type === 'video' && '🎥'}
+                          {step.type === 'template' && '📋'}
+                          {isDelay && '⏱️'}
+                          {isEnd && '🏁'}
                         </div>
 
-                        <div className="flex-1 sm:flex-initial">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-900">{step.title}</span>
-                            <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                        {/* Step Details */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-900 truncate">
+                              {step.title}
+                            </span>
+                            <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">
                               {step.type}
                             </span>
                           </div>
 
-                          {step.type === 'message' ? (
-                            <p className="text-xs text-slate-600 mt-1 max-w-xl">
-                              "{step.messageText}"
-                            </p>
-                          ) : (
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-slate-500">Wait:</span>
-                              <input
-                                type="number"
-                                min="1"
-                                value={step.delayAmount || 1}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10) || 1;
-                                  setFollowUpSteps((prev) =>
-                                    prev.map((s) => (s.id === step.id ? { ...s, delayAmount: val } : s))
-                                  );
-                                }}
-                                className="w-16 px-2 py-1 text-xs border border-slate-200 rounded-lg bg-slate-50"
-                              />
-                              <select
-                                value={step.delayUnit || 'hours'}
-                                onChange={(e) => {
-                                  const val = e.target.value as any;
-                                  setFollowUpSteps((prev) =>
-                                    prev.map((s) => (s.id === step.id ? { ...s, delayUnit: val } : s))
-                                  );
-                                }}
-                                className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-slate-50"
-                              >
-                                <option value="minutes">Minutes</option>
-                                <option value="hours">Hours</option>
-                                <option value="days">Days</option>
-                              </select>
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                            {step.text || step.caption || step.description}
+                          </p>
+
+                          {isDelay && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-blue-50 text-blue-800 text-[11px] font-bold border border-blue-200/60 font-mono">
+                              <Clock className="w-3 h-3 text-blue-600" />
+                              <span>
+                                Wait {step.delayAmount} {step.delayUnit}
+                              </span>
                             </div>
                           )}
                         </div>
+
+                        {/* Move & Delete Actions */}
+                        {!isTrigger && !isEnd && (
+                          <div className="flex flex-col gap-1 items-center shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveStep(idx, 'up');
+                              }}
+                              disabled={idx <= 1}
+                              className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-30"
+                              title="Move Up"
+                            >
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveStep(idx, 'down');
+                              }}
+                              disabled={idx >= steps.length - 2}
+                              className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-30"
+                              title="Move Down"
+                            >
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteStep(step.id);
+                              }}
+                              className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                              title="Delete Step"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
-                      {/* Reorder and Delete controls */}
-                      <div className="flex items-center gap-1.5 self-end sm:self-center">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveFollowUp(idx, 'up')}
-                          disabled={idx === 0}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 rounded text-[11px] text-slate-700 cursor-pointer"
-                        >
-                          ↑ Up
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveFollowUp(idx, 'down')}
-                          disabled={idx === followUpSteps.length - 1}
-                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 rounded text-[11px] text-slate-700 cursor-pointer"
-                        >
-                          ↓ Down
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteFollowUp(step.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      {/* Visual Flow Connector */}
+                      {idx < steps.length - 1 && (
+                        <div className="flex justify-center py-0.5">
+                          <div className="w-0.5 h-4 bg-slate-200 flex items-center justify-center">
+                            <ArrowDown className="w-3 h-3 text-slate-400" />
+                          </div>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </div>
             </div>
-          )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* TAB 3 & 4: MODULE 3 & 4 - CHATBOT & BUTTON FLOWS                 */}
-          {/* ---------------------------------------------------------------- */}
-          {(activeTab === 'chatbot' || activeTab === 'buttonflow') && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <div className="lg:col-span-8 bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-950 flex items-center gap-2">
-                    <Bot className="w-4 h-4 text-emerald-600" />
-                    <span>
-                      {activeTab === 'chatbot' ? 'Interactive Chatbot Flow' : 'Button-Based Decision Tree'}
-                    </span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Ask customers questions and provide 1-tap buttons for instant replies. No coding needed.
-                  </p>
+            {/* COLUMN 2: Step Editor & Delay Selector (6 Cols) */}
+            <div className="lg:col-span-6 space-y-6">
+              {/* Step Editor Card */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Edit Selected Step</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-slate-400 uppercase">
+                    {selectedStep?.type}
+                  </span>
                 </div>
 
-                {/* Question Node Card */}
-                <div className="p-5 rounded-2xl border-2 border-slate-200 bg-slate-50/50 space-y-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-800 block mb-1">
-                      1. Message Sent to Customer
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={chatbotNodes[0].prompt}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setChatbotNodes((prev) => [{ ...prev[0], prompt: val }]);
-                      }}
-                      className="w-full text-xs p-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
+                {selectedStep ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-700 block mb-1">
+                        Step Title
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedStep.title}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSteps((prev) =>
+                            prev.map((s) => (s.id === selectedStep.id ? { ...s, title: val } : s))
+                          );
+                        }}
+                        className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-medium"
+                      />
+                    </div>
 
-                  {/* Buttons Branching List */}
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-slate-800 block">
-                      2. Customer Quick Reply Buttons (Branches)
-                    </label>
-
-                    {chatbotNodes[0].options.map((opt, optIdx) => (
-                      <div
-                        key={opt.id}
-                        className="p-4 rounded-xl border border-slate-200 bg-white space-y-2"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                            Button {optIdx + 1}: [{opt.label}]
-                          </span>
-                          <span className="text-[11px] text-slate-400">If Customer Taps This</span>
+                    {/* Delay Selector (Minutes, Hours, Days) */}
+                    {selectedStep.type === 'delay' && (
+                      <div className="grid grid-cols-2 gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                        <div>
+                          <label className="text-xs font-bold text-blue-900 block mb-1">
+                            Delay Duration
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={selectedStep.delayAmount || 1}
+                            onChange={(e) => {
+                              const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                              setSteps((prev) =>
+                                prev.map((s) =>
+                                  s.id === selectedStep.id
+                                    ? { ...s, delayAmount: val, title: `Wait ${val} ${s.delayUnit || 'hours'}` }
+                                    : s
+                                )
+                              );
+                            }}
+                            className="w-full text-xs px-3.5 py-2 bg-white border border-blue-200 rounded-xl font-mono font-bold"
+                          />
                         </div>
 
                         <div>
-                          <label className="text-[11px] text-slate-500 block mb-1">
-                            Automatic Reply Message:
+                          <label className="text-xs font-bold text-blue-900 block mb-1">
+                            Time Unit
+                          </label>
+                          <select
+                            value={selectedStep.delayUnit || 'hours'}
+                            onChange={(e) => {
+                              const val = e.target.value as any;
+                              setSteps((prev) =>
+                                prev.map((s) =>
+                                  s.id === selectedStep.id
+                                    ? { ...s, delayUnit: val, title: `Wait ${s.delayAmount || 1} ${val}` }
+                                    : s
+                                )
+                              );
+                            }}
+                            className="w-full text-xs px-3.5 py-2 bg-white border border-blue-200 rounded-xl font-bold cursor-pointer"
+                          >
+                            <option value="minutes">Minutes</option>
+                            <option value="hours">Hours</option>
+                            <option value="days">Days</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Message Text Area */}
+                    {(selectedStep.type === 'message' || selectedStep.type === 'template') && (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-700 block mb-1">
+                          WhatsApp Message Body
+                        </label>
+                        <textarea
+                          rows={4}
+                          value={selectedStep.text || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSteps((prev) =>
+                              prev.map((s) => (s.id === selectedStep.id ? { ...s, text: val } : s))
+                            );
+                          }}
+                          placeholder="Type the message to send to the lead..."
+                          className="w-full text-xs p-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 font-sans"
+                        />
+                      </div>
+                    )}
+
+                    {/* Image URL & Caption */}
+                    {selectedStep.type === 'image' && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold text-slate-700 block mb-1">
+                            Image URL
                           </label>
                           <input
                             type="text"
-                            value={opt.replyText}
+                            value={selectedStep.mediaUrl || ''}
                             onChange={(e) => {
                               const val = e.target.value;
-                              const updatedOptions = [...chatbotNodes[0].options];
-                              updatedOptions[optIdx].replyText = val;
-                              setChatbotNodes((prev) => [{ ...prev[0], options: updatedOptions }]);
+                              setSteps((prev) =>
+                                prev.map((s) => (s.id === selectedStep.id ? { ...s, mediaUrl: val } : s))
+                              );
                             }}
-                            className="w-full text-xs px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500"
+                            className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-slate-700 block mb-1">
+                            Image Caption
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedStep.caption || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSteps((prev) =>
+                                prev.map((s) => (s.id === selectedStep.id ? { ...s, caption: val } : s))
+                              );
+                            }}
+                            className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl"
                           />
                         </div>
                       </div>
-                    ))}
+                    )}
+
+                    {/* Document / Video */}
+                    {(selectedStep.type === 'document' || selectedStep.type === 'video') && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold text-slate-700 block mb-1">
+                            Media File URL
+                          </label>
+                          <input
+                            type="text"
+                            value={selectedStep.mediaUrl || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSteps((prev) =>
+                                prev.map((s) => (s.id === selectedStep.id ? { ...s, mediaUrl: val } : s))
+                              );
+                            }}
+                            className="w-full text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  <p className="text-xs text-slate-400">Select a step on the left to configure.</p>
+                )}
               </div>
 
-              {/* Interactive Phone Simulation */}
-              <div className="lg:col-span-4 flex flex-col items-center">
-                <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>Interactive Customer Preview</span>
-                </div>
-                <PhoneMockup
-                  businessName="Your Business"
-                  bodyText={chatbotNodes[0].prompt}
-                  buttons={chatbotNodes[0].options.map((o) => ({ id: o.id, title: o.label }))}
-                  className="scale-95 origin-top"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* ---------------------------------------------------------------- */}
-          {/* TAB 5: MODULE 5 - VISUAL LEAD FUNNEL JOURNEY                     */}
-          {/* ---------------------------------------------------------------- */}
-          {activeTab === 'leadfunnel' && (
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-950 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-600" />
-                    <span>Visual Lead Funnel Journey</span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Full end-to-end customer progression from Meta Ad click to Priority Lead
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">Overall Conversion:</span>
-                  <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg">
-                    29.6% Closed
+              {/* Real-Time Live WhatsApp Device Preview */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs flex flex-col items-center">
+                <div className="w-full flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-emerald-600" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Real-Time Device Preview
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                    Live Preview
                   </span>
                 </div>
+
+                <PhoneMockup
+                  businessName="TriPix Solutions"
+                  bodyText={selectedStep?.text || selectedStep?.caption || selectedStep?.description || 'WhatsApp Message'}
+                  mediaUrl={selectedStep?.type === 'image' ? selectedStep.mediaUrl : undefined}
+                  className="scale-90 origin-top"
+                />
               </div>
 
-              {/* Visual Funnel Stages */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {funnelStages.map((stage, idx) => (
-                  <div
-                    key={stage.id}
-                    className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-500/60 transition-all space-y-3 relative group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl">{stage.icon}</span>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                        {stage.conversionRate}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-900">{stage.title}</h3>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                        {stage.subtitle}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Total Leads:</span>
-                      <span className="font-bold text-slate-800">{stage.leadsCount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-200/60 flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <p className="text-xs text-emerald-900 leading-relaxed">
-                  <strong>Automatic Intent Escalation:</strong> When any customer asks for price, shipping, or types "interested", they are automatically promoted to <strong>Priority Leads</strong> and highlighted in your CRM inbox.
+              {/* Test Run Sequence Form */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-4">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Test Sequence Execution
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Send a live test run of this automation flow to your WhatsApp phone.
                 </p>
+
+                <form onSubmit={handleTestRunFlow} className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="+15551234567"
+                    value={testPhoneNumber}
+                    onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    className="flex-1 text-xs px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isTesting}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shrink-0 cursor-pointer min-h-[38px]"
+                  >
+                    {isTesting ? 'Sending...' : 'Test Run'}
+                  </button>
+                </form>
+
+                {testResult && (
+                  <div
+                    className={cn(
+                      'p-3 rounded-xl text-xs flex items-center gap-2',
+                      testResult.success
+                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border border-rose-200'
+                    )}
+                  >
+                    {testResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{testResult.message}</span>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Workflow Execution Logs & History Table */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-sm font-bold text-slate-950">Execution Logs &amp; Delivery Status</h3>
+                <p className="text-xs text-slate-500">
+                  Real-time delivery receipts for automated follow-up messages
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={loadFlowAndLogs}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                title="Refresh logs"
+              >
+                <RefreshCw className={cn('w-4 h-4', loadingLogs && 'animate-spin text-emerald-600')} />
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100 text-xs">
+              {logs.length === 0 ? (
+                <div className="py-8 text-center text-slate-400">
+                  No automated executions recorded yet. Once a lead arrives or a test run is initiated, logs will display here.
+                </div>
+              ) : (
+                logs.map((log) => (
+                  <div key={log.id} className="py-3 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{log.stepName}</span>
+                        <span className="text-[11px] font-mono text-slate-500">({log.phoneNumber})</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate mt-0.5 max-w-md">{log.details}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span
+                        className={cn(
+                          'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                          log.status === 'delivered' && 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+                          log.status === 'read' && 'bg-blue-50 text-blue-800 border border-blue-200',
+                          log.status === 'sent' && 'bg-slate-100 text-slate-700',
+                          log.status === 'failed' && 'bg-rose-50 text-rose-800 border border-rose-200'
+                        )}
+                      >
+                        {log.status}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </main>
       </div>
     </div>

@@ -10,6 +10,7 @@ interface PhoneMockupProps {
   bodyText?: string;
   headerText?: string;
   footerText?: string;
+  mediaUrl?: string;
   buttons?: { id: string; title: string }[];
   showInboundReply?: boolean;
   inboundText?: string;
@@ -23,12 +24,13 @@ export function PhoneMockup({
   bodyText = 'Something big is coming soon. Are you ready?',
   headerText = 'AURA Private Showcase',
   footerText = 'Confidential • By Invitation Only',
+  mediaUrl,
   buttons = [
     { id: 'btn_specs', title: 'Product Specs' },
     { id: 'btn_pricing', title: 'Pricing' },
     { id: 'btn_agent', title: 'Talk to Agent' },
   ],
-  showInboundReply = true,
+  showInboundReply = false,
   inboundText = 'Show me',
   onButtonClick,
   className,
@@ -84,6 +86,12 @@ export function PhoneMockup({
               <span className="font-mono uppercase tracking-wide">Template: {templateName}</span>
               <Sparkles className="w-3 h-3 text-[#E6C687]" />
             </div>
+            {mediaUrl && (
+              <div className="rounded-lg overflow-hidden my-1 max-h-36">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={mediaUrl} alt="Message Media" className="w-full h-full object-cover" />
+              </div>
+            )}
             <p className="text-xs leading-relaxed text-zinc-100 font-sans">
               {bodyText}
             </p>

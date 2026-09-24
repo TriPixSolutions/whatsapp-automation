@@ -46,6 +46,11 @@ export async function getAuthorizedUser(
     }
 
     if (!sessionPayload || !sessionPayload.userId) {
+      // In local development sandbox mode only, allow dev fallback if explicitly enabled
+      if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_AUTH_BYPASS === 'true') {
+        const defaultAdmin = UsersDB.getByEmail('admin@tripixsolutions.com') || UsersDB.getAll()[0];
+        if (defaultAdmin) return defaultAdmin;
+      }
       return null;
     }
 
