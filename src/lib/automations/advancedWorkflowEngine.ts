@@ -493,38 +493,39 @@ export class AdvancedWorkflowEngine {
     },
     isTestSimulation = false
   ): Promise<WorkflowExecutionLog | null> {
+    console.log(`[BUTTON PAYLOAD] Button action received for session ${session.id}:\n` +
+      `  - buttonId: "${event.buttonId || 'none'}"\n` +
+      `  - buttonTitle: "${event.buttonTitle || 'none'}"\n` +
+      `  - action: "${event.action}"\n` +
+      `  - fromPhone: "${session.phoneNumber}"`);
+
     const workflow = TestCenterStore.getWorkflow(session.workflowId);
     if (!workflow) {
-      console.error(`[WorkflowEngine] ❌ ERROR: Workflow ${session.workflowId} not found for session ${session.id}`);
+      const err = `[WORKFLOW NOT FOUND] Workflow "${session.workflowId}" not found for session "${session.id}"`;
+      console.error(err);
       return null;
     }
+    console.log(`[WORKFLOW FOUND] Workflow ID: "${workflow.id}", Name: "${workflow.name}"`);
 
     const pausedNode = workflow.nodes.find((n) => n.id === session.currentNodeId);
     if (!pausedNode) {
-      console.error(`[WorkflowEngine] ❌ ERROR: Paused node ${session.currentNodeId} not found in workflow ${workflow.id}`);
+      const err = `[NODE NOT FOUND] Paused node "${session.currentNodeId}" not found in workflow "${workflow.id}"`;
+      console.error(err);
       return null;
     }
+    console.log(`[NODE FOUND] Current Paused Node: "${pausedNode.title}" (${pausedNode.id}), Type: "${pausedNode.type}"`);
 
     const resolution = this.resolveNextBranchDetailed(workflow, pausedNode, event);
     const nextNodeId = resolution.nextNodeId;
 
-    console.log(`[BUTTON CLICK RECEIVED] Button ID: "${event.buttonId || 'none'}", Title: "${event.buttonTitle || 'none'}", From: "${session.phoneNumber}"`);
-    console.log(`[BUTTON ID] "${event.buttonId || 'none'}"`);
-    console.log(`[BUTTON TITLE] "${event.buttonTitle || 'none'}"`);
-
     if (!nextNodeId) {
-      console.warn(`[STEP 5: BRANCH NOT FOUND] No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action}\n` +
-        `  - clicked button id: "${event.buttonId || 'none'}"\n` +
-        `  - clicked button title: "${event.buttonTitle || 'none'}"\n` +
-        `  - current node: "${pausedNode.title}" (${pausedNode.id})`);
-      console.warn(`[BRANCH NOT FOUND] No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action} (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
+      console.error(`[BRANCH NOT FOUND] No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action} (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
       return null;
     }
 
-    console.log(`[SESSION FOUND] Session ID: "${session.id}", Workflow: "${session.workflowId}", Node: "${session.currentNodeId}", Phone: "${session.phoneNumber}"`);
     console.log(`[BRANCH FOUND] Matched branch from node "${pausedNode.title}" (${pausedNode.id}) ➔ Next Node ID: "${nextNodeId}" (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
-    console.log(`[WorkflowEngine] 🔘 BUTTON CLICKED / ACTION: Customer ${session.phoneNumber} performed "${event.buttonTitle || event.buttonId || event.text || event.action}"`);
-    console.log(`[WorkflowEngine] ▶️ WORKFLOW RESUMED: Workflow "${workflow.name}" (${workflow.id}) resumed from node "${pausedNode.title}" (${pausedNode.id}) ➔ Advancing to node "${nextNodeId}"`);
+    console.log(`[NEXT NODE] Next Node ID: "${nextNodeId}"`);
+    console.log(`[WORKFLOW RESUMED] Workflow "${workflow.name}" (${workflow.id}) resumed from node "${pausedNode.title}" (${pausedNode.id}) ➔ Advancing to node "${nextNodeId}"`);
 
     // Clear the waiting session since it has been fulfilled
     TestCenterStore.clearSession(session.phoneNumber, session.workspaceId);
@@ -645,6 +646,10 @@ export class AdvancedWorkflowEngine {
     while (currentNode && stepCount < maxSteps) {
       stepCount++;
       const stepStart = Date.now();
+      console.log(`[NEXT NODE] Next node executed:\n` +
+        `  - nodeId: "${currentNode.id}"\n` +
+        `  - title: "${currentNode.title}"\n` +
+        `  - type: "${currentNode.type}"`);
       console.log(`[STEP 6: NEXT NODE EXECUTED] Starting execution of next node:\n` +
         `  - node type: "${currentNode.type}"\n` +
         `  - node id: "${currentNode.id}"\n` +
@@ -738,6 +743,11 @@ export class AdvancedWorkflowEngine {
 
             if (sendResult.success) {
               traceStep.status = 'message_sent';
+              console.log(`[MESSAGE SENT] Message dispatched successfully:\n` +
+                `  - node: "${currentNode.title}" (${currentNode.id})\n` +
+                `  - type: "${currentNode.type}"\n` +
+                `  - to: "${context.phoneNumber}"\n` +
+                `  - messageId: "${sendResult.messageId || 'simulated'}"`);
               if (sendResult.messageId) {
                 metaResponses.push({
                   messageId: sendResult.messageId,
@@ -749,6 +759,7 @@ export class AdvancedWorkflowEngine {
             } else {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
+              console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
             }
 
             traceStep.completedAt = new Date().toISOString();
@@ -874,6 +885,11 @@ export class AdvancedWorkflowEngine {
 
             if (sendResult.success) {
               traceStep.status = 'message_sent';
+              console.log(`[MESSAGE SENT] Message dispatched successfully:\n` +
+                `  - node: "${currentNode.title}" (${currentNode.id})\n` +
+                `  - type: "${currentNode.type}"\n` +
+                `  - to: "${context.phoneNumber}"\n` +
+                `  - messageId: "${sendResult.messageId || 'simulated'}"`);
               if (sendResult.messageId) {
                 metaResponses.push({
                   messageId: sendResult.messageId,
@@ -885,6 +901,7 @@ export class AdvancedWorkflowEngine {
             } else {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
+              console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
             }
             console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Dispatched to ${context.phoneNumber}`);
             break;

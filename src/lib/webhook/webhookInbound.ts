@@ -195,7 +195,75 @@ export async function handleWebhookInboundMessages(
     // 3. Customer replied: automatically cancel pending scheduled follow-ups!
     await FollowUpEngine.cancelPendingOnReply(fromPhone);
 
-    // 4. Interactive Chatbot Branch Execution (Yes/No buttons or dynamic options)
+    const isButtonClick = (message.type === 'interactive' && message.interactive?.type === 'button_reply') || message.type === 'button';
+    const buttonId = interactionPayload?.id || message.interactive?.button_reply?.id || message.button?.payload || triggerText;
+    const buttonTitle = interactionPayload?.title || message.interactive?.button_reply?.title || message.button?.text || content;
+
+    console.log(`[PHONE NORMALIZED] raw: "${message.from}" ➔ normalized: "${fromPhone}"`);
+
+    if (isButtonClick) {
+      console.log(`[BUTTON PAYLOAD] Button action received:\n` +
+        `  - buttonId: "${buttonId}"\n` +
+        `  - buttonTitle: "${buttonTitle}"\n` +
+        `  - fromPhone: "${fromPhone}"\n` +
+        `  - rawType: "${message.type}"\n` +
+        `  - interactiveType: "${message.interactive?.type || 'none'}"\n` +
+        `  - messageId: "${message.id}"`);
+      console.log(`[BUTTON CLICK RECEIVED] Button ID: "${buttonId}", Title: "${buttonTitle}", From: "${fromPhone}"`);
+      console.log(`[BUTTON ID] "${buttonId}"`);
+      console.log(`[BUTTON TITLE] "${buttonTitle}"`);
+    }
+
+    // 4. PRIORITY 1: Check if customer has an active paused/waiting workflow execution session
+    let advancedWorkflowHandled = false;
+    try {
+      const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
+      const { TestCenterStore } = await import('@/lib/automations/testCenterStore');
+
+      console.log(`[SESSION SEARCH] Checking active workflow session for phone: "${fromPhone}", workspaceId: "${workspaceId}"`);
+      const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
+
+      if (waitingSession) {
+        console.log(`[SESSION FOUND] Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", Phone: "${fromPhone}", WaitingFor: "${waitingSession.waitingFor}"`);
+
+        let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
+        const cardIndex = interactionPayload?.cardIndex;
+        const cardButtonId = interactionPayload?.cardButtonId || buttonId;
+
+        if (isButtonClick || waitingSession.waitingFor === 'button_click') {
+          resumeAction = 'button_click';
+        } else if (waitingSession.waitingFor === 'carousel_selection') {
+          resumeAction = 'carousel_click';
+        } else if (waitingSession.waitingFor === 'reply') {
+          resumeAction = 'reply';
+        }
+
+        console.log(`[RESUME STARTED] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}")`);
+
+        const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(waitingSession, {
+          action: resumeAction,
+          buttonId,
+          buttonTitle,
+          cardIndex,
+          cardButtonId,
+          text: content || triggerText,
+        });
+
+        if (resumedLog) {
+          console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
+          advancedWorkflowHandled = true;
+          continue; // Successfully handled by active workflow session!
+        } else {
+          console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}"`);
+        }
+      } else {
+        console.log(`[SESSION NOT FOUND] No active session found for phone: "${fromPhone}", Workspace: "${workspaceId}"`);
+      }
+    } catch (err: any) {
+      console.error('[Advanced Workflow Webhook Error]:', err);
+    }
+
+    // 5. PRIORITY 2: Interactive Chatbot Branch Execution (Legacy flows)
     let branchHandled = false;
     const activeFlows = AutomationsDB.list(workspaceId);
     for (const flow of activeFlows) {
@@ -241,86 +309,9 @@ export async function handleWebhookInboundMessages(
     }
     if (branchHandled) continue;
 
-    const isButtonClick = (message.type === 'interactive' && message.interactive?.type === 'button_reply') || message.type === 'button';
-    const buttonId = interactionPayload?.id || message.interactive?.button_reply?.id || message.button?.payload || triggerText;
-    const buttonTitle = interactionPayload?.title || message.interactive?.button_reply?.title || message.button?.text || content;
-
-    if (isButtonClick) {
-      console.log(`[BUTTON CLICK RECEIVED] Button ID: "${buttonId}", Title: "${buttonTitle}", From: "${fromPhone}"`);
-      console.log(`[BUTTON ID] "${buttonId}"`);
-      console.log(`[BUTTON TITLE] "${buttonTitle}"`);
-    }
-
-    // 5b. Advanced Workflow Engine 2.0 (DAG Workflows, Buttons, Carousels, Session State)
-    let advancedWorkflowHandled = false;
+    // 6. PRIORITY 3: If not waiting in a workflow, match incoming message to new workflow triggers
     try {
       const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
-      const { TestCenterStore } = await import('@/lib/automations/testCenterStore');
-
-      // 1. FIRST PRIORITY: Check if user has an active paused/waiting workflow execution session
-      const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
-
-      if (waitingSession) {
-        console.log(`[STEP 3: SESSION FOUND] Active workflow session verified:\n` +
-          `  - session found: true\n` +
-          `  - session id: "${waitingSession.id}"\n` +
-          `  - workflow id: "${waitingSession.workflowId}"\n` +
-          `  - current node id: "${waitingSession.currentNodeId}"\n` +
-          `  - waiting for: "${waitingSession.waitingFor}"\n` +
-          `  - phone: "${fromPhone}"`);
-
-        let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
-        const cardIndex = interactionPayload?.cardIndex;
-        const cardButtonId = interactionPayload?.cardButtonId || buttonId;
-
-        if (isButtonClick || waitingSession.waitingFor === 'button_click') {
-          resumeAction = 'button_click';
-        } else if (waitingSession.waitingFor === 'carousel_selection') {
-          resumeAction = 'carousel_click';
-        } else if (waitingSession.waitingFor === 'reply') {
-          resumeAction = 'reply';
-        }
-
-        console.log(`[STEP 4: RESUME CALLED] resumeWorkflowExecution() initiated:\n` +
-          `  - session id: "${waitingSession.id}"\n` +
-          `  - workflow id: "${waitingSession.workflowId}"\n` +
-          `  - current node id: "${waitingSession.currentNodeId}"\n` +
-          `  - action: "${resumeAction}"\n` +
-          `  - button id: "${buttonId}"\n` +
-          `  - button title: "${buttonTitle}"`);
-
-        console.log(`[RESUME STARTED] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}")`);
-
-        const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(waitingSession, {
-          action: resumeAction,
-          buttonId,
-          buttonTitle,
-          cardIndex,
-          cardButtonId,
-          text: content || triggerText,
-        });
-
-        if (resumedLog) {
-          console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
-          advancedWorkflowHandled = true;
-        } else {
-          console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}"`);
-        }
-      } else {
-        if (isButtonClick) {
-          console.log(`[STEP 3: SESSION NOT FOUND] Active session check:\n` +
-            `  - session found: false\n` +
-            `  - session not found: true\n` +
-            `  - phone: "${fromPhone}"\n` +
-            `  - workspace id: "${workspaceId}"\n` +
-            `  - button id: "${buttonId}"\n` +
-            `  - button title: "${buttonTitle}"`);
-          console.log(`[STEP 4: RESUME BLOCKED] Condition blocking resumeWorkflowExecution():\n` +
-            `  - No active session exists for phone "${fromPhone}" in workspace "${workspaceId}". Session was either not saved or has expired.`);
-        }
-      }
-
-      // 2. SECOND PRIORITY: If not waiting in a workflow, match incoming message to new workflow triggers
       if (!advancedWorkflowHandled) {
         let triggerType: any = 'keyword';
         if (message.type === 'interactive') {

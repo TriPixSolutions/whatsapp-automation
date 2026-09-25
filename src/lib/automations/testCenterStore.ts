@@ -300,7 +300,8 @@ function syncFromDisk() {
 
 function seedDefaultWorkflows() {
   const defaultFlow = buildProductionVipWorkflow(DEFAULT_WORKSPACE_ID);
-  if (!globalState.workflows[defaultFlow.id]) {
+  const existing = globalState.workflows[defaultFlow.id];
+  if (!existing || existing.nodes.length !== defaultFlow.nodes.length || (existing.edges?.length || 0) !== (defaultFlow.edges?.length || 0)) {
     globalState.workflows[defaultFlow.id] = defaultFlow;
     persistStore(true);
   }
