@@ -373,8 +373,24 @@ export const ContactsDB = {
   getByPhone(phone: string, workspaceId: string = DEFAULT_WORKSPACE_ID): Contact | null {
     const cleanDigits = phone.replace(/[^0-9]/g, '');
     if (!cleanDigits) return null;
+    // 1. Exact workspace match
     for (const c of memoryState.contacts.values()) {
       if ((c.workspaceId || c.workspace_id) === workspaceId) {
+        if (c.phoneNumber.replace(/[^0-9]/g, '') === cleanDigits) {
+          return c;
+        }
+      }
+    }
+    // 2. Fallback match across default workspace aliases
+    for (const c of memoryState.contacts.values()) {
+      const cWs = c.workspaceId || c.workspace_id;
+      if (
+        cWs === 'default' ||
+        cWs === DEFAULT_WORKSPACE_ID ||
+        workspaceId === 'default' ||
+        workspaceId === DEFAULT_WORKSPACE_ID ||
+        !cWs
+      ) {
         if (c.phoneNumber.replace(/[^0-9]/g, '') === cleanDigits) {
           return c;
         }

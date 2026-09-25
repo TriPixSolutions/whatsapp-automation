@@ -195,7 +195,7 @@ export function buildProductionVipWorkflow(workspaceId = DEFAULT_WORKSPACE_ID): 
         config: {},
         position: { x: 1360, y: 320 },
       },
-      // Branch 3: Talk To Expert -> Create Human Agent Request -> Done
+      // Branch 3: Talk To Expert -> Create Human Agent Request -> Send Confirmation -> Done
       {
         id: 'node_expert_request',
         type: 'crm_action',
@@ -207,6 +207,18 @@ export function buildProductionVipWorkflow(workspaceId = DEFAULT_WORKSPACE_ID): 
           priority: 'urgent',
         },
         position: { x: 1040, y: 500 },
+        nextNodeId: 'node_expert_msg',
+      },
+      {
+        id: 'node_expert_msg',
+        type: 'message',
+        title: 'Send Expert Request Confirmation',
+        description: 'Sends confirmation to customer that specialist was notified',
+        messageType: 'text',
+        config: {
+          text: '👨‍💼 *Live Specialist Alerted*\n\nYour request has been routed to our senior concierge team. An expert will respond directly in this chat shortly.\n\nThank you for reaching out!',
+        },
+        position: { x: 1360, y: 500 },
         nextNodeId: 'node_end_expert',
       },
       {
@@ -215,7 +227,7 @@ export function buildProductionVipWorkflow(workspaceId = DEFAULT_WORKSPACE_ID): 
         title: 'Workflow Completed',
         description: 'Human agent request registered & ticket opened',
         config: {},
-        position: { x: 1360, y: 500 },
+        position: { x: 1680, y: 500 },
       },
     ],
     edges: [
@@ -231,14 +243,18 @@ export function buildProductionVipWorkflow(workspaceId = DEFAULT_WORKSPACE_ID): 
       { id: 'e_pricing_end', source: 'node_pricing_info', target: 'node_end_pricing' },
       // Branch 3: Talk To Expert (support btn_agent, btn-2, and label)
       { id: 'e_btn_agent', source: 'node_button_menu', sourceHandle: 'btn_agent', target: 'node_expert_request', label: 'Talk To Expert' },
-      { id: 'e_expert_end', source: 'node_expert_request', target: 'node_end_expert' },
+      { id: 'e_expert_msg', source: 'node_expert_request', target: 'node_expert_msg' },
+      { id: 'e_expert_end', source: 'node_expert_msg', target: 'node_end_expert' },
     ],
   };
 }
 
 function seedDefaultWorkflows() {
   const defaultFlow = buildProductionVipWorkflow(DEFAULT_WORKSPACE_ID);
-  globalState.workflows[defaultFlow.id] = defaultFlow;
+  if (!globalState.workflows[defaultFlow.id]) {
+    globalState.workflows[defaultFlow.id] = defaultFlow;
+    persistStore(true);
+  }
 }
 
 // Load from disk if exists
@@ -300,10 +316,11 @@ function syncFromDisk() {
       const raw = fs.readFileSync(STORE_FILE, 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed.workflows) {
-        globalState.workflows = { ...parsed.workflows, ...globalState.workflows };
+        globalState.workflows = { ...globalState.workflows, ...parsed.workflows };
       }
       if (parsed.workflowSessions) {
-        globalState.workflowSessions = { ...parsed.workflowSessions, ...globalState.workflowSessions };
+        // Disk is authoritative for multi-process PM2 cluster workers
+        globalState.workflowSessions = parsed.workflowSessions;
       }
     }
   } catch {
@@ -314,6 +331,7 @@ function syncFromDisk() {
 export const TestCenterStore = {
   // WORKFLOWS
   listWorkflows(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowDefinition[] {
+    syncFromDisk();
     return Object.values(globalState.workflows).filter(
       (w) =>
         w.workspaceId === workspaceId ||
@@ -332,14 +350,14 @@ export const TestCenterStore = {
   saveWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
     workflow.updatedAt = new Date().toISOString();
     globalState.workflows[workflow.id] = workflow;
-    persistStore();
+    persistStore(true);
     return workflow;
   },
 
   deleteWorkflow(id: string): boolean {
     if (globalState.workflows[id]) {
       delete globalState.workflows[id];
-      persistStore();
+      persistStore(true);
       return true;
     }
     return false;
@@ -521,18 +539,22 @@ export const TestCenterStore = {
       phoneNumber: cleanPhone,
     };
     persistStore(true);
+    console.log(`[SESSION CREATED] Session ID: "${session.id}", Workflow: "${session.workflowId}", Node: "${session.currentNodeId}", Phone: "${cleanPhone}", WaitingFor: "${session.waitingFor}"`);
     return globalState.workflowSessions[key];
   },
 
   getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): WorkflowSessionState | null {
     const cleanPhone = `+${phoneNumber.replace(/[^0-9]/g, '')}`;
+    // Always sync fresh from disk to coordinate across PM2 cluster workers
+    syncFromDisk();
+
     const key = `${workspaceId}:${cleanPhone}`;
     let session = globalState.workflowSessions[key];
 
-    // If not in memory, sync from disk
-    if (!session) {
-      syncFromDisk();
-      session = globalState.workflowSessions[key];
+    // Check alias key if workspace is default
+    if (!session && (workspaceId === 'default' || workspaceId === DEFAULT_WORKSPACE_ID)) {
+      const altWsId = workspaceId === 'default' ? DEFAULT_WORKSPACE_ID : 'default';
+      session = globalState.workflowSessions[`${altWsId}:${cleanPhone}`];
     }
 
     // Fallback search by clean phone across any matching session
@@ -546,14 +568,20 @@ export const TestCenterStore = {
       }
     }
 
-    if (!session) return null;
+    if (!session) {
+      console.log(`[SESSION NOT FOUND] No active session found for phone: "${cleanPhone}", Workspace: "${workspaceId}"`);
+      return null;
+    }
 
     // Check expiration (24h default)
     if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
       delete globalState.workflowSessions[key];
       persistStore(true);
+      console.log(`[SESSION NOT FOUND] Session for phone "${cleanPhone}" expired and was removed`);
       return null;
     }
+
+    console.log(`[SESSION FOUND] Session ID: "${session.id}", Workflow: "${session.workflowId}", Node: "${session.currentNodeId}", Phone: "${cleanPhone}", WaitingFor: "${session.waitingFor}"`);
     return session;
   },
 
@@ -567,7 +595,10 @@ export const TestCenterStore = {
         cleared = true;
       }
     }
-    if (cleared) persistStore(true);
+    if (cleared) {
+      persistStore(true);
+      console.log(`[SESSION CLEARED] Cleared active session for phone: "${cleanPhone}", Workspace: "${workspaceId}"`);
+    }
     return cleared;
   },
 

@@ -10,12 +10,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
-    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user?.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
     const format = searchParams.get('format'); // 'nodes' or default
 
     // If requesting modern DAG workflows
@@ -34,12 +30,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await request.json();
-    const targetWorkspaceId = user.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user?.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
 
     // Check if this is a Workflow 2.0 DAG definition
     if (Array.isArray(body.nodes)) {

@@ -77,6 +77,7 @@ export type NodeExecutionStatus =
   | 'message_read'
   | 'node_paused'
   | 'waiting_user_action'
+  | 'waiting_for_trigger'
   | 'workflow_resumed'
   | 'completed'
   | 'failed'

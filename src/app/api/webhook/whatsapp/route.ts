@@ -123,11 +123,13 @@ export async function POST(request: NextRequest) {
           if (value.messages?.length > 0) {
             console.log(`[Meta Webhook] Processing ${value.messages.length} inbound message(s) for workspace "${targetWorkspaceId}"`);
             for (const msg of value.messages) {
-              if (msg.type === 'interactive') {
-                console.log(`[Meta Webhook] Interactive message received: type=${msg.interactive?.type}, button_reply.id=${msg.interactive?.button_reply?.id}, button_reply.title=${msg.interactive?.button_reply?.title}, list_reply.id=${msg.interactive?.list_reply?.id}`);
-              } else if (msg.type === 'button') {
-                console.log(`[Meta Webhook] Quick reply button received: text=${msg.button?.text}, payload=${msg.button?.payload}`);
-              }
+              console.log(`[Meta Webhook Step 1] Incoming Message Telemetry:\n` +
+                `  - message.type: ${msg.type}\n` +
+                `  - interactive.type: ${msg.interactive?.type || 'none'}\n` +
+                `  - button_reply.id: ${msg.interactive?.button_reply?.id || msg.button?.payload || 'none'}\n` +
+                `  - button_reply.title: ${msg.interactive?.button_reply?.title || msg.button?.text || 'none'}\n` +
+                `  - from: ${msg.from}\n` +
+                `  - message.id: ${msg.id}`);
             }
             await handleWebhookInboundMessages(value.messages, value.contacts, targetWorkspaceId);
           }

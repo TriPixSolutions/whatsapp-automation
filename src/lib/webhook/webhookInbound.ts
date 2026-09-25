@@ -247,6 +247,8 @@ export async function handleWebhookInboundMessages(
 
     if (isButtonClick) {
       console.log(`[BUTTON CLICK RECEIVED] Button ID: "${buttonId}", Title: "${buttonTitle}", From: "${fromPhone}"`);
+      console.log(`[BUTTON ID] "${buttonId}"`);
+      console.log(`[BUTTON TITLE] "${buttonTitle}"`);
     }
 
     // 5b. Advanced Workflow Engine 2.0 (DAG Workflows, Buttons, Carousels, Session State)
@@ -259,19 +261,33 @@ export async function handleWebhookInboundMessages(
       const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
 
       if (waitingSession) {
-        console.log(`[SESSION FOUND] Found active session "${waitingSession.id}" for phone "${fromPhone}" (workflow: "${waitingSession.workflowId}", paused at node: "${waitingSession.currentNodeId}", waitingFor: "${waitingSession.waitingFor}")`);
+        console.log(`[STEP 3: SESSION FOUND] Active workflow session verified:\n` +
+          `  - session found: true\n` +
+          `  - session id: "${waitingSession.id}"\n` +
+          `  - workflow id: "${waitingSession.workflowId}"\n` +
+          `  - current node id: "${waitingSession.currentNodeId}"\n` +
+          `  - waiting for: "${waitingSession.waitingFor}"\n` +
+          `  - phone: "${fromPhone}"`);
 
         let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
         const cardIndex = interactionPayload?.cardIndex;
         const cardButtonId = interactionPayload?.cardButtonId || buttonId;
 
-        if (waitingSession.waitingFor === 'button_click') {
+        if (isButtonClick || waitingSession.waitingFor === 'button_click') {
           resumeAction = 'button_click';
         } else if (waitingSession.waitingFor === 'carousel_selection') {
           resumeAction = 'carousel_click';
         } else if (waitingSession.waitingFor === 'reply') {
           resumeAction = 'reply';
         }
+
+        console.log(`[STEP 4: RESUME CALLED] resumeWorkflowExecution() initiated:\n` +
+          `  - session id: "${waitingSession.id}"\n` +
+          `  - workflow id: "${waitingSession.workflowId}"\n` +
+          `  - current node id: "${waitingSession.currentNodeId}"\n` +
+          `  - action: "${resumeAction}"\n` +
+          `  - button id: "${buttonId}"\n` +
+          `  - button title: "${buttonTitle}"`);
 
         console.log(`[RESUME STARTED] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}")`);
 
@@ -292,7 +308,15 @@ export async function handleWebhookInboundMessages(
         }
       } else {
         if (isButtonClick) {
-          console.log(`[SESSION NOT FOUND] No active workflow session found for phone "${fromPhone}" in workspace "${workspaceId}"`);
+          console.log(`[STEP 3: SESSION NOT FOUND] Active session check:\n` +
+            `  - session found: false\n` +
+            `  - session not found: true\n` +
+            `  - phone: "${fromPhone}"\n` +
+            `  - workspace id: "${workspaceId}"\n` +
+            `  - button id: "${buttonId}"\n` +
+            `  - button title: "${buttonTitle}"`);
+          console.log(`[STEP 4: RESUME BLOCKED] Condition blocking resumeWorkflowExecution():\n` +
+            `  - No active session exists for phone "${fromPhone}" in workspace "${workspaceId}". Session was either not saved or has expired.`);
         }
       }
 
