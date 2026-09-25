@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       settings = SettingsDB.getByPhoneNumberId(phoneNumberId);
     }
 
-    const targetWorkspaceId = settings.id || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = (settings.id === 'default' || !settings.id) ? DEFAULT_WORKSPACE_ID : settings.id;
     const appSecret = settings.appSecret || process.env.META_APP_SECRET;
 
     // 2. Strict HMAC-SHA256 Signature Verification

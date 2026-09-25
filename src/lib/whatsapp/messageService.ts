@@ -1,5 +1,6 @@
 import { SettingsDB, MessagesDB, ContactsDB, ConversationsDB, DEFAULT_WORKSPACE_ID, Message, MessageType } from '@/lib/db';
 import { MetaWhatsAppClient, MetaApiResult } from '@/lib/meta/api';
+import { decryptToken } from '@/lib/crypto';
 
 export interface SendWhatsAppMessageOptions {
   workspaceId?: string;
@@ -62,10 +63,28 @@ export class WhatsAppMessageService {
    * Centralized message dispatch with 24-hour window enforcement, retry mechanism, and message persistence
    */
   static async send(options: SendWhatsAppMessageOptions): Promise<SendMessageResult> {
-    const workspaceId = options.workspaceId || DEFAULT_WORKSPACE_ID;
-    const settings = SettingsDB.get(workspaceId);
-    const phoneNumberId = (options.phoneNumberId || settings.phoneNumberId || '').trim();
-    const accessToken = (options.accessToken || settings.accessToken || '').trim();
+    const workspaceId = (options.workspaceId === 'default' || !options.workspaceId) ? DEFAULT_WORKSPACE_ID : options.workspaceId;
+    let settings = SettingsDB.get(workspaceId);
+    if (!settings?.phoneNumberId) {
+      const defaultSettings = SettingsDB.get('default');
+      if (defaultSettings?.phoneNumberId) settings = defaultSettings;
+    }
+
+    const phoneNumberId = (options.phoneNumberId || settings.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '').trim();
+    let rawToken = (options.accessToken || settings.accessToken || process.env.META_ACCESS_TOKEN || '').trim();
+    let accessToken = rawToken;
+
+    if (rawToken.startsWith('enc:gcm:')) {
+      const decrypted = decryptToken(rawToken);
+      if (decrypted && !decrypted.startsWith('enc:gcm:')) {
+        accessToken = decrypted;
+      } else if (process.env.META_ACCESS_TOKEN) {
+        accessToken = process.env.META_ACCESS_TOKEN.trim();
+      }
+    }
+    if ((!accessToken || accessToken.startsWith('enc:gcm:')) && process.env.META_ACCESS_TOKEN) {
+      accessToken = process.env.META_ACCESS_TOKEN.trim();
+    }
 
     const cleanTo = options.to.startsWith('+') ? options.to : `+${options.to.replace(/[^0-9]/g, '')}`;
 
@@ -113,6 +132,7 @@ export class WhatsAppMessageService {
     // 3. Check live credentials
     const isPlaceholder = Boolean(
       !accessToken ||
+      accessToken.startsWith('enc:gcm:') ||
       accessToken.includes('SAMPLE_TOKEN') ||
       accessToken.includes('AI_GENERATED') ||
       accessToken.includes('placeholder') ||

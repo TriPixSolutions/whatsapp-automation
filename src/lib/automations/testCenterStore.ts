@@ -336,12 +336,18 @@ export const TestCenterStore = {
   // WORKFLOWS
   listWorkflows(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowDefinition[] {
     syncFromDisk();
-    return Object.values(globalState.workflows).filter(
+    const effectiveWsId = (workspaceId === 'default' || !workspaceId) ? DEFAULT_WORKSPACE_ID : workspaceId;
+    let list = Object.values(globalState.workflows).filter(
       (w) =>
-        w.workspaceId === workspaceId ||
-        (w.workspaceId === 'default' && workspaceId === DEFAULT_WORKSPACE_ID) ||
-        (w.workspaceId === DEFAULT_WORKSPACE_ID && workspaceId === 'default')
+        !w.workspaceId ||
+        w.workspaceId === effectiveWsId ||
+        (w.workspaceId === 'default' && effectiveWsId === DEFAULT_WORKSPACE_ID) ||
+        (w.workspaceId === DEFAULT_WORKSPACE_ID && effectiveWsId === 'default')
     );
+    if (list.length === 0 && Object.keys(globalState.workflows).length > 0) {
+      list = Object.values(globalState.workflows);
+    }
+    return list;
   },
 
   getWorkflow(id: string): WorkflowDefinition | null {
@@ -579,7 +585,11 @@ export const TestCenterStore = {
 
     // Check expiration (24h default)
     if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
-      delete globalState.workflowSessions[key];
+      for (const [k, s] of Object.entries(globalState.workflowSessions)) {
+        if (s.id === session.id) {
+          delete globalState.workflowSessions[k];
+        }
+      }
       persistStore(true);
       console.log(`[SESSION NOT FOUND] Session for phone "${cleanPhone}" expired and was removed`);
       return null;
@@ -594,7 +604,7 @@ export const TestCenterStore = {
     let cleared = false;
     for (const [key, session] of Object.entries(globalState.workflowSessions)) {
       const sPhone = `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
-      if (sPhone === cleanPhone && (session.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || session.workspaceId === 'default' || !workspaceId)) {
+      if (sPhone === cleanPhone) {
         delete globalState.workflowSessions[key];
         cleared = true;
       }
