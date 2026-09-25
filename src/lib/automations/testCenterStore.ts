@@ -354,7 +354,40 @@ export const TestCenterStore = {
     if (!globalState.workflows[id]) {
       syncFromDisk();
     }
-    return globalState.workflows[id] || null;
+    if (globalState.workflows[id]) {
+      return globalState.workflows[id];
+    }
+    // Check built-in templates fallback if workflow was generated from a template
+    try {
+      const { BUILTIN_WORKFLOW_TEMPLATES } = require('./workflowTemplatesData');
+      const matchedTpl = BUILTIN_WORKFLOW_TEMPLATES.find((t: any) =>
+        t.id === id || id.startsWith(`test_${t.id}`) || id.includes(t.id)
+      );
+      if (matchedTpl) {
+        const reconstructed: WorkflowDefinition = {
+          id,
+          workspaceId: DEFAULT_WORKSPACE_ID,
+          name: matchedTpl.name,
+          description: matchedTpl.description,
+          triggerType: matchedTpl.triggerType || 'keyword',
+          triggerKeyword: matchedTpl.triggerKeyword || 'hello',
+          triggerMatchPattern: 'contains',
+          isActive: true,
+          debugModeEnabled: true,
+          executionCount: 0,
+          nodes: JSON.parse(JSON.stringify(matchedTpl.nodes)),
+          edges: JSON.parse(JSON.stringify(matchedTpl.edges)),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        globalState.workflows[id] = reconstructed;
+        persistStore(true);
+        return reconstructed;
+      }
+    } catch {
+      // non-blocking
+    }
+    return null;
   },
 
   saveWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
@@ -592,6 +625,14 @@ export const TestCenterStore = {
       }
       persistStore(true);
       console.log(`[SESSION NOT FOUND] Session for phone "${cleanPhone}" expired and was removed`);
+      return null;
+    }
+
+    // Verify referenced workflow exists or can be resolved
+    const wf = this.getWorkflow(session.workflowId);
+    if (!wf) {
+      console.warn(`[ORPHANED SESSION PURGED] Purging session "${session.id}" for phone "${cleanPhone}" because workflow "${session.workflowId}" does not exist.`);
+      this.clearSession(phoneNumber, workspaceId);
       return null;
     }
 
