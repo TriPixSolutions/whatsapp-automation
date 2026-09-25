@@ -249,44 +249,14 @@ export function buildProductionVipWorkflow(workspaceId = DEFAULT_WORKSPACE_ID): 
   };
 }
 
-function seedDefaultWorkflows() {
-  const defaultFlow = buildProductionVipWorkflow(DEFAULT_WORKSPACE_ID);
-  if (!globalState.workflows[defaultFlow.id]) {
-    globalState.workflows[defaultFlow.id] = defaultFlow;
-    persistStore(true);
-  }
-}
-
-// Load from disk if exists
-try {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (fs.existsSync(STORE_FILE)) {
-    const raw = fs.readFileSync(STORE_FILE, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed.workflows) globalState.workflows = parsed.workflows;
-    if (parsed.workflowSessions) globalState.workflowSessions = parsed.workflowSessions;
-    if (parsed.executionLogs) globalState.executionLogs = parsed.executionLogs;
-    if (parsed.deliveryReceipts) globalState.deliveryReceipts = parsed.deliveryReceipts;
-    if (parsed.metaLogs) globalState.metaLogs = parsed.metaLogs;
-    if (parsed.webhookLogs) globalState.webhookLogs = parsed.webhookLogs;
-    if (parsed.buttonLogs) globalState.buttonLogs = parsed.buttonLogs;
-    if (parsed.carouselLogs) globalState.carouselLogs = parsed.carouselLogs;
-    if (parsed.sandboxRecipients) globalState.sandboxRecipients = parsed.sandboxRecipients;
-    if (typeof parsed.sandboxEnabled === 'boolean') globalState.sandboxEnabled = parsed.sandboxEnabled;
-  }
-} catch {
-  // non-blocking
-}
-
-seedDefaultWorkflows();
-
 // Debounced save
 let saveTimer: NodeJS.Timeout | null = null;
 function persistStore(immediate = false) {
   if (immediate) {
-    if (saveTimer) clearTimeout(saveTimer);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -327,6 +297,39 @@ function syncFromDisk() {
     // non-blocking
   }
 }
+
+function seedDefaultWorkflows() {
+  const defaultFlow = buildProductionVipWorkflow(DEFAULT_WORKSPACE_ID);
+  if (!globalState.workflows[defaultFlow.id]) {
+    globalState.workflows[defaultFlow.id] = defaultFlow;
+    persistStore(true);
+  }
+}
+
+// Load from disk if exists
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  if (fs.existsSync(STORE_FILE)) {
+    const raw = fs.readFileSync(STORE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed.workflows) globalState.workflows = parsed.workflows;
+    if (parsed.workflowSessions) globalState.workflowSessions = parsed.workflowSessions;
+    if (parsed.executionLogs) globalState.executionLogs = parsed.executionLogs;
+    if (parsed.deliveryReceipts) globalState.deliveryReceipts = parsed.deliveryReceipts;
+    if (parsed.metaLogs) globalState.metaLogs = parsed.metaLogs;
+    if (parsed.webhookLogs) globalState.webhookLogs = parsed.webhookLogs;
+    if (parsed.buttonLogs) globalState.buttonLogs = parsed.buttonLogs;
+    if (parsed.carouselLogs) globalState.carouselLogs = parsed.carouselLogs;
+    if (parsed.sandboxRecipients) globalState.sandboxRecipients = parsed.sandboxRecipients;
+    if (typeof parsed.sandboxEnabled === 'boolean') globalState.sandboxEnabled = parsed.sandboxEnabled;
+  }
+} catch {
+  // non-blocking
+}
+
+seedDefaultWorkflows();
 
 export const TestCenterStore = {
   // WORKFLOWS
