@@ -698,21 +698,26 @@ export class AdvancedWorkflowEngine {
           case 'trigger_carousel':
           case 'trigger_list':
           case 'trigger_flow': {
-            // 7. Log Before and After Trigger Evaluation
-            console.log(`[TRIGGER EVALUATION: BEFORE] Evaluating trigger node "${currentNode.title}" (${currentNode.id}) of type "${currentNode.type}" for workflow "${workflow.name}" (${workflow.id}) | Recipient: ${context.phoneNumber}, triggerType: "${context.triggerType}"`);
+            // Trigger Evaluation Logging & Processing
+            console.log(`[TRIGGER EVALUATION STARTED]\n` +
+              `  - workflowId: "${workflow.id}"\n` +
+              `  - workflowName: "${workflow.name}"\n` +
+              `  - nodeId: "${currentNode.id}"\n` +
+              `  - nodeTitle: "${currentNode.title}"\n` +
+              `  - nodeType: "${currentNode.type}"\n` +
+              `  - triggerType: "${context.triggerType}"\n` +
+              `  - phoneNumber: "${context.phoneNumber}"\n` +
+              `  - incomingText: "${context.triggerPayload?.text || context.triggerPayload?.body || ''}"\n` +
+              `  - storedKeyword: "${currentNode.config?.text || currentNode.triggerKeyword || workflow.triggerKeyword || ''}"`);
+
             const evalResult = AdvancedWorkflowEngine.evaluateTriggerNode(currentNode, workflow, context);
             const incomingText = evalResult.incomingText || (context.triggerPayload?.text || '').toString().trim();
             const expectedKeywords = evalResult.expectedKeywords || (currentNode.config?.text || workflow.triggerKeyword || '');
+
             console.log(`[TRIGGER EVALUATION: AFTER] Result: matched=${evalResult.matched}, incomingText="${incomingText}", expectedKeywords="${expectedKeywords}"${evalResult.reason ? `, reason="${evalResult.reason}"` : ''}`);
 
-            console.log(`[TRIGGER RECEIVED] Incoming message/payload received:\n` +
-              `  - text: "${incomingText}"\n` +
-              `  - triggerType: "${context.triggerType}"\n` +
-              `  - expectedKeywords: "${expectedKeywords}"\n` +
-              `  - node: "${currentNode.title}" (${currentNode.id})`);
-
             if (!evalResult.matched) {
-              console.log(`[TRIGGER FAILED] Trigger condition failed: incoming "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`);
+              console.log(`[TRIGGER FAILED] Trigger condition failed: incoming text "${incomingText}" does not match stored keyword(s) "${expectedKeywords}" for workflow "${workflow.id}"`);
               console.log(`[WORKFLOW WAITING FOR TRIGGER] Workflow "${workflow.name}" (${workflow.id}) remains idle waiting for trigger condition.`);
 
               traceStep.status = 'waiting_for_trigger';
@@ -738,7 +743,7 @@ export class AdvancedWorkflowEngine {
               return execLog;
             }
 
-            console.log(`[TRIGGER MATCHED] Trigger matched successfully: incoming "${incomingText}" matches required keyword(s): "${expectedKeywords}"`);
+            console.log(`[TRIGGER MATCHED] Trigger matched successfully: incoming text "${incomingText}" matches stored keyword(s) "${expectedKeywords}" for workflow "${workflow.id}"`);
             console.log(`[WORKFLOW STARTED] Workflow "${workflow.name}" (${workflow.id}) started for recipient ${context.phoneNumber}`);
 
             traceStep.status = 'trigger_fired';

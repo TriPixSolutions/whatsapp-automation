@@ -231,41 +231,52 @@ export async function handleWebhookInboundMessages(
       const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
       console.log(`[SESSION LOOKUP: AFTER] Session lookup result: ${waitingSession ? `FOUND (Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", WaitingFor: "${waitingSession.waitingFor}")` : 'NOT FOUND (No active waiting session)'}`);
 
+      // If customer sent a top-level trigger keyword (e.g. "hello", "hi", "start") as text, prioritize fresh workflow trigger over stale button session
+      const matchingNewFlows = !isButtonClick && triggerText
+        ? AdvancedWorkflowEngine.matchWorkflows('keyword', { text: triggerText }, workspaceId)
+        : [];
+
       if (waitingSession) {
-        console.log(`[SESSION FOUND] Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", Phone: "${fromPhone}", WaitingFor: "${waitingSession.waitingFor}"`);
-
-        let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
-        const cardIndex = interactionPayload?.cardIndex;
-        const cardButtonId = interactionPayload?.cardButtonId || buttonId;
-
-        if (isButtonClick || waitingSession.waitingFor === 'button_click') {
-          resumeAction = 'button_click';
-        } else if (waitingSession.waitingFor === 'carousel_selection') {
-          resumeAction = 'carousel_click';
-        } else if (waitingSession.waitingFor === 'reply') {
-          resumeAction = 'reply';
-        }
-
-        // 9. Log Before and After Workflow Resume
-        console.log(`[WORKFLOW RESUME: BEFORE] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}", sessionPhone: "${waitingSession.phoneNumber}")`);
-
-        const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(waitingSession, {
-          action: resumeAction,
-          buttonId,
-          buttonTitle,
-          cardIndex,
-          cardButtonId,
-          text: content || triggerText,
-        });
-
-        console.log(`[WORKFLOW RESUME: AFTER] Resume result for workflow "${waitingSession.workflowId}": ${resumedLog ? `SUCCESS (status: "${resumedLog.status}", steps: ${resumedLog.steps?.length || 0})` : 'FAILED / NULL (Branch not resolved or node not found)'}`);
-
-        if (resumedLog) {
-          console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
-          advancedWorkflowHandled = true;
-          continue; // Successfully handled by active workflow session!
+        if (matchingNewFlows.length > 0 && !isButtonClick) {
+          console.log(`[SESSION RESET] Incoming text "${triggerText}" matches fresh workflow trigger [${matchingNewFlows.map(w => w.name).join(', ')}]. Clearing previous waiting session "${waitingSession.id}".`);
+          TestCenterStore.clearSession(fromPhone, workspaceId);
         } else {
-          console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}"`);
+          console.log(`[SESSION FOUND] Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", Phone: "${fromPhone}", WaitingFor: "${waitingSession.waitingFor}"`);
+
+          let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
+          const cardIndex = interactionPayload?.cardIndex;
+          const cardButtonId = interactionPayload?.cardButtonId || buttonId;
+
+          if (isButtonClick || waitingSession.waitingFor === 'button_click') {
+            resumeAction = 'button_click';
+          } else if (waitingSession.waitingFor === 'carousel_selection') {
+            resumeAction = 'carousel_click';
+          } else if (waitingSession.waitingFor === 'reply') {
+            resumeAction = 'reply';
+          }
+
+          // 9. Log Before and After Workflow Resume
+          console.log(`[WORKFLOW RESUME: BEFORE] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}", sessionPhone: "${waitingSession.phoneNumber}")`);
+
+          const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(waitingSession, {
+            action: resumeAction,
+            buttonId,
+            buttonTitle,
+            cardIndex,
+            cardButtonId,
+            text: content || triggerText,
+          });
+
+          console.log(`[WORKFLOW RESUME: AFTER] Resume result for workflow "${waitingSession.workflowId}": ${resumedLog ? `SUCCESS (status: "${resumedLog.status}", steps: ${resumedLog.steps?.length || 0})` : 'FAILED / NULL (Branch not resolved or node not found)'}`);
+
+          if (resumedLog) {
+            console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
+            advancedWorkflowHandled = true;
+            continue; // Successfully handled by active workflow session!
+          } else {
+            console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}". Clearing stale session.`);
+            TestCenterStore.clearSession(fromPhone, workspaceId);
+          }
         }
       }
     } catch (err: any) {
