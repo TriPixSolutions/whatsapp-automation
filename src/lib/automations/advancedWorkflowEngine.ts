@@ -143,9 +143,9 @@ export class AdvancedWorkflowEngine {
       const buttons = currentNode.config?.buttons || [];
       const btnIndex = buttons.findIndex(
         (b: any) =>
-          b.id === buttonId ||
-          (b.title && b.title.toLowerCase() === buttonTitle) ||
-          (buttonId && b.id && b.id.toLowerCase() === buttonId.toLowerCase())
+          (buttonId && b.id && b.id.toLowerCase() === buttonId.toLowerCase()) ||
+          (buttonTitle && b.title && b.title.trim().toLowerCase() === buttonTitle) ||
+          (buttonId && b.title && b.title.trim().toLowerCase() === buttonId.toLowerCase())
       );
       const matchedBtn = btnIndex !== -1 ? buttons[btnIndex] : null;
 
@@ -160,6 +160,17 @@ export class AdvancedWorkflowEngine {
         if (edgeById) return edgeById.target;
       }
 
+      // 1b. Match by matchedBtn.id if different from buttonId
+      if (matchedBtn?.id && matchedBtn.id.toLowerCase() !== buttonId.toLowerCase()) {
+        const edgeByMatchedId = nodeEdges.find(
+          (e) =>
+            e.sourceHandle === matchedBtn.id ||
+            (e.sourceHandle && e.sourceHandle.toLowerCase() === matchedBtn.id.toLowerCase()) ||
+            (e.label && e.label.toLowerCase() === matchedBtn.id.toLowerCase())
+        );
+        if (edgeByMatchedId) return edgeByMatchedId.target;
+      }
+
       // 2. Direct edge match by btnIndex (e.g., sourceHandle === 'btn-0' or 'btn_0' or '0')
       if (btnIndex !== -1) {
         const edgeByIndex = nodeEdges.find(
@@ -172,11 +183,13 @@ export class AdvancedWorkflowEngine {
       }
 
       // 3. Direct edge match by button title (e.g., label or sourceHandle === 'Browse Catalog')
-      if (buttonTitle) {
+      const targetTitle = buttonTitle || (matchedBtn?.title || '').trim().toLowerCase();
+      if (targetTitle) {
         const edgeByTitle = nodeEdges.find(
           (e) =>
-            (e.label && e.label.toLowerCase() === buttonTitle) ||
-            (e.sourceHandle && e.sourceHandle.toLowerCase() === buttonTitle)
+            (e.label && e.label.toLowerCase() === targetTitle) ||
+            (e.sourceHandle && e.sourceHandle.toLowerCase() === targetTitle) ||
+            (e.label && (e.label.toLowerCase().includes(targetTitle) || targetTitle.includes(e.label.toLowerCase())))
         );
         if (edgeByTitle) return edgeByTitle.target;
       }
@@ -341,10 +354,11 @@ export class AdvancedWorkflowEngine {
 
     const nextNodeId = this.resolveNextBranch(workflow, pausedNode, event);
     if (!nextNodeId) {
-      console.warn(`[WorkflowEngine] ⚠️ No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action} (Button: ${event.buttonTitle || event.buttonId || event.text})`);
+      console.warn(`[BRANCH NOT FOUND] No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action} (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
       return null;
     }
 
+    console.log(`[BRANCH FOUND] Matched branch from node "${pausedNode.title}" (${pausedNode.id}) ➔ Next Node ID: "${nextNodeId}" (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
     console.log(`[WorkflowEngine] 🔘 BUTTON CLICKED / ACTION: Customer ${session.phoneNumber} performed "${event.buttonTitle || event.buttonId || event.text || event.action}"`);
     console.log(`[WorkflowEngine] ▶️ WORKFLOW RESUMED: Workflow "${workflow.name}" (${workflow.id}) resumed from node "${pausedNode.title}" (${pausedNode.id}) ➔ Advancing to node "${nextNodeId}"`);
 
@@ -919,6 +933,8 @@ export class AdvancedWorkflowEngine {
         traceStep.completedAt = new Date().toISOString();
         traceStep.durationMs = Date.now() - stepStart;
         stepsTrace.push(traceStep);
+
+        console.log(`[NEXT NODE EXECUTED] Node "${currentNode.title}" (${currentNode.id}) [${currentNode.type}] executed successfully for ${context.phoneNumber} (Status: ${traceStep.status})`);
 
         // Terminate on explicit stop or failed non-recoverable error
         if (currentNode.type === 'end' || !nextNodeIdToFollow) {

@@ -268,7 +268,19 @@ seedDefaultWorkflows();
 
 // Debounced save
 let saveTimer: NodeJS.Timeout | null = null;
-function persistStore() {
+function persistStore(immediate = false) {
+  if (immediate) {
+    if (saveTimer) clearTimeout(saveTimer);
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      fs.writeFileSync(STORE_FILE, JSON.stringify(globalState, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('[TestCenterStore] Immediate persistence warning:', e);
+    }
+    return;
+  }
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
@@ -280,6 +292,23 @@ function persistStore() {
       console.warn('[TestCenterStore] Persistence warning:', e);
     }
   }, 1000);
+}
+
+function syncFromDisk() {
+  try {
+    if (fs.existsSync(STORE_FILE)) {
+      const raw = fs.readFileSync(STORE_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed.workflows) {
+        globalState.workflows = { ...parsed.workflows, ...globalState.workflows };
+      }
+      if (parsed.workflowSessions) {
+        globalState.workflowSessions = { ...parsed.workflowSessions, ...globalState.workflowSessions };
+      }
+    }
+  } catch {
+    // non-blocking
+  }
 }
 
 export const TestCenterStore = {
@@ -294,6 +323,9 @@ export const TestCenterStore = {
   },
 
   getWorkflow(id: string): WorkflowDefinition | null {
+    if (!globalState.workflows[id]) {
+      syncFromDisk();
+    }
     return globalState.workflows[id] || null;
   },
 
@@ -480,9 +512,7 @@ export const TestCenterStore = {
 
   // WORKFLOW SESSION MANAGEMENT (Waiting / Paused State)
   saveSession(session: WorkflowSessionState): WorkflowSessionState {
-    const cleanPhone = session.phoneNumber.startsWith('+')
-      ? session.phoneNumber
-      : `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
+    const cleanPhone = `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
     const wsId = session.workspaceId || DEFAULT_WORKSPACE_ID;
     const key = `${wsId}:${cleanPhone}`;
     globalState.workflowSessions[key] = {
@@ -490,21 +520,26 @@ export const TestCenterStore = {
       workspaceId: wsId,
       phoneNumber: cleanPhone,
     };
-    persistStore();
+    persistStore(true);
     return globalState.workflowSessions[key];
   },
 
   getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): WorkflowSessionState | null {
-    const cleanPhone = phoneNumber.startsWith('+')
-      ? phoneNumber
-      : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
+    const cleanPhone = `+${phoneNumber.replace(/[^0-9]/g, '')}`;
     const key = `${workspaceId}:${cleanPhone}`;
     let session = globalState.workflowSessions[key];
 
-    // Fallback search by clean phone across any matching default workspace
+    // If not in memory, sync from disk
+    if (!session) {
+      syncFromDisk();
+      session = globalState.workflowSessions[key];
+    }
+
+    // Fallback search by clean phone across any matching session
     if (!session) {
       for (const [k, s] of Object.entries(globalState.workflowSessions)) {
-        if (s.phoneNumber === cleanPhone && (s.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || s.workspaceId === 'default')) {
+        const sPhone = `+${s.phoneNumber.replace(/[^0-9]/g, '')}`;
+        if (sPhone === cleanPhone) {
           session = s;
           break;
         }
@@ -516,24 +551,23 @@ export const TestCenterStore = {
     // Check expiration (24h default)
     if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
       delete globalState.workflowSessions[key];
-      persistStore();
+      persistStore(true);
       return null;
     }
     return session;
   },
 
   clearSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): boolean {
-    const cleanPhone = phoneNumber.startsWith('+')
-      ? phoneNumber
-      : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
+    const cleanPhone = `+${phoneNumber.replace(/[^0-9]/g, '')}`;
     let cleared = false;
     for (const [key, session] of Object.entries(globalState.workflowSessions)) {
-      if (session.phoneNumber === cleanPhone && (session.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || session.workspaceId === 'default')) {
+      const sPhone = `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
+      if (sPhone === cleanPhone && (session.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || session.workspaceId === 'default' || !workspaceId)) {
         delete globalState.workflowSessions[key];
         cleared = true;
       }
     }
-    if (cleared) persistStore();
+    if (cleared) persistStore(true);
     return cleared;
   },
 

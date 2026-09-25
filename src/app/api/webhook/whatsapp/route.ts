@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     let body: any;
     try {
       body = JSON.parse(rawBody);
+      console.log('[Meta Webhook] Full Webhook Payload Received:\n', JSON.stringify(body, null, 2));
     } catch {
       return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
     }
@@ -120,6 +121,14 @@ export async function POST(request: NextRequest) {
 
           // 4. Process Inbound Messages (with explicit tenant workspace context)
           if (value.messages?.length > 0) {
+            console.log(`[Meta Webhook] Processing ${value.messages.length} inbound message(s) for workspace "${targetWorkspaceId}"`);
+            for (const msg of value.messages) {
+              if (msg.type === 'interactive') {
+                console.log(`[Meta Webhook] Interactive message received: type=${msg.interactive?.type}, button_reply.id=${msg.interactive?.button_reply?.id}, button_reply.title=${msg.interactive?.button_reply?.title}, list_reply.id=${msg.interactive?.list_reply?.id}`);
+              } else if (msg.type === 'button') {
+                console.log(`[Meta Webhook] Quick reply button received: text=${msg.button?.text}, payload=${msg.button?.payload}`);
+              }
+            }
             await handleWebhookInboundMessages(value.messages, value.contacts, targetWorkspaceId);
           }
 
