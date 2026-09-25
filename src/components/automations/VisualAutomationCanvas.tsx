@@ -736,6 +736,15 @@ function VisualCanvasInner({
             ) : null}
           </div>
 
+          <a
+            href="/templates"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all"
+            title="Browse Workflow Templates"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Templates</span>
+          </a>
+
           {onOpenLogs && (
             <button
               onClick={onOpenLogs}

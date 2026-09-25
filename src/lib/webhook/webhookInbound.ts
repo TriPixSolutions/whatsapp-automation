@@ -204,6 +204,8 @@ export async function handleWebhookInboundMessages(
 
     console.log(`[PHONE NORMALIZED] raw: "${message.from}" ➔ normalized: "${fromPhone}"`);
 
+    // 10. Log Before and After Button Click Processing
+    console.log(`[BUTTON CLICK PROCESSING: BEFORE] rawType: "${message.type}", isButtonClick: ${isButtonClick}, buttonId: "${buttonId}", buttonTitle: "${buttonTitle}"`);
     if (isButtonClick) {
       console.log(`[BUTTON PAYLOAD] Button action received:\n` +
         `  - buttonId: "${buttonId}"\n` +
@@ -216,6 +218,7 @@ export async function handleWebhookInboundMessages(
       console.log(`[BUTTON ID] "${buttonId}"`);
       console.log(`[BUTTON TITLE] "${buttonTitle}"`);
     }
+    console.log(`[BUTTON CLICK PROCESSING: AFTER] Parsed button context: buttonId="${buttonId}", buttonTitle="${buttonTitle}"`);
 
     // 4. PRIORITY 1: Check if customer has an active paused/waiting workflow execution session
     let advancedWorkflowHandled = false;
@@ -223,8 +226,10 @@ export async function handleWebhookInboundMessages(
       const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
       const { TestCenterStore } = await import('@/lib/automations/testCenterStore');
 
-      console.log(`[SESSION SEARCH] Checking active workflow session for phone: "${fromPhone}", workspaceId: "${workspaceId}"`);
+      // 8. Log Before and After Session Lookup
+      console.log(`[SESSION LOOKUP: BEFORE] Searching active workflow session for phone: "${fromPhone}", workspaceId: "${workspaceId}", isButtonClick: ${isButtonClick}`);
       const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
+      console.log(`[SESSION LOOKUP: AFTER] Session lookup result: ${waitingSession ? `FOUND (Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", WaitingFor: "${waitingSession.waitingFor}")` : 'NOT FOUND (No active waiting session)'}`);
 
       if (waitingSession) {
         console.log(`[SESSION FOUND] Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", Phone: "${fromPhone}", WaitingFor: "${waitingSession.waitingFor}"`);
@@ -241,7 +246,8 @@ export async function handleWebhookInboundMessages(
           resumeAction = 'reply';
         }
 
-        console.log(`[RESUME STARTED] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}")`);
+        // 9. Log Before and After Workflow Resume
+        console.log(`[WORKFLOW RESUME: BEFORE] Resuming workflow "${waitingSession.workflowId}" from node "${waitingSession.currentNodeId}" with action "${resumeAction}" (buttonId: "${buttonId}", buttonTitle: "${buttonTitle}", sessionPhone: "${waitingSession.phoneNumber}")`);
 
         const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(waitingSession, {
           action: resumeAction,
@@ -252,6 +258,8 @@ export async function handleWebhookInboundMessages(
           text: content || triggerText,
         });
 
+        console.log(`[WORKFLOW RESUME: AFTER] Resume result for workflow "${waitingSession.workflowId}": ${resumedLog ? `SUCCESS (status: "${resumedLog.status}", steps: ${resumedLog.steps?.length || 0})` : 'FAILED / NULL (Branch not resolved or node not found)'}`);
+
         if (resumedLog) {
           console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
           advancedWorkflowHandled = true;
@@ -259,8 +267,6 @@ export async function handleWebhookInboundMessages(
         } else {
           console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}"`);
         }
-      } else {
-        console.log(`[SESSION NOT FOUND] No active session found for phone: "${fromPhone}", Workspace: "${workspaceId}"`);
       }
     } catch (err: any) {
       console.error('[Advanced Workflow Webhook Error]:', err);
@@ -325,6 +331,7 @@ export async function handleWebhookInboundMessages(
           }
         }
 
+        console.log(`[TRIGGER MATCHING: BEFORE] Matching active workflows for triggerType: "${triggerType}", triggerText: "${triggerText}", workspaceId: "${workspaceId}"`);
         let advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
           triggerType,
           { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
@@ -333,15 +340,18 @@ export async function handleWebhookInboundMessages(
 
         // Fallback: If no keyword matched for regular text, check for incoming_message triggers
         if (advancedMatches.length === 0 && triggerType === 'keyword') {
+          console.log(`[TRIGGER MATCHING: FALLBACK] Checking fallback incoming_message triggers for text: "${triggerText}"`);
           advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
             'incoming_message',
             { text: triggerText, from: fromPhone },
             workspaceId
           );
         }
+        console.log(`[TRIGGER MATCHING: AFTER] Matched ${advancedMatches.length} workflow(s): [${advancedMatches.map(w => `${w.name} (${w.id})`).join(', ')}]`);
 
         if (advancedMatches.length > 0) {
           for (const matchedWf of advancedMatches) {
+            console.log(`[WORKFLOW EXECUTION: DISPATCH] Executing matched workflow "${matchedWf.name}" (${matchedWf.id}) for ${fromPhone}`);
             await AdvancedWorkflowEngine.executeWorkflow(matchedWf, {
               workflowId: matchedWf.id,
               workspaceId,

@@ -698,9 +698,12 @@ export class AdvancedWorkflowEngine {
           case 'trigger_carousel':
           case 'trigger_list':
           case 'trigger_flow': {
+            // 7. Log Before and After Trigger Evaluation
+            console.log(`[TRIGGER EVALUATION: BEFORE] Evaluating trigger node "${currentNode.title}" (${currentNode.id}) of type "${currentNode.type}" for workflow "${workflow.name}" (${workflow.id}) | Recipient: ${context.phoneNumber}, triggerType: "${context.triggerType}"`);
             const evalResult = AdvancedWorkflowEngine.evaluateTriggerNode(currentNode, workflow, context);
             const incomingText = evalResult.incomingText || (context.triggerPayload?.text || '').toString().trim();
             const expectedKeywords = evalResult.expectedKeywords || (currentNode.config?.text || workflow.triggerKeyword || '');
+            console.log(`[TRIGGER EVALUATION: AFTER] Result: matched=${evalResult.matched}, incomingText="${incomingText}", expectedKeywords="${expectedKeywords}"${evalResult.reason ? `, reason="${evalResult.reason}"` : ''}`);
 
             console.log(`[TRIGGER RECEIVED] Incoming message/payload received:\n` +
               `  - text: "${incomingText}"\n` +
