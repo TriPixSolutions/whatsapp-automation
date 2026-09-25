@@ -1361,3 +1361,54 @@ export const IntegrationsDB = {
     return memoryState.integrations.delete(`${userId}_${platform}`);
   },
 };
+
+// ==============================================================================
+// 10. WORKFLOW SESSIONS REPOSITORY (Active Waiting State & User Context)
+// ==============================================================================
+export const WorkflowSessionsDB = {
+  get(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.getActiveSession(phoneNumber, workspaceId);
+  },
+
+  save(session: any) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.saveSession(session);
+  },
+
+  delete(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.clearSession(phoneNumber, workspaceId);
+  },
+
+  list(workspaceId = DEFAULT_WORKSPACE_ID) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.listActiveSessions(workspaceId);
+  },
+};
+
+// ==============================================================================
+// 11. WORKFLOW EXECUTIONS REPOSITORY (History, Traces & Observability)
+// ==============================================================================
+export const WorkflowExecutionsDB = {
+  get(executionId: string) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.getExecutionLog(executionId);
+  },
+
+  save(log: any) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.recordExecutionLog(log);
+  },
+
+  update(log: any) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.updateExecutionLog(log);
+  },
+
+  list(filters?: { workflowId?: string; phoneNumber?: string; limit?: number }) {
+    const { TestCenterStore } = require('@/lib/automations/testCenterStore');
+    return TestCenterStore.listExecutionLogs(filters);
+  },
+};
+

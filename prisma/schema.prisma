@@ -183,3 +183,63 @@ model User {
   @@map("users")
 }
 
+enum ExecutionStatus {
+  running
+  waiting
+  paused
+  completed
+  failed
+  cancelled
+}
+
+model WorkflowExecution {
+  id             String          @id @default(uuid())
+  executionId    String          @unique
+  workflowId     String
+  workflowName   String
+  workspaceId    String          @default("default")
+  phoneNumber    String
+  contactId      String?
+  triggerType    String
+  triggerValue   String?
+  status         ExecutionStatus @default(running)
+  currentNodeId  String?
+  waitingFor     String?
+  waitingPayload Json?
+  variables      Json?
+  steps          Json?
+  metaResponses  Json?
+  startedAt      DateTime        @default(now())
+  pausedAt       DateTime?
+  resumedAt      DateTime?
+  completedAt    DateTime?
+  totalDurationMs Int            @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([phoneNumber])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([workflowId])
+  @@map("workflow_executions")
+}
+
+model WorkflowSession {
+  id             String          @id @default(uuid())
+  workspaceId    String          @default("default")
+  phoneNumber    String          @unique
+  workflowId     String
+  executionId    String
+  currentNodeId  String
+  waitingFor     String          // "button_click" | "reply" | "carousel_selection" | "delay"
+  waitingOptions Json?           // list of expected button IDs / titles
+  variables      Json?
+  expiresAt      DateTime
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([phoneNumber])
+  @@index([workspaceId])
+  @@map("workflow_sessions")
+}
+

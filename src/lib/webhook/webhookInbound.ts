@@ -241,47 +241,85 @@ export async function handleWebhookInboundMessages(
     }
     if (branchHandled) continue;
 
-    // 5b. Advanced Workflow Engine 2.0 (DAG Workflows, Buttons, Carousels, Triggers)
+    // 5b. Advanced Workflow Engine 2.0 (DAG Workflows, Buttons, Carousels, Session State)
     let advancedWorkflowHandled = false;
     try {
       const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
-      let triggerType: any = 'keyword';
-      if (message.type === 'interactive') {
-        if (message.interactive?.list_reply || (interactionPayload && interactionPayload.description)) {
-          triggerType = 'list_selection';
-        } else {
-          triggerType = 'button_click';
+      const { TestCenterStore } = await import('@/lib/automations/testCenterStore');
+
+      // 1. FIRST PRIORITY: Check if user has an active paused/waiting workflow execution session
+      const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
+
+      if (waitingSession) {
+        let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
+        const buttonId = interactionPayload?.id || message.interactive?.button_reply?.id || triggerText;
+        const buttonTitle = interactionPayload?.title || message.interactive?.button_reply?.title || content;
+        const cardIndex = interactionPayload?.cardIndex;
+        const cardButtonId = interactionPayload?.cardButtonId || buttonId;
+
+        if (waitingSession.waitingFor === 'button_click') {
+          resumeAction = 'button_click';
+        } else if (waitingSession.waitingFor === 'carousel_selection') {
+          resumeAction = 'carousel_click';
+        } else if (waitingSession.waitingFor === 'reply') {
+          resumeAction = 'reply';
+        }
+
+        const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(waitingSession, {
+          action: resumeAction,
+          buttonId,
+          buttonTitle,
+          cardIndex,
+          cardButtonId,
+          text: content || triggerText,
+        });
+
+        if (resumedLog) {
+          console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
+          advancedWorkflowHandled = true;
         }
       }
 
-      let advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
-        triggerType,
-        { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
-        workspaceId
-      );
+      // 2. SECOND PRIORITY: If not waiting in a workflow, match incoming message to new workflow triggers
+      if (!advancedWorkflowHandled) {
+        let triggerType: any = 'keyword';
+        if (message.type === 'interactive') {
+          if (message.interactive?.list_reply || (interactionPayload && interactionPayload.description)) {
+            triggerType = 'list_selection';
+          } else {
+            triggerType = 'button_click';
+          }
+        }
 
-      // Fallback: If no keyword matched for regular text, check for incoming_message triggers
-      if (advancedMatches.length === 0 && triggerType === 'keyword') {
-        advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
-          'incoming_message',
-          { text: triggerText, from: fromPhone },
+        let advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+          triggerType,
+          { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
           workspaceId
         );
-      }
 
-      if (advancedMatches.length > 0) {
-        for (const matchedWf of advancedMatches) {
-          await AdvancedWorkflowEngine.executeWorkflow(matchedWf, {
-            workflowId: matchedWf.id,
-            workspaceId,
-            phoneNumber: fromPhone,
-            contactId: contact.id,
-            triggerType,
-            triggerPayload: { text: triggerText, ...interactionPayload },
-            isTestSimulation: false,
-          });
+        // Fallback: If no keyword matched for regular text, check for incoming_message triggers
+        if (advancedMatches.length === 0 && triggerType === 'keyword') {
+          advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+            'incoming_message',
+            { text: triggerText, from: fromPhone },
+            workspaceId
+          );
         }
-        advancedWorkflowHandled = true;
+
+        if (advancedMatches.length > 0) {
+          for (const matchedWf of advancedMatches) {
+            await AdvancedWorkflowEngine.executeWorkflow(matchedWf, {
+              workflowId: matchedWf.id,
+              workspaceId,
+              phoneNumber: fromPhone,
+              contactId: contact.id,
+              triggerType,
+              triggerPayload: { text: triggerText, ...interactionPayload },
+              isTestSimulation: false,
+            });
+          }
+          advancedWorkflowHandled = true;
+        }
       }
     } catch (advErr) {
       console.warn('[Webhook Inbound] AdvancedWorkflowEngine error:', advErr);

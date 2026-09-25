@@ -75,6 +75,9 @@ export type NodeExecutionStatus =
   | 'message_sent'
   | 'message_delivered'
   | 'message_read'
+  | 'node_paused'
+  | 'waiting_user_action'
+  | 'workflow_resumed'
   | 'completed'
   | 'failed'
   | 'skipped';
@@ -303,6 +306,28 @@ export interface ExecutionTraceStep {
   error?: string;
 }
 
+export interface WorkflowSessionState {
+  id: string;
+  workspaceId: string;
+  phoneNumber: string;
+  contactId?: string;
+  workflowId: string;
+  executionId: string;
+  currentNodeId: string;
+  waitingFor: 'button_click' | 'reply' | 'carousel_selection' | 'delay';
+  waitingOptions?: {
+    id: string;
+    title: string;
+    index?: number;
+    type?: string;
+  }[];
+  variables: Record<string, any>;
+  pausedAt: string;
+  resumedAt?: string;
+  expiresAt: string;
+  metadata?: Record<string, any>;
+}
+
 export interface WorkflowExecutionLog {
   id: string;
   executionId: string;
@@ -313,8 +338,13 @@ export interface WorkflowExecutionLog {
   contactId?: string;
   triggerType: AutomationTriggerType;
   triggerValue: string;
-  status: 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'running' | 'waiting' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  currentNodeId?: string;
+  waitingFor?: string;
+  waitingOptions?: any;
   startedAt: string;
+  pausedAt?: string;
+  resumedAt?: string;
   completedAt?: string;
   totalDurationMs: number;
   steps: ExecutionTraceStep[];

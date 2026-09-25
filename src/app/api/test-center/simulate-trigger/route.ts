@@ -250,7 +250,44 @@ export async function POST(request: NextRequest) {
         break;
     }
 
-    // 2. Select target workflow
+    // 2. PRIORITY 1: If there is an active waiting session for this recipient, RESUME it!
+    const activeSession = TestCenterStore.getActiveSession(cleanPhone, workspaceId);
+    if (activeSession && ['button_click', 'carousel_click', 'cta_click', 'incoming_message'].includes(simulationType)) {
+      const resumeAction = simulationType === 'carousel_click'
+        ? 'carousel_click'
+        : simulationType === 'incoming_message'
+        ? 'reply'
+        : 'button_click';
+
+      const resumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(
+        activeSession,
+        {
+          action: resumeAction,
+          buttonId: buttonId || triggerPayload?.buttonId,
+          buttonTitle: buttonTitle || triggerPayload?.buttonTitle,
+          cardIndex,
+          cardButtonId,
+          text: text || triggerPayload?.text,
+        },
+        true // isTestSimulation
+      );
+
+      if (resumed) {
+        return NextResponse.json({
+          success: true,
+          simulationType,
+          phoneNumber: cleanPhone,
+          resumed: true,
+          matchedWorkflowsCount: 1,
+          executions: [resumed],
+          activeExecution: resumed,
+          status: resumed.status,
+          message: `Workflow resumed along branch for "${buttonTitle || buttonId || text || simulationType}".`,
+        });
+      }
+    }
+
+    // 2b. PRIORITY 2: Select target workflow to start fresh execution
     let targetWorkflows = [];
     if (workflowId) {
       const specificWf = TestCenterStore.getWorkflow(workflowId);

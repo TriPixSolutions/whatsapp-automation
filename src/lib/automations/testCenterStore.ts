@@ -1,6 +1,7 @@
 import {
   WorkflowDefinition,
   WorkflowExecutionLog,
+  WorkflowSessionState,
   MessageDeliveryReceipt,
   MetaApiLog,
   WebhookLogItem,
@@ -18,6 +19,7 @@ const STORE_FILE = path.join(DATA_DIR, 'test_center_store.json');
 
 interface TestCenterState {
   workflows: Record<string, WorkflowDefinition>;
+  workflowSessions: Record<string, WorkflowSessionState>;
   executionLogs: WorkflowExecutionLog[];
   deliveryReceipts: MessageDeliveryReceipt[];
   metaLogs: MetaApiLog[];
@@ -31,6 +33,7 @@ interface TestCenterState {
 // Global in-memory singleton
 const globalState: TestCenterState = {
   workflows: {},
+  workflowSessions: {},
   executionLogs: [],
   deliveryReceipts: [],
   metaLogs: [],
@@ -45,139 +48,197 @@ const globalState: TestCenterState = {
   sandboxEnabled: false,
 };
 
-// Seed default workflows if none exist
-function seedDefaultWorkflows() {
-  const defaultFlowId = 'wf_welcome_interactive';
-  if (!globalState.workflows[defaultFlowId]) {
-    globalState.workflows[defaultFlowId] = {
-      id: defaultFlowId,
-      workspaceId: DEFAULT_WORKSPACE_ID,
-      name: 'Interactive VIP Concierge & Catalog Flow',
-      description: 'Triggered by greeting or lead form submission with buttons and carousel',
-      triggerType: 'keyword',
-      triggerKeyword: 'Hello',
-      triggerMatchPattern: 'contains',
-      isActive: true,
-      debugModeEnabled: true,
-      executionCount: 24,
-      stats: {
-        enteredCount: 24,
-        completedCount: 22,
-        droppedCount: 2,
-        sentCount: 48,
-        deliveredCount: 46,
-        readCount: 42,
-        clickedCount: 38,
-        repliedCount: 29,
+// Seed default production-grade 3-branch workflow
+export function buildProductionVipWorkflow(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowDefinition {
+  return {
+    id: 'wf_welcome_interactive',
+    workspaceId,
+    name: 'Production VIP Concierge & Catalog Flow',
+    description: 'Production-ready WhatsApp flow: Welcome -> 3 Interactive Buttons -> Catalog/Pricing/Human Agent branches',
+    triggerType: 'keyword',
+    triggerKeyword: 'hello',
+    triggerMatchPattern: 'contains',
+    isActive: true,
+    debugModeEnabled: true,
+    executionCount: 42,
+    stats: {
+      enteredCount: 42,
+      completedCount: 38,
+      droppedCount: 4,
+      sentCount: 96,
+      deliveredCount: 92,
+      readCount: 88,
+      clickedCount: 76,
+      repliedCount: 58,
+    },
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    nodes: [
+      {
+        id: 'node_trigger',
+        type: 'trigger',
+        title: 'Keyword Match: "hello"',
+        description: 'Triggers on incoming "hello", "hi", or greeting',
+        triggerType: 'keyword',
+        triggerKeyword: 'hello',
+        config: { text: 'hello' },
+        position: { x: 80, y: 300 },
+        nextNodeId: 'node_welcome_msg',
       },
-      createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-      updatedAt: new Date().toISOString(),
-      nodes: [
-        {
-          id: 'node_trigger',
-          type: 'trigger',
-          title: 'Incoming Keyword Trigger',
-          description: 'Matches "Hello", "Hi", "Start", or "Pricing"',
-          triggerType: 'keyword',
-          triggerKeyword: 'Hello',
-          config: {
-            text: 'Hello',
-          },
-          position: { x: 100, y: 150 },
-          nextNodeId: 'node_welcome_msg',
+      {
+        id: 'node_welcome_msg',
+        type: 'message',
+        title: 'Send Welcome Message',
+        description: 'Instant personalized introduction message',
+        messageType: 'text',
+        config: {
+          text: '🌟 Welcome to our Official WhatsApp Store! How can we assist you today?',
         },
-        {
-          id: 'node_welcome_msg',
-          type: 'message',
-          title: 'Welcome VIP Greeting',
-          description: 'Instant personalized introduction message',
-          messageType: 'text',
-          config: {
-            text: '🌟 Welcome to our Official WhatsApp Store! How can we assist you today?',
-          },
-          position: { x: 380, y: 150 },
-          nextNodeId: 'node_button_menu',
+        position: { x: 380, y: 300 },
+        nextNodeId: 'node_button_menu',
+      },
+      {
+        id: 'node_button_menu',
+        type: 'button',
+        title: 'Interactive Button Message',
+        description: 'Presents 3 action buttons to customer and pauses execution',
+        messageType: 'interactive_button',
+        config: {
+          bodyText: 'Please select an option below to get started immediately:',
+          footerText: 'Official Verified Account',
+          buttons: [
+            { id: 'btn_catalog', title: 'Browse Catalog', type: 'reply' },
+            { id: 'btn_pricing', title: 'Get Pricing', type: 'reply' },
+            { id: 'btn_agent', title: 'Talk To Expert', type: 'reply' },
+          ],
         },
-        {
-          id: 'node_button_menu',
-          type: 'button',
-          title: 'Interactive Quick Reply Buttons',
-          description: 'Presents 3 action buttons to customer',
-          messageType: 'interactive_button',
-          config: {
-            bodyText: 'Please select an option below to get started immediately:',
-            footerText: 'Official Verified Account',
-            buttons: [
-              { id: 'btn_catalog', title: 'Browse Catalog', type: 'reply' },
-              { id: 'btn_pricing', title: 'Get Pricing Offer', type: 'reply' },
-              { id: 'btn_agent', title: 'Talk to Expert', type: 'reply' },
-            ],
-          },
-          position: { x: 660, y: 150 },
-          nextNodeId: 'node_carousel_showcase',
+        position: { x: 680, y: 300 },
+      },
+      // Branch 1: Browse Catalog -> Product Carousel -> Wait Selection -> Add Tag: VIP -> Done
+      {
+        id: 'node_carousel_showcase',
+        type: 'carousel',
+        title: 'Show Product Carousel',
+        description: 'Displays 3 interactive cards with product photos & CTAs',
+        messageType: 'carousel',
+        config: {
+          bodyText: 'Explore our top trending items below:',
+          cards: [
+            {
+              headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
+              title: 'Runner Pro Sneakers',
+              description: 'Ultra-light breathable performance shoes. $129',
+              buttons: [{ id: 'buy_shoes', title: 'Order Shoes' }],
+            },
+            {
+              headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+              title: 'Chronos Smart Watch',
+              description: 'Titanium chassis, AMOLED sapphire glass. $249',
+              buttons: [{ id: 'buy_watch', title: 'Order Watch' }],
+            },
+            {
+              headerImage: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=80',
+              title: 'Aviator Sun Shades',
+              description: 'Polarized UV400 classic gold frame. $79',
+              buttons: [{ id: 'buy_glasses', title: 'Order Shades' }],
+            },
+          ],
         },
-        {
-          id: 'node_carousel_showcase',
-          type: 'carousel',
-          title: 'Product Carousel Showcase',
-          description: 'Displays 3 interactive cards with product photos & CTAs',
-          messageType: 'carousel',
-          config: {
-            bodyText: 'Explore our top trending items below:',
-            cards: [
-              {
-                headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
-                title: 'Runner Pro Sneakers',
-                description: 'Ultra-light breathable performance shoes. $129',
-                buttons: [{ id: 'buy_shoes', title: 'Order Shoes' }],
-              },
-              {
-                headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-                title: 'Chronos Smart Watch',
-                description: 'Titanium chassis, AMOLED sapphire glass. $249',
-                buttons: [{ id: 'buy_watch', title: 'Order Watch' }],
-              },
-              {
-                headerImage: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop&q=80',
-                title: 'Aviator Sun Shades',
-                description: 'Polarized UV400 classic gold frame. $79',
-                buttons: [{ id: 'buy_glasses', title: 'Order Shades' }],
-              },
-            ],
-          },
-          position: { x: 940, y: 150 },
-          nextNodeId: 'node_condition_tag',
+        position: { x: 1040, y: 120 },
+        nextNodeId: 'node_wait_product',
+      },
+      {
+        id: 'node_wait_product',
+        type: 'wait_for_reply',
+        title: 'Wait For Product Selection',
+        description: 'Pauses workflow until customer selects product or taps card',
+        config: { timeoutMinutes: 1440 },
+        position: { x: 1360, y: 120 },
+        nextNodeId: 'node_condition_tag',
+      },
+      {
+        id: 'node_condition_tag',
+        type: 'tag_management',
+        title: 'Add Tag: VIP',
+        description: 'Automatically labels contact with "VIP" tag',
+        actionType: 'tag_contact',
+        config: { action: 'add', tag: 'VIP' },
+        position: { x: 1680, y: 120 },
+        nextNodeId: 'node_end_catalog',
+      },
+      {
+        id: 'node_end_catalog',
+        type: 'end',
+        title: 'Workflow Completed',
+        description: 'Catalog browsing & VIP tagging flow completed',
+        config: {},
+        position: { x: 1980, y: 120 },
+      },
+      // Branch 2: Get Pricing -> Send Pricing Information -> Done
+      {
+        id: 'node_pricing_info',
+        type: 'message',
+        title: 'Send Pricing Information',
+        description: 'Dispatches pricing tier details to customer',
+        messageType: 'text',
+        config: {
+          text: '📊 *Exclusive WhatsApp Pricing Plans*:\n\n• *Starter*: $29/mo - 1,000 monthly contacts\n• *Growth*: $79/mo - 10,000 monthly contacts + Workflows\n• *Enterprise VIP*: $199/mo - Unlimited contacts & Dedicated Manager\n\nReply with your plan of interest or tap below!',
         },
-        {
-          id: 'node_condition_tag',
-          type: 'condition',
-          title: 'Tag Customer as VIP Lead',
-          description: 'Automatically labels contact with "vip_lead" tag',
-          actionType: 'tag_contact',
-          config: {
-            tag: 'vip_lead',
-          },
-          position: { x: 1220, y: 150 },
-          nextNodeId: 'node_end',
+        position: { x: 1040, y: 320 },
+        nextNodeId: 'node_end_pricing',
+      },
+      {
+        id: 'node_end_pricing',
+        type: 'end',
+        title: 'Workflow Completed',
+        description: 'Pricing information dispatch completed',
+        config: {},
+        position: { x: 1360, y: 320 },
+      },
+      // Branch 3: Talk To Expert -> Create Human Agent Request -> Done
+      {
+        id: 'node_expert_request',
+        type: 'crm_action',
+        title: 'Create Human Agent Request',
+        description: 'Escalates conversation to live specialist in CRM',
+        config: {
+          stage: 'negotiation',
+          notes: 'Customer requested live human agent escalation from WhatsApp button menu.',
+          priority: 'urgent',
         },
-        {
-          id: 'node_end',
-          type: 'end',
-          title: 'Workflow Completed',
-          description: 'Execution ends successfully. Awaiting customer reply.',
-          config: {},
-          position: { x: 1500, y: 150 },
-        },
-      ],
-      edges: [
-        { id: 'e_trigger_welcome', source: 'node_trigger', target: 'node_welcome_msg', animated: true },
-        { id: 'e_welcome_button', source: 'node_welcome_msg', target: 'node_button_menu' },
-        { id: 'e_button_carousel', source: 'node_button_menu', target: 'node_carousel_showcase' },
-        { id: 'e_carousel_tag', source: 'node_carousel_showcase', target: 'node_condition_tag' },
-        { id: 'e_tag_end', source: 'node_condition_tag', target: 'node_end' },
-      ],
-    };
-  }
+        position: { x: 1040, y: 500 },
+        nextNodeId: 'node_end_expert',
+      },
+      {
+        id: 'node_end_expert',
+        type: 'end',
+        title: 'Workflow Completed',
+        description: 'Human agent request registered & ticket opened',
+        config: {},
+        position: { x: 1360, y: 500 },
+      },
+    ],
+    edges: [
+      { id: 'e_trigger_welcome', source: 'node_trigger', target: 'node_welcome_msg', animated: true },
+      { id: 'e_welcome_button', source: 'node_welcome_msg', target: 'node_button_menu' },
+      // Branch 1: Browse Catalog (support btn_catalog, btn-0, and label)
+      { id: 'e_btn_catalog', source: 'node_button_menu', sourceHandle: 'btn_catalog', target: 'node_carousel_showcase', label: 'Browse Catalog' },
+      { id: 'e_carousel_wait', source: 'node_carousel_showcase', target: 'node_wait_product' },
+      { id: 'e_wait_tag', source: 'node_wait_product', target: 'node_condition_tag' },
+      { id: 'e_tag_end', source: 'node_condition_tag', target: 'node_end_catalog' },
+      // Branch 2: Get Pricing (support btn_pricing, btn-1, and label)
+      { id: 'e_btn_pricing', source: 'node_button_menu', sourceHandle: 'btn_pricing', target: 'node_pricing_info', label: 'Get Pricing' },
+      { id: 'e_pricing_end', source: 'node_pricing_info', target: 'node_end_pricing' },
+      // Branch 3: Talk To Expert (support btn_agent, btn-2, and label)
+      { id: 'e_btn_agent', source: 'node_button_menu', sourceHandle: 'btn_agent', target: 'node_expert_request', label: 'Talk To Expert' },
+      { id: 'e_expert_end', source: 'node_expert_request', target: 'node_end_expert' },
+    ],
+  };
+}
+
+function seedDefaultWorkflows() {
+  const defaultFlow = buildProductionVipWorkflow(DEFAULT_WORKSPACE_ID);
+  globalState.workflows[defaultFlow.id] = defaultFlow;
 }
 
 // Load from disk if exists
@@ -189,6 +250,7 @@ try {
     const raw = fs.readFileSync(STORE_FILE, 'utf8');
     const parsed = JSON.parse(raw);
     if (parsed.workflows) globalState.workflows = parsed.workflows;
+    if (parsed.workflowSessions) globalState.workflowSessions = parsed.workflowSessions;
     if (parsed.executionLogs) globalState.executionLogs = parsed.executionLogs;
     if (parsed.deliveryReceipts) globalState.deliveryReceipts = parsed.deliveryReceipts;
     if (parsed.metaLogs) globalState.metaLogs = parsed.metaLogs;
@@ -399,6 +461,89 @@ export const TestCenterStore = {
   },
   listExecutionLogs(filters?: { workflowId?: string; phoneNumber?: string; limit?: number }): WorkflowExecutionLog[] {
     return this.getExecutionLogs(filters);
+  },
+
+  getExecutionLog(executionId: string): WorkflowExecutionLog | null {
+    return globalState.executionLogs.find((l) => l.executionId === executionId || l.id === executionId) || null;
+  },
+
+  updateExecutionLog(log: WorkflowExecutionLog): WorkflowExecutionLog {
+    const idx = globalState.executionLogs.findIndex((l) => l.executionId === log.executionId || l.id === log.id);
+    if (idx !== -1) {
+      globalState.executionLogs[idx] = log;
+    } else {
+      globalState.executionLogs.unshift(log);
+    }
+    persistStore();
+    return log;
+  },
+
+  // WORKFLOW SESSION MANAGEMENT (Waiting / Paused State)
+  saveSession(session: WorkflowSessionState): WorkflowSessionState {
+    const cleanPhone = session.phoneNumber.startsWith('+')
+      ? session.phoneNumber
+      : `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
+    const wsId = session.workspaceId || DEFAULT_WORKSPACE_ID;
+    const key = `${wsId}:${cleanPhone}`;
+    globalState.workflowSessions[key] = {
+      ...session,
+      workspaceId: wsId,
+      phoneNumber: cleanPhone,
+    };
+    persistStore();
+    return globalState.workflowSessions[key];
+  },
+
+  getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): WorkflowSessionState | null {
+    const cleanPhone = phoneNumber.startsWith('+')
+      ? phoneNumber
+      : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
+    const key = `${workspaceId}:${cleanPhone}`;
+    let session = globalState.workflowSessions[key];
+
+    // Fallback search by clean phone across any matching default workspace
+    if (!session) {
+      for (const [k, s] of Object.entries(globalState.workflowSessions)) {
+        if (s.phoneNumber === cleanPhone && (s.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || s.workspaceId === 'default')) {
+          session = s;
+          break;
+        }
+      }
+    }
+
+    if (!session) return null;
+
+    // Check expiration (24h default)
+    if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
+      delete globalState.workflowSessions[key];
+      persistStore();
+      return null;
+    }
+    return session;
+  },
+
+  clearSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): boolean {
+    const cleanPhone = phoneNumber.startsWith('+')
+      ? phoneNumber
+      : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
+    let cleared = false;
+    for (const [key, session] of Object.entries(globalState.workflowSessions)) {
+      if (session.phoneNumber === cleanPhone && (session.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || session.workspaceId === 'default')) {
+        delete globalState.workflowSessions[key];
+        cleared = true;
+      }
+    }
+    if (cleared) persistStore();
+    return cleared;
+  },
+
+  listActiveSessions(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowSessionState[] {
+    const now = Date.now();
+    return Object.values(globalState.workflowSessions).filter(
+      (s) =>
+        (s.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || s.workspaceId === 'default') &&
+        (!s.expiresAt || new Date(s.expiresAt).getTime() > now)
+    );
   },
 
   // BUTTON TESTING LAB

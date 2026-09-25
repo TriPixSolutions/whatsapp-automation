@@ -2,6 +2,7 @@ import {
   WorkflowDefinition,
   WorkflowNode,
   WorkflowExecutionLog,
+  WorkflowSessionState,
   ExecutionTraceStep,
   AutomationTriggerType,
   PlatformMessageType,
@@ -113,6 +114,127 @@ export class AdvancedWorkflowEngine {
   }
 
   /**
+   * Resolves the next branch/node to follow based on button click, carousel interaction, or customer reply
+   */
+  static resolveNextBranch(
+    workflow: WorkflowDefinition,
+    currentNode: WorkflowNode,
+    event: {
+      action: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired';
+      buttonId?: string;
+      buttonTitle?: string;
+      cardIndex?: number;
+      cardButtonId?: string;
+      text?: string;
+    }
+  ): string | undefined {
+    const edges = workflow.edges || [];
+    const nodeEdges = edges.filter((e) => e.source === currentNode.id);
+
+    if (nodeEdges.length === 0) {
+      return currentNode.nextNodeId;
+    }
+
+    if (event.action === 'button_click') {
+      const buttonId = (event.buttonId || '').trim();
+      const buttonTitle = (event.buttonTitle || '').trim().toLowerCase();
+
+      // Find index of clicked button in node config
+      const buttons = currentNode.config?.buttons || [];
+      const btnIndex = buttons.findIndex(
+        (b: any) =>
+          b.id === buttonId ||
+          (b.title && b.title.toLowerCase() === buttonTitle) ||
+          (buttonId && b.id && b.id.toLowerCase() === buttonId.toLowerCase())
+      );
+      const matchedBtn = btnIndex !== -1 ? buttons[btnIndex] : null;
+
+      // 1. Direct edge match by buttonId (e.g., sourceHandle === 'btn_catalog')
+      if (buttonId) {
+        const edgeById = nodeEdges.find(
+          (e) =>
+            e.sourceHandle === buttonId ||
+            (e.sourceHandle && e.sourceHandle.toLowerCase() === buttonId.toLowerCase()) ||
+            (e.label && e.label.toLowerCase() === buttonId.toLowerCase())
+        );
+        if (edgeById) return edgeById.target;
+      }
+
+      // 2. Direct edge match by btnIndex (e.g., sourceHandle === 'btn-0' or 'btn_0' or '0')
+      if (btnIndex !== -1) {
+        const edgeByIndex = nodeEdges.find(
+          (e) =>
+            e.sourceHandle === `btn-${btnIndex}` ||
+            e.sourceHandle === `btn_${btnIndex}` ||
+            e.sourceHandle === `${btnIndex}`
+        );
+        if (edgeByIndex) return edgeByIndex.target;
+      }
+
+      // 3. Direct edge match by button title (e.g., label or sourceHandle === 'Browse Catalog')
+      if (buttonTitle) {
+        const edgeByTitle = nodeEdges.find(
+          (e) =>
+            (e.label && e.label.toLowerCase() === buttonTitle) ||
+            (e.sourceHandle && e.sourceHandle.toLowerCase() === buttonTitle)
+        );
+        if (edgeByTitle) return edgeByTitle.target;
+      }
+
+      // 4. Node config direct routing (e.g., button.nextNodeId or config.buttonRoutes)
+      if ((matchedBtn as any)?.nextNodeId) return (matchedBtn as any).nextNodeId;
+      if ((currentNode.config as any)?.buttonRoutes?.[buttonId]) return (currentNode.config as any).buttonRoutes[buttonId];
+      if ((currentNode.config as any)?.branches?.[buttonId]) return (currentNode.config as any).branches[buttonId];
+
+      // 5. If only 1 edge exists leaving this button node, follow it
+      if (nodeEdges.length === 1) {
+        return nodeEdges[0].target;
+      }
+
+      // 6. Fallback: match nth edge to nth button if counts match
+      if (btnIndex >= 0 && btnIndex < nodeEdges.length) {
+        return nodeEdges[btnIndex].target;
+      }
+    }
+
+    if (event.action === 'carousel_click') {
+      const cardBtnId = (event.cardButtonId || '').trim();
+      const cardIndex = event.cardIndex !== undefined ? event.cardIndex : 0;
+
+      if (cardBtnId) {
+        const edgeByCardBtn = nodeEdges.find(
+          (e) =>
+            e.sourceHandle === cardBtnId ||
+            (e.sourceHandle && e.sourceHandle.toLowerCase() === cardBtnId.toLowerCase()) ||
+            (e.label && e.label.toLowerCase() === cardBtnId.toLowerCase())
+        );
+        if (edgeByCardBtn) return edgeByCardBtn.target;
+      }
+
+      const edgeByCardIndex = nodeEdges.find(
+        (e) =>
+          e.sourceHandle === `card-${cardIndex}` ||
+          e.sourceHandle === `card_${cardIndex}` ||
+          e.sourceHandle === `${cardIndex}`
+      );
+      if (edgeByCardIndex) return edgeByCardIndex.target;
+
+      if (nodeEdges.length === 1) return nodeEdges[0].target;
+      return currentNode.nextNodeId;
+    }
+
+    if (event.action === 'reply') {
+      const repliedEdge = nodeEdges.find((e) => e.sourceHandle === 'replied') || nodeEdges[0];
+      if (repliedEdge) return repliedEdge.target;
+      return currentNode.nextNodeId;
+    }
+
+    // Default edge or nextNodeId
+    if (nodeEdges.length > 0) return nodeEdges[0].target;
+    return currentNode.nextNodeId;
+  }
+
+  /**
    * Main Workflow Execution Runner
    */
   static async executeWorkflow(
@@ -143,6 +265,8 @@ export class AdvancedWorkflowEngine {
     }
     context.contactId = contact.id;
 
+    console.log(`[WorkflowEngine] 🚀 WORKFLOW STARTED: "${workflow.name}" (${workflow.id}) for recipient ${context.phoneNumber} via trigger ${context.triggerType}`);
+
     // 2. Initialize execution log
     const execLog: WorkflowExecutionLog = {
       id: executionId,
@@ -167,13 +291,175 @@ export class AdvancedWorkflowEngine {
 
     TestCenterStore.recordExecutionLog(execLog);
 
-    // 3. Execution Node Graph Navigation
+    const startNode = workflow.nodes[0];
+    if (!startNode) {
+      execLog.status = 'completed';
+      execLog.completedAt = new Date().toISOString();
+      TestCenterStore.recordExecutionLog(execLog);
+      return execLog;
+    }
+
+    return this.runNodeTraversal(
+      workflow,
+      startNode,
+      context,
+      execLog,
+      stepsTrace,
+      metaResponses,
+      executionVariables,
+      contact
+    );
+  }
+
+  /**
+   * Resumes a paused/waiting workflow execution after customer button click, selection, or reply
+   */
+  static async resumeWorkflowExecution(
+    session: WorkflowSessionState,
+    event: {
+      action: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired';
+      buttonId?: string;
+      buttonTitle?: string;
+      cardIndex?: number;
+      cardButtonId?: string;
+      text?: string;
+      metadata?: any;
+    },
+    isTestSimulation = false
+  ): Promise<WorkflowExecutionLog | null> {
+    const workflow = TestCenterStore.getWorkflow(session.workflowId);
+    if (!workflow) {
+      console.error(`[WorkflowEngine] ❌ ERROR: Workflow ${session.workflowId} not found for session ${session.id}`);
+      return null;
+    }
+
+    const pausedNode = workflow.nodes.find((n) => n.id === session.currentNodeId);
+    if (!pausedNode) {
+      console.error(`[WorkflowEngine] ❌ ERROR: Paused node ${session.currentNodeId} not found in workflow ${workflow.id}`);
+      return null;
+    }
+
+    const nextNodeId = this.resolveNextBranch(workflow, pausedNode, event);
+    if (!nextNodeId) {
+      console.warn(`[WorkflowEngine] ⚠️ No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action} (Button: ${event.buttonTitle || event.buttonId || event.text})`);
+      return null;
+    }
+
+    console.log(`[WorkflowEngine] 🔘 BUTTON CLICKED / ACTION: Customer ${session.phoneNumber} performed "${event.buttonTitle || event.buttonId || event.text || event.action}"`);
+    console.log(`[WorkflowEngine] ▶️ WORKFLOW RESUMED: Workflow "${workflow.name}" (${workflow.id}) resumed from node "${pausedNode.title}" (${pausedNode.id}) ➔ Advancing to node "${nextNodeId}"`);
+
+    // Clear the waiting session since it has been fulfilled
+    TestCenterStore.clearSession(session.phoneNumber, session.workspaceId);
+
+    // Fetch existing execution log or fallback
+    let execLog = TestCenterStore.getExecutionLog(session.executionId);
+    if (!execLog) {
+      execLog = {
+        id: session.executionId,
+        executionId: session.executionId,
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        workspaceId: session.workspaceId,
+        phoneNumber: session.phoneNumber,
+        contactId: session.contactId,
+        triggerType: 'button_click',
+        triggerValue: event.buttonId || event.buttonTitle || event.action,
+        status: 'running',
+        startedAt: session.pausedAt || new Date().toISOString(),
+        resumedAt: new Date().toISOString(),
+        totalDurationMs: 0,
+        steps: [],
+        metaResponses: [],
+      };
+    } else {
+      execLog.status = 'running';
+      execLog.resumedAt = new Date().toISOString();
+      execLog.waitingFor = undefined;
+      execLog.waitingOptions = undefined;
+    }
+
+    const stepsTrace = execLog.steps || [];
+    const metaResponses = execLog.metaResponses || [];
+    const executionVariables: Record<string, any> = {
+      phoneNumber: session.phoneNumber,
+      ...(session.variables || {}),
+    };
+    if (event.text) executionVariables.text = event.text;
+    if (event.buttonId) executionVariables.buttonId = event.buttonId;
+    if (event.buttonTitle) executionVariables.buttonTitle = event.buttonTitle;
+
+    // Record resume step in trace
+    stepsTrace.push({
+      nodeId: pausedNode.id,
+      nodeType: pausedNode.type,
+      nodeTitle: `${pausedNode.title} ➔ Clicked: "${event.buttonTitle || event.buttonId || event.action}"`,
+      status: 'workflow_resumed',
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      durationMs: 0,
+      outputResult: {
+        event: event.action,
+        buttonId: event.buttonId,
+        buttonTitle: event.buttonTitle,
+        cardIndex: event.cardIndex,
+        cardButtonId: event.cardButtonId,
+        text: event.text,
+        resumedToNodeId: nextNodeId,
+      },
+    });
+
+    const contact = ContactsDB.getByPhone(session.phoneNumber, session.workspaceId);
+    const nextNode = workflow.nodes.find((n) => n.id === nextNodeId);
+
+    if (!nextNode) {
+      execLog.status = 'completed';
+      execLog.completedAt = new Date().toISOString();
+      TestCenterStore.recordExecutionLog(execLog);
+      return execLog;
+    }
+
+    const context: WorkflowExecutionContext = {
+      workflowId: workflow.id,
+      workspaceId: session.workspaceId,
+      phoneNumber: session.phoneNumber,
+      contactId: session.contactId,
+      triggerType: 'button_click',
+      triggerPayload: event,
+      isTestSimulation,
+      variables: executionVariables,
+    };
+
+    return this.runNodeTraversal(
+      workflow,
+      nextNode,
+      context,
+      execLog,
+      stepsTrace,
+      metaResponses,
+      executionVariables,
+      contact
+    );
+  }
+
+  /**
+   * Internal Core Node Graph Traversal Runner
+   */
+  private static async runNodeTraversal(
+    workflow: WorkflowDefinition,
+    startNode: WorkflowNode,
+    context: WorkflowExecutionContext,
+    execLog: WorkflowExecutionLog,
+    stepsTrace: ExecutionTraceStep[],
+    metaResponses: any[],
+    executionVariables: Record<string, any>,
+    contact: any
+  ): Promise<WorkflowExecutionLog> {
     const nodeMap = new Map<string, WorkflowNode>();
     for (const n of workflow.nodes) {
       nodeMap.set(n.id, n);
     }
 
-    let currentNode: WorkflowNode | undefined = workflow.nodes[0];
+    let currentNode: WorkflowNode | undefined = startNode;
     let stepCount = 0;
     const maxSteps = 50; // loop protection
 
@@ -209,15 +495,147 @@ export class AdvancedWorkflowEngine {
               triggerType: context.triggerType,
               payload: context.triggerPayload,
             };
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id})`);
             break;
           }
 
-          case 'message':
-          case 'whatsapp_message':
           case 'button':
-          case 'whatsapp_button':
+          case 'whatsapp_button': {
+            // 1. Dispatch interactive button message to WhatsApp
+            const sendResult = await this.dispatchNodeMessage(
+              currentNode,
+              context,
+              executionVariables,
+              contact
+            );
+
+            traceStep.outputResult = sendResult;
+            traceStep.metaCall = sendResult.metaCall;
+
+            if (sendResult.success) {
+              traceStep.status = 'message_sent';
+              if (sendResult.messageId) {
+                metaResponses.push({
+                  messageId: sendResult.messageId,
+                  status: 'sent',
+                  timestamp: new Date().toISOString(),
+                  nodeId: currentNode.id,
+                });
+              }
+            } else {
+              traceStep.status = 'failed';
+              traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
+            }
+
+            traceStep.completedAt = new Date().toISOString();
+            traceStep.durationMs = Date.now() - stepStart;
+            stepsTrace.push(traceStep);
+
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Interactive buttons dispatched to ${context.phoneNumber}`);
+
+            // 2. PAUSE WORKFLOW EXECUTION: Interactive buttons require user click!
+            const buttons = currentNode.config?.buttons || [];
+            if (buttons.length > 0) {
+              const waitStep: ExecutionTraceStep = {
+                nodeId: currentNode.id,
+                nodeType: currentNode.type,
+                nodeTitle: `Waiting for Button Click (${buttons.map((b: any) => b.title).join(', ')})`,
+                status: 'waiting_user_action',
+                startedAt: new Date().toISOString(),
+                durationMs: 0,
+                outputResult: {
+                  waitingFor: 'button_click',
+                  buttons: currentNode.config.buttons,
+                  status: 'paused_waiting_user_action',
+                },
+              };
+              stepsTrace.push(waitStep);
+
+              // Persist active session
+              const session: WorkflowSessionState = {
+                id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                workspaceId: context.workspaceId,
+                phoneNumber: context.phoneNumber,
+                contactId: contact?.id,
+                workflowId: workflow.id,
+                executionId: execLog.executionId,
+                currentNodeId: currentNode.id,
+                waitingFor: 'button_click',
+                waitingOptions: buttons.map((b: any, idx: number) => ({
+                  id: b.id,
+                  title: b.title,
+                  index: idx,
+                })),
+                variables: executionVariables,
+                pausedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+              };
+              TestCenterStore.saveSession(session);
+
+              console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused at "${currentNode.title}" (${currentNode.id})`);
+              console.log(`[WorkflowEngine] ⏳ WAITING FOR USER ACTION: Waiting for button click from ${context.phoneNumber} (Options: ${buttons.map((b: any) => b.title).join(', ')})`);
+
+              execLog.status = 'waiting';
+              execLog.currentNodeId = currentNode.id;
+              execLog.waitingFor = 'button_click';
+              execLog.waitingOptions = session.waitingOptions;
+              execLog.pausedAt = new Date().toISOString();
+              execLog.steps = stepsTrace;
+              execLog.metaResponses = metaResponses;
+              execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
+              TestCenterStore.recordExecutionLog(execLog);
+
+              return execLog;
+            }
+            break;
+          }
+
+          case 'wait_for_reply': {
+            traceStep.status = 'waiting_user_action';
+            traceStep.outputResult = {
+              waitingFor: 'reply',
+              timeoutMinutes: currentNode.config?.timeoutMinutes || 1440,
+              status: 'paused_waiting_user_reply',
+            };
+            traceStep.completedAt = new Date().toISOString();
+            traceStep.durationMs = Date.now() - stepStart;
+            stepsTrace.push(traceStep);
+
+            // Persist active session waiting for reply/product selection
+            const session: WorkflowSessionState = {
+              id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              workspaceId: context.workspaceId,
+              phoneNumber: context.phoneNumber,
+              contactId: contact?.id,
+              workflowId: workflow.id,
+              executionId: execLog.executionId,
+              currentNodeId: currentNode.id,
+              waitingFor: 'reply',
+              variables: executionVariables,
+              pausedAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+            };
+            TestCenterStore.saveSession(session);
+
+            console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused at "${currentNode.title}" (${currentNode.id})`);
+            console.log(`[WorkflowEngine] ⏳ WAITING FOR USER ACTION: Waiting for customer reply / product selection from ${context.phoneNumber}`);
+
+            execLog.status = 'waiting';
+            execLog.currentNodeId = currentNode.id;
+            execLog.waitingFor = 'reply';
+            execLog.pausedAt = new Date().toISOString();
+            execLog.steps = stepsTrace;
+            execLog.metaResponses = metaResponses;
+            execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
+            TestCenterStore.recordExecutionLog(execLog);
+
+            return execLog;
+          }
+
           case 'carousel':
           case 'whatsapp_carousel':
+          case 'message':
+          case 'whatsapp_message':
           case 'whatsapp_catalog':
           case 'whatsapp_flow': {
             const sendResult = await this.dispatchNodeMessage(
@@ -244,6 +662,7 @@ export class AdvancedWorkflowEngine {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
             }
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Dispatched to ${context.phoneNumber}`);
             break;
           }
 
@@ -254,8 +673,8 @@ export class AdvancedWorkflowEngine {
             const scheduledDelayMs = amount * multiplier;
             const scheduledFor = new Date(Date.now() + scheduledDelayMs).toISOString();
 
-            if (context.isTestSimulation) {
-              const simDelayMs = Math.min(amount * 200, 1000);
+            if (context.isTestSimulation && amount <= 5 && unit === 'seconds') {
+              const simDelayMs = amount * 1000;
               await new Promise((r) => setTimeout(r, simDelayMs));
               traceStep.outputResult = {
                 simulatedDelay: `${amount} ${unit}`,
@@ -263,14 +682,48 @@ export class AdvancedWorkflowEngine {
                 resumedAt: new Date().toISOString(),
                 waitedMs: simDelayMs,
               };
+              traceStep.status = 'node_executed';
+              console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [delay] "${currentNode.title}" (${currentNode.id}) ➔ Waited ${amount}s simulation`);
             } else {
+              // Pause execution and schedule follow-up job
+              traceStep.status = 'waiting_user_action';
               traceStep.outputResult = {
                 scheduledDelay: `${amount} ${unit}`,
                 scheduledFor,
                 queueState: 'scheduled',
               };
+              traceStep.completedAt = new Date().toISOString();
+              traceStep.durationMs = Date.now() - stepStart;
+              stepsTrace.push(traceStep);
+
+              const session: WorkflowSessionState = {
+                id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                workspaceId: context.workspaceId,
+                phoneNumber: context.phoneNumber,
+                contactId: contact?.id,
+                workflowId: workflow.id,
+                executionId: execLog.executionId,
+                currentNodeId: currentNode.id,
+                waitingFor: 'delay',
+                variables: executionVariables,
+                pausedAt: new Date().toISOString(),
+                expiresAt: scheduledFor,
+              };
+              TestCenterStore.saveSession(session);
+
+              console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused for scheduled delay until ${scheduledFor}`);
+
+              execLog.status = 'waiting';
+              execLog.currentNodeId = currentNode.id;
+              execLog.waitingFor = 'delay';
+              execLog.pausedAt = new Date().toISOString();
+              execLog.steps = stepsTrace;
+              execLog.metaResponses = metaResponses;
+              execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
+              TestCenterStore.recordExecutionLog(execLog);
+
+              return execLog;
             }
-            traceStep.status = 'node_executed';
             break;
           }
 
@@ -287,17 +740,7 @@ export class AdvancedWorkflowEngine {
               currentContextVariables: { ...executionVariables },
             };
             traceStep.status = 'node_executed';
-            break;
-          }
-
-          case 'wait_for_reply': {
-            traceStep.status = 'node_executed';
-            traceStep.outputResult = {
-              waitingForReply: true,
-              timeoutMinutes: currentNode.config.timeoutMinutes || 60,
-              status: 'customer_replied',
-            };
-            branchHandleToFollow = 'replied';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [variable] Set ${key}="${val}"`);
             break;
           }
 
@@ -315,6 +758,7 @@ export class AdvancedWorkflowEngine {
             if (conditionResult.branchNextNodeId) {
               nextNodeIdToFollow = conditionResult.branchNextNodeId;
             }
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [condition] "${currentNode.title}" ➔ Evaluated to ${conditionResult.conditionResult}`);
             break;
           }
 
@@ -331,18 +775,19 @@ export class AdvancedWorkflowEngine {
               branchId: matchedBranch?.id,
             };
             traceStep.status = 'node_executed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [multi_branch] "${currentNode.title}" ➔ Selected "${matchedBranch?.label}"`);
             break;
           }
 
           case 'crm_action': {
             const conf = currentNode.config || {};
-            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contact) {
+            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contactRecord) {
               if (conf.stage) {
-                ContactsDB.upsert({ phoneNumber: contact.phoneNumber, stage: conf.stage as any }, context.workspaceId);
+                ContactsDB.upsert({ phoneNumber: contactRecord.phoneNumber, stage: conf.stage as any }, context.workspaceId);
               }
               if (conf.notes) {
-                ContactsDB.addNote(contact.id, {
+                ContactsDB.addNote(contactRecord.id, {
                   authorName: 'Workflow Engine',
                   content: conf.notes,
                 });
@@ -354,18 +799,19 @@ export class AdvancedWorkflowEngine {
               notesAdded: conf.notes || 'None',
             };
             traceStep.status = 'node_executed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [crm_action] "${currentNode.title}" ➔ Stage: ${conf.stage || 'updated'}`);
             break;
           }
 
           case 'lead_management': {
             const conf = currentNode.config || {};
-            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contact) {
+            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contactRecord) {
               const updatedContact = {
-                ...contact,
+                ...contactRecord,
                 leadStatus: conf.leadStatus || 'qualified',
                 metadata: {
-                  ...(contact.metadata || {}),
+                  ...(contactRecord.metadata || {}),
                   leadValue: conf.leadValue || 500,
                   priority: conf.priority || 'high',
                 },
@@ -378,27 +824,30 @@ export class AdvancedWorkflowEngine {
               priority: conf.priority || 'high',
             };
             traceStep.status = 'node_executed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [lead_management] Status: ${conf.leadStatus || 'qualified'}`);
             break;
           }
 
+          case 'tag':
           case 'tag_management': {
             const conf = currentNode.config || {};
-            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contact && conf.tag) {
-              const tagToApply = conf.tag.toLowerCase().trim();
-              let tags = contact.tags || [];
+            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contactRecord && conf.tag) {
+              const tagToApply = conf.tag.trim();
+              let tags = contactRecord.tags || [];
               if (conf.action === 'remove') {
-                tags = tags.filter((t) => t.toLowerCase() !== tagToApply);
+                tags = tags.filter((t) => t.toLowerCase() !== tagToApply.toLowerCase());
               } else {
                 tags = Array.from(new Set([...tags, tagToApply]));
               }
-              ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
+              ContactsDB.upsert({ ...contactRecord, tags }, context.workspaceId);
             }
             traceStep.outputResult = {
               action: conf.action || 'add',
               tag: conf.tag,
             };
             traceStep.status = 'node_executed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [tag] "${currentNode.title}" ➔ Tag "${conf.tag}" applied`);
             break;
           }
 
@@ -415,6 +864,7 @@ export class AdvancedWorkflowEngine {
               status: 'success',
             };
             traceStep.status = 'node_executed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [google_sheets] Sheet: ${conf.sheetName}`);
             break;
           }
 
@@ -430,6 +880,7 @@ export class AdvancedWorkflowEngine {
             traceStep.outputResult = integrationResult;
             traceStep.status = integrationResult.success ? 'node_executed' : 'failed';
             if (integrationResult.error) traceStep.error = integrationResult.error;
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [api/webhook] Result: ${integrationResult.success ? 'OK' : 'Error'}`);
             break;
           }
 
@@ -437,6 +888,7 @@ export class AdvancedWorkflowEngine {
             traceStep.status = 'completed';
             traceStep.outputResult = { workflowCompleted: true };
             nextNodeIdToFollow = undefined;
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [end] "${currentNode.title}" (${currentNode.id})`);
             break;
           }
 
@@ -475,6 +927,7 @@ export class AdvancedWorkflowEngine {
 
         currentNode = nodeMap.get(nextNodeIdToFollow);
       } catch (err: any) {
+        console.error(`[WorkflowEngine] ❌ ERROR at node "${currentNode?.title || 'Unknown'}":`, err.message);
         traceStep.status = 'failed';
         traceStep.error = err.message;
         traceStep.completedAt = new Date().toISOString();
@@ -485,6 +938,7 @@ export class AdvancedWorkflowEngine {
     }
 
     if (stepCount >= maxSteps && currentNode) {
+      console.warn(`[WorkflowEngine] ⚠️ Loop Guard triggered (${maxSteps} steps threshold)`);
       stepsTrace.push({
         nodeId: 'loop_guard_protection',
         nodeType: 'end',
@@ -497,14 +951,19 @@ export class AdvancedWorkflowEngine {
       });
     }
 
-    // 4. Finalize execution status
+    // Workflow reached completion (or unrecoverable error)
     const completedAt = new Date().toISOString();
     const hasFailures = stepsTrace.some((s) => s.status === 'failed');
     execLog.status = hasFailures ? 'failed' : 'completed';
     execLog.completedAt = completedAt;
-    execLog.totalDurationMs = Date.now() - new Date(startedAt).getTime();
+    execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
     execLog.steps = stepsTrace;
     execLog.metaResponses = metaResponses;
+
+    // Clear session upon workflow completion
+    TestCenterStore.clearSession(context.phoneNumber, context.workspaceId);
+
+    console.log(`[WorkflowEngine] ✅ WORKFLOW COMPLETED: Workflow "${workflow.name}" (${workflow.id}) completed for ${context.phoneNumber} (Status: ${execLog.status})`);
 
     TestCenterStore.recordExecutionLog(execLog);
 
