@@ -298,6 +298,27 @@ export class AdvancedWorkflowEngine {
         if (edgeById) return { nextNodeId: edgeById.target, sourceHandle: edgeById.sourceHandle || undefined, matchedEdge: edgeById };
       }
 
+      // 1a. List Row Match if current node is a list
+      if (currentNode.type === 'list' || currentNode.type === 'whatsapp_list') {
+        const sections = currentNode.config?.sections || [];
+        for (const sec of sections) {
+          const matchedRow = (sec.rows || []).find(
+            (r: any) =>
+              (buttonId && r.id && r.id.toLowerCase() === buttonId.toLowerCase()) ||
+              (buttonTitle && r.title && r.title.toLowerCase() === buttonTitle.toLowerCase())
+          );
+          if (matchedRow) {
+            const edgeByRow = nodeEdges.find(
+              (e) =>
+                e.sourceHandle === matchedRow.id ||
+                (e.sourceHandle && e.sourceHandle.toLowerCase() === matchedRow.id.toLowerCase()) ||
+                (e.label && e.label.toLowerCase() === (matchedRow.title || '').toLowerCase())
+            );
+            if (edgeByRow) return { nextNodeId: edgeByRow.target, sourceHandle: edgeByRow.sourceHandle || undefined, matchedEdge: edgeByRow };
+          }
+        }
+      }
+
       // 1b. Match by matchedBtn.id if different from buttonId
       if (matchedBtn?.id && matchedBtn.id.toLowerCase() !== buttonId.toLowerCase()) {
         const edgeByMatchedId = nodeEdges.find(
@@ -825,6 +846,84 @@ export class AdvancedWorkflowEngine {
             break;
           }
 
+          case 'list':
+          case 'whatsapp_list': {
+            const sendResult = await this.dispatchNodeMessage(
+              currentNode,
+              context,
+              executionVariables,
+              contact
+            );
+
+            traceStep.outputResult = sendResult;
+            traceStep.metaCall = sendResult.metaCall;
+
+            if (sendResult.success) {
+              traceStep.status = 'message_sent';
+              if (sendResult.messageId) {
+                metaResponses.push({
+                  messageId: sendResult.messageId,
+                  status: 'sent',
+                  timestamp: new Date().toISOString(),
+                  nodeId: currentNode.id,
+                });
+              }
+            } else {
+              traceStep.status = 'failed';
+              traceStep.error = sendResult.error || 'Meta API returned list message dispatch failure';
+            }
+
+            traceStep.completedAt = new Date().toISOString();
+            traceStep.durationMs = Date.now() - stepStart;
+            stepsTrace.push(traceStep);
+
+            // Pause if list has sections and rows waiting for user selection
+            const sections = currentNode.config?.sections || [];
+            if (sections.length > 0) {
+              const waitStep: ExecutionTraceStep = {
+                nodeId: currentNode.id,
+                nodeType: currentNode.type,
+                nodeTitle: `Waiting for List Selection`,
+                status: 'waiting_user_action',
+                startedAt: new Date().toISOString(),
+                durationMs: 0,
+                outputResult: {
+                  waitingFor: 'button_click',
+                  sections: currentNode.config.sections,
+                  status: 'paused_waiting_user_action',
+                },
+              };
+              stepsTrace.push(waitStep);
+
+              const session: WorkflowSessionState = {
+                id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                workspaceId: context.workspaceId,
+                phoneNumber: context.phoneNumber,
+                contactId: contact?.id,
+                workflowId: workflow.id,
+                executionId: execLog.executionId,
+                currentNodeId: currentNode.id,
+                waitingFor: 'button_click',
+                variables: executionVariables,
+                pausedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+              };
+              TestCenterStore.saveSession(session);
+
+              execLog.status = 'waiting';
+              execLog.currentNodeId = currentNode.id;
+              execLog.waitingFor = 'button_click';
+              execLog.pausedAt = new Date().toISOString();
+              execLog.steps = stepsTrace;
+              execLog.metaResponses = metaResponses;
+              execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
+              TestCenterStore.recordExecutionLog(execLog);
+
+              return execLog;
+            }
+            break;
+          }
+
           case 'wait_for_reply': {
             traceStep.status = 'waiting_user_action';
             traceStep.outputResult = {
@@ -1122,8 +1221,10 @@ export class AdvancedWorkflowEngine {
 
           case 'webhook':
           case 'webhook_node':
+          case 'webhook_request':
           case 'api':
-          case 'api_node': {
+          case 'api_node':
+          case 'api_request': {
             const integrationResult = await this.executeIntegrationNode(
               currentNode,
               context,
@@ -1133,6 +1234,67 @@ export class AdvancedWorkflowEngine {
             traceStep.status = integrationResult.success ? 'node_executed' : 'failed';
             if (integrationResult.error) traceStep.error = integrationResult.error;
             console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [api/webhook] Result: ${integrationResult.success ? 'OK' : 'Error'}`);
+            break;
+          }
+
+          case 'assign_agent': {
+            const conf = currentNode.config || {};
+            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            if (contactRecord) {
+              ContactsDB.upsert(
+                {
+                  ...contactRecord,
+                  assignedAgent: conf.agentName || conf.agentId || 'Support Specialist',
+                  stage: 'in_progress',
+                },
+                context.workspaceId
+              );
+            }
+            traceStep.outputResult = {
+              assignedAgent: conf.agentName || conf.agentId || 'Support Specialist',
+              status: 'assigned',
+            };
+            traceStep.status = 'node_executed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [assign_agent] Assigned: ${conf.agentName || 'Specialist'}`);
+            break;
+          }
+
+          case 'ai':
+          case 'ai_agent':
+          case 'ai_smart_reply': {
+            const conf = currentNode.config || {};
+            const systemPrompt = conf.systemPrompt || 'You are a helpful WhatsApp customer support assistant.';
+            const customerMessage = (executionVariables.text || context.triggerPayload?.text || 'Hello').toString();
+
+            let replyText = 'Thank you for reaching out! Our team is reviewing your inquiry.';
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (apiKey) {
+              try {
+                const { GoogleGenerativeAI } = await import('@google/generative-ai');
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const model = genAI.getGenerativeModel({
+                  model: 'gemini-1.5-flash',
+                  systemInstruction: systemPrompt,
+                });
+                const result = await model.generateContent(`Customer message: "${customerMessage}". Respond briefly and professionally for WhatsApp.`);
+                const text = result.response.text().trim();
+                if (text) replyText = text;
+              } catch (err: any) {
+                console.warn('[WorkflowEngine] AI generation failed, using fallback:', err.message);
+              }
+            }
+
+            const sendResult = await WhatsAppMessageService.send({
+              workspaceId: context.workspaceId,
+              to: context.phoneNumber,
+              type: 'text',
+              text: replyText,
+              bypassWindowCheck: true,
+            });
+
+            traceStep.outputResult = { aiReply: replyText, success: sendResult.success };
+            traceStep.status = sendResult.success ? 'message_sent' : 'failed';
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [ai] Generated AI reply and dispatched`);
             break;
           }
 
@@ -1282,6 +1444,8 @@ export class AdvancedWorkflowEngine {
         ? 'interactive_button'
         : node.type === 'carousel' || node.type === 'whatsapp_carousel'
         ? 'carousel'
+        : node.type === 'list' || node.type === 'whatsapp_list'
+        ? 'list'
         : node.type === 'whatsapp_catalog' || node.type === 'catalog'
         ? 'catalog'
         : node.type === 'whatsapp_flow' || node.type === 'flow'

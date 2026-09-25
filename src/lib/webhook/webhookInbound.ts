@@ -195,9 +195,12 @@ export async function handleWebhookInboundMessages(
     // 3. Customer replied: automatically cancel pending scheduled follow-ups!
     await FollowUpEngine.cancelPendingOnReply(fromPhone);
 
-    const isButtonClick = (message.type === 'interactive' && message.interactive?.type === 'button_reply') || message.type === 'button';
-    const buttonId = interactionPayload?.id || message.interactive?.button_reply?.id || message.button?.payload || triggerText;
-    const buttonTitle = interactionPayload?.title || message.interactive?.button_reply?.title || message.button?.text || content;
+    const isButtonClick =
+      (message.type === 'interactive' &&
+        (message.interactive?.type === 'button_reply' || message.interactive?.type === 'list_reply')) ||
+      message.type === 'button';
+    const buttonId = interactionPayload?.id || message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || message.button?.payload || triggerText;
+    const buttonTitle = interactionPayload?.title || message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || message.button?.text || content;
 
     console.log(`[PHONE NORMALIZED] raw: "${message.from}" ➔ normalized: "${fromPhone}"`);
 
