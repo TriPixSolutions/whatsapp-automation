@@ -187,7 +187,7 @@ export const WorkflowTemplatesStore = {
       throw new Error(`Template "${templateId}" not found`);
     }
 
-    return {
+    const transientWf: WorkflowDefinition = {
       id: `test_${template.id}_${Date.now()}`,
       workspaceId,
       name: `[Test] ${template.name}`,
@@ -203,5 +203,10 @@ export const WorkflowTemplatesStore = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    // Save transient workflow so paused sessions can resolve branches & resume seamlessly
+    TestCenterStore.saveWorkflow(transientWf);
+
+    return transientWf;
   },
 };
