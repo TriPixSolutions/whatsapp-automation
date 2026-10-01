@@ -35,3 +35,4 @@ data/*.json
 !.env.example
 logs/
 scratch/
+__agent__/

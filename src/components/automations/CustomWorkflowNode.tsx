@@ -391,6 +391,7 @@ export const CustomWorkflowNode = memo(function CustomWorkflowNode({
   const isButton = resolvedKey === 'whatsapp_button';
   const isMultiBranch = resolvedKey === 'multi_branch';
   const isWaitForReply = resolvedKey === 'wait_for_reply';
+  const isCarousel = resolvedKey === 'whatsapp_carousel' || resolvedKey === 'carousel';
   const isEnd = resolvedKey === 'end';
 
   const buttons = node.config?.buttons || [];
@@ -773,6 +774,34 @@ export const CustomWorkflowNode = memo(function CustomWorkflowNode({
             position={Position.Right}
             id="source"
             className="!w-3 !h-3 !-right-2 !top-auto !bg-gray-400 !border-2 !border-gray-950 hover:!bg-emerald-400 transition-colors"
+          />
+        </div>
+      ) : isCarousel && cards.length > 0 ? (
+        /* 2b. Carousel Node: Dedicated output handles per card + standard output */
+        <div className="mt-2.5 pt-2 border-t border-gray-800/80 space-y-1">
+          {cards.map((card: any, idx: number) => {
+            const cardBtn = card.buttons?.[0];
+            const handleId = cardBtn?.id || `card-${idx}`;
+            return (
+              <div
+                key={card.id || idx}
+                className="relative flex items-center justify-between text-[10px] text-fuchsia-300 py-0.5"
+              >
+                <span className="truncate pr-3">Card {idx + 1}: {card.title || cardBtn?.title || `Card ${idx + 1}`}</span>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={handleId}
+                  className="!w-2.5 !h-2.5 !-right-2 !top-auto !bg-fuchsia-400 !border-2 !border-gray-950 hover:scale-125 transition-transform"
+                />
+              </div>
+            );
+          })}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="source"
+            className="!w-3 !h-3 !-right-2 !top-auto !bg-gray-400 !border-2 !border-gray-950 hover:!bg-fuchsia-400 transition-colors"
           />
         </div>
       ) : isMultiBranch && branches.length > 0 ? (

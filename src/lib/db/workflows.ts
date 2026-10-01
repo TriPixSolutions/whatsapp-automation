@@ -34,7 +34,17 @@ export const WorkflowsDB = {
   async get(id: string, workspaceId: string): Promise<WorkflowDefinition | null> {
     const row = checked(await database().from('workflow_definitions').select('*').eq('id', id)
       .eq('workspace_id', workspace(workspaceId)).maybeSingle());
-    return row ? mapWorkflow(row) : null;
+    if (row) return mapWorkflow(row);
+    if (id === 'wf_welcome_interactive') {
+      try {
+        const { buildProductionVipWorkflow } = await import('@/lib/automations/testCenterStore');
+        const defaultWf = buildProductionVipWorkflow(workspaceId);
+        return await this.save(defaultWf);
+      } catch {
+        return null;
+      }
+    }
+    return null;
   },
   async save(definition: WorkflowDefinition): Promise<WorkflowDefinition> {
     const now = new Date().toISOString();
@@ -83,10 +93,10 @@ export const WorkflowSessionsDB = {
       await this.delete(phoneNumber, id, row.id);
       return null;
     }
+    // Safe lookup: Never delete the active customer session if workflow lookup fails!
     const workflow = await WorkflowsDB.get(row.workflow_id, id);
     if (!workflow) {
-      await this.delete(phoneNumber, id, row.id);
-      return null;
+      console.warn(`[WorkflowSessionsDB] Workflow definition "${row.workflow_id}" not found in DB for session "${row.id}". Preserving session state.`);
     }
     return mapSession(row);
   },

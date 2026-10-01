@@ -12,6 +12,129 @@ import { TestCenterStore } from './testCenterStore';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
 import { ContactsDB, MessagesDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
+export function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function normalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFC')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+export function stripBoundaryPunctuation(text: string): string {
+  if (!text) return '';
+  return text.replace(/^[!?,.:;\-~*#@%^&()\[\]{}'"]+|[!?,.:;\-~*#@%^&()\[\]{}'"]+$/gu, '');
+}
+
+export function matchKeywordRule(
+  rawIncomingText: string,
+  rawExpectedKeywords: string | string[],
+  pattern: 'contains' | 'exact' | 'starts_with' | 'regex' = 'contains'
+): { matched: boolean; matchedKeyword?: string } {
+  const incoming = normalizeText(rawIncomingText);
+  if (!incoming) return { matched: false };
+
+  const incomingClean = stripBoundaryPunctuation(incoming);
+
+  const keywordList: string[] = (
+    Array.isArray(rawExpectedKeywords)
+      ? rawExpectedKeywords
+      : (rawExpectedKeywords || '').toString().split(/,|\//)
+  )
+    .map((k) => normalizeText(k))
+    .filter(Boolean);
+
+  if (keywordList.length === 0) {
+    return { matched: true };
+  }
+
+  const tokens = incoming
+    .split(/[\s,.;:!?\-_/\\()\[\]{}'"]+/)
+    .map(stripBoundaryPunctuation)
+    .filter(Boolean);
+
+  for (const kw of keywordList) {
+    const kwClean = stripBoundaryPunctuation(kw);
+
+    if (pattern === 'exact') {
+      if (incoming === kw || incomingClean === kwClean) {
+        return { matched: true, matchedKeyword: kw };
+      }
+    } else if (pattern === 'starts_with') {
+      if (incoming.startsWith(kw) || incomingClean.startsWith(kwClean)) {
+        return { matched: true, matchedKeyword: kw };
+      }
+    } else if (pattern === 'regex') {
+      try {
+        const regex = new RegExp(kw, 'iu');
+        if (regex.test(incoming) || regex.test(incomingClean)) {
+          return { matched: true, matchedKeyword: kw };
+        }
+      } catch {
+        // safe failure
+      }
+    } else {
+      if (incoming.includes(kw) || (kwClean && incomingClean.includes(kwClean))) {
+        return { matched: true, matchedKeyword: kw };
+      }
+      if (tokens.includes(kw) || (kwClean && tokens.includes(kwClean))) {
+        return { matched: true, matchedKeyword: kw };
+      }
+      try {
+        const escaped = escapeRegex(kw);
+        const regex = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, 'iu');
+        if (regex.test(incoming)) {
+          return { matched: true, matchedKeyword: kw };
+        }
+      } catch {
+        // fallback
+      }
+    }
+  }
+
+  return { matched: false };
+}
+
+export function findTriggerNode(workflow: WorkflowDefinition): WorkflowNode | undefined {
+  if (!workflow.nodes || workflow.nodes.length === 0) return undefined;
+
+  const triggerByType = workflow.nodes.find((n) =>
+    n.type === 'trigger' ||
+    n.type === 'trigger_keyword' ||
+    n.type === 'trigger_incoming' ||
+    n.type === 'trigger_button' ||
+    n.type.startsWith('trigger_') ||
+    n.id === 'node_trigger' ||
+    n.id === 'node-trigger'
+  );
+  if (triggerByType) return triggerByType;
+
+  const triggerByConfig = workflow.nodes.find((n) =>
+    Boolean(n.triggerKeyword || n.config?.keyword || n.config?.keywords || n.triggerType)
+  );
+  if (triggerByConfig) return triggerByConfig;
+
+  return workflow.nodes[0];
+}
+
+export function getWorkflowExpectedKeywords(workflow: WorkflowDefinition, triggerNode?: WorkflowNode): string {
+  const node = triggerNode || findTriggerNode(workflow);
+  const isTrigger = !node || node.type.startsWith('trigger') || node.id.includes('trigger');
+  const nodeText = isTrigger ? (node?.config?.text || '') : '';
+
+  return (
+    node?.config?.keyword ||
+    node?.config?.keywords ||
+    node?.triggerKeyword ||
+    nodeText ||
+    workflow.triggerKeyword ||
+    ''
+  ).toString().trim();
+}
 
 export interface WorkflowExecutionContext {
   workflowId: string;
@@ -56,16 +179,10 @@ export class AdvancedWorkflowEngine {
     triggerType: AutomationTriggerType,
     payload: any
   ): boolean {
-    const text = (payload?.text || payload?.body || payload?.triggerKeyword || '').toString().trim();
-    const startNode = wf.nodes?.[0];
-    const rawKeywords = (
-      startNode?.config?.text ||
-      startNode?.config?.keyword ||
-      startNode?.config?.keywords ||
-      startNode?.triggerKeyword ||
-      wf.triggerKeyword ||
-      ''
-    ).toString().trim();
+    const text = (payload?.text || payload?.body || payload?.triggerKeyword || '').toString();
+    const triggerNode = findTriggerNode(wf);
+    const rawKeywords = getWorkflowExpectedKeywords(wf, triggerNode);
+    const pattern = wf.triggerMatchPattern || (wf.triggerType === 'exact_match' ? 'exact' : 'contains');
 
     // Specific trigger type matches
     switch (triggerType) {
@@ -73,16 +190,16 @@ export class AdvancedWorkflowEngine {
       case 'first_message':
       case 'customer_reply':
       case 'broadcast_reply': {
-        if (wf.triggerType === 'incoming_message' || startNode?.type === 'trigger_incoming') {
+        const isIncoming = wf.triggerType === 'incoming_message' || triggerNode?.type === 'trigger_incoming';
+        const isKeyword = wf.triggerType === 'keyword' || triggerNode?.type === 'trigger_keyword' || triggerNode?.type === 'trigger';
+
+        if (isIncoming) {
           if (!rawKeywords) return true;
-          const keywords = rawKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-          return keywords.some((k: string) => text.toLowerCase().includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(text));
+          return matchKeywordRule(text, rawKeywords, pattern).matched;
         }
-        // If workflow triggerType is keyword, check if the incoming text matches the keyword
-        if (wf.triggerType === 'keyword' || startNode?.type === 'trigger_keyword' || startNode?.type === 'trigger') {
+        if (isKeyword) {
           if (!rawKeywords) return false;
-          const keywords = rawKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-          return keywords.some((k: string) => text.toLowerCase().includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(text));
+          return matchKeywordRule(text, rawKeywords, pattern).matched;
         }
         return false;
       }
@@ -90,14 +207,12 @@ export class AdvancedWorkflowEngine {
       case 'keyword':
       case 'contains_text': {
         if (!rawKeywords) return false;
-        const keywords = rawKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-        return keywords.some((k: string) => text.toLowerCase().includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(text));
+        return matchKeywordRule(text, rawKeywords, pattern).matched;
       }
 
       case 'exact_match': {
         if (!rawKeywords) return false;
-        const keywords = rawKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-        return keywords.some((k: string) => text.toLowerCase() === k);
+        return matchKeywordRule(text, rawKeywords, 'exact').matched;
       }
 
       case 'new_contact':
@@ -111,19 +226,29 @@ export class AdvancedWorkflowEngine {
 
       case 'manual_trigger':
       case 'api_trigger':
-      case 'webhook_trigger':
-        return wf.triggerType === triggerType || wf.id === payload?.workflowId;
+      case 'webhook_trigger': {
+        if (payload?.workflowId && wf.id === payload.workflowId) {
+          if (text && rawKeywords) {
+            return matchKeywordRule(text, rawKeywords, pattern).matched;
+          }
+          return true;
+        }
+        if (text && rawKeywords) {
+          return matchKeywordRule(text, rawKeywords, pattern).matched;
+        }
+        return wf.triggerType === triggerType;
+      }
 
       case 'contact_tag':
-        if (payload?.tag && startNode?.config?.tag) {
-          return payload.tag.toLowerCase() === startNode.config.tag.toLowerCase();
+        if (payload?.tag && triggerNode?.config?.tag) {
+          return payload.tag.toLowerCase() === triggerNode.config.tag.toLowerCase();
         }
         return wf.triggerType === 'contact_tag';
 
       case 'button_click':
         if (wf.triggerType === 'button_click') {
           if (!payload?.buttonId) return true;
-          return startNode?.config?.buttons?.some((b: any) => b.id === payload.buttonId) ?? true;
+          return triggerNode?.config?.buttons?.some((b: any) => b.id === payload.buttonId) ?? true;
         }
         return false;
 
@@ -151,21 +276,40 @@ export class AdvancedWorkflowEngine {
       context.triggerPayload?.body ||
       context.triggerPayload?.triggerKeyword ||
       ''
-    ).toString().trim();
+    ).toString();
 
-    const expectedKeywords = (
-      currentNode.config?.text ||
-      currentNode.config?.keyword ||
-      currentNode.config?.keywords ||
-      currentNode.triggerKeyword ||
-      workflow.triggerKeyword ||
-      ''
-    ).toString().trim();
+    const expectedKeywords = getWorkflowExpectedKeywords(workflow, currentNode);
+    const pattern = workflow.triggerMatchPattern || (workflow.triggerType === 'exact_match' ? 'exact' : 'contains');
 
-    // An explicit operator/API run starts the selected workflow even when its
-    // normal entry node waits for an inbound keyword. If test text is supplied,
-    // the normal trigger checks below still validate it.
-    if (['manual_trigger', 'api_trigger', 'webhook_trigger'].includes(context.triggerType) && !incomingText) {
+    // Operator explicit manual run (e.g. from an operator "Run Workflow" action)
+    if (['manual_trigger', 'api_trigger', 'webhook_trigger'].includes(context.triggerType)) {
+      const isKeywordFlow = workflow.triggerType === 'keyword' || currentNode.type === 'trigger_keyword';
+
+      // If incoming text is provided, validate it against the expected keyword
+      if (incomingText && expectedKeywords) {
+        const { matched } = matchKeywordRule(incomingText, expectedKeywords, pattern);
+        return {
+          matched,
+          reason: matched ? undefined : `Incoming message "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`,
+          incomingText,
+          expectedKeywords,
+        };
+      }
+
+      // If no text provided, only allow direct execution if explicit manual override is set
+      if (context.triggerPayload?.allowDirectRun || context.triggerPayload?.manual) {
+        return { matched: true, incomingText, expectedKeywords };
+      }
+
+      if (isKeywordFlow && !incomingText) {
+        return {
+          matched: false,
+          reason: `Workflow requires incoming keyword(s): "${expectedKeywords}". None provided.`,
+          incomingText,
+          expectedKeywords,
+        };
+      }
+
       return { matched: true, incomingText, expectedKeywords };
     }
 
@@ -174,11 +318,10 @@ export class AdvancedWorkflowEngine {
       if (!expectedKeywords) {
         return { matched: Boolean(incomingText || context.triggerPayload), incomingText, expectedKeywords: '(any message)' };
       }
-      const keywords = expectedKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-      const isMatch = keywords.some((k: string) => incomingText.toLowerCase().includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(incomingText));
+      const { matched } = matchKeywordRule(incomingText, expectedKeywords, pattern);
       return {
-        matched: isMatch,
-        reason: isMatch ? undefined : `Incoming message "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`,
+        matched,
+        reason: matched ? undefined : `Incoming message "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`,
         incomingText,
         expectedKeywords,
       };
@@ -210,17 +353,10 @@ export class AdvancedWorkflowEngine {
         };
       }
 
-      const keywords = expectedKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-      const isExact = workflow.triggerMatchPattern === 'exact' || workflow.triggerType === 'exact_match';
-
-      const isMatch = keywords.some((k: string) => {
-        if (isExact) return incomingText.toLowerCase() === k;
-        return incomingText.toLowerCase().includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(incomingText);
-      });
-
+      const { matched } = matchKeywordRule(incomingText, expectedKeywords, pattern);
       return {
-        matched: isMatch,
-        reason: isMatch ? undefined : `Incoming message "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`,
+        matched,
+        reason: matched ? undefined : `Incoming message "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`,
         incomingText,
         expectedKeywords,
       };
@@ -237,22 +373,6 @@ export class AdvancedWorkflowEngine {
         incomingText,
         expectedKeywords: expectedButtons.map((b: any) => b.id).join(', '),
       };
-    }
-
-    // 4. Manual / Webhook / API trigger
-    if (['manual_trigger', 'api_trigger', 'webhook_trigger'].includes(context.triggerType)) {
-      // If manual trigger explicitly provided a text payload and node has keyword configured, validate it
-      if (expectedKeywords && incomingText) {
-        const keywords = expectedKeywords.split(/,|\//).map((k: string) => k.trim().toLowerCase()).filter(Boolean);
-        const isMatch = keywords.some((k: string) => incomingText.toLowerCase().includes(k) || new RegExp(`\\b${k}\\b`, 'i').test(incomingText));
-        return {
-          matched: isMatch,
-          reason: isMatch ? undefined : `Test payload text "${incomingText}" does not match required keyword(s): "${expectedKeywords}"`,
-          incomingText,
-          expectedKeywords,
-        };
-      }
-      return { matched: true, incomingText, expectedKeywords };
     }
 
     return { matched: true, incomingText, expectedKeywords };
@@ -281,12 +401,75 @@ export class AdvancedWorkflowEngine {
       return { nextNodeId: currentNode.nextNodeId };
     }
 
-    if (event.action === 'button_click') {
-      const buttonId = (event.buttonId || '').trim();
-      const buttonTitle = (event.buttonTitle || '').trim().toLowerCase();
+    const buttonId = (event.buttonId || '').trim();
+    const buttonTitle = (event.buttonTitle || '').trim().toLowerCase();
+    const cardButtonId = (event.cardButtonId || buttonId).trim();
+    const cardIndex = event.cardIndex !== undefined ? event.cardIndex : undefined;
 
-      // Find index of clicked button in node config
-      const buttons = currentNode.config?.buttons || [];
+    // Check if current node (or parent if wait_for_reply) has carousel cards or buttons
+    let cards = currentNode.config?.cards || [];
+    let buttons = currentNode.config?.buttons || [];
+
+    // If current node is wait_for_reply without its own cards/buttons, inspect parent node
+    if (currentNode.type === 'wait_for_reply' && cards.length === 0 && buttons.length === 0) {
+      const incomingEdges = edges.filter((e) => e.target === currentNode.id);
+      for (const inEdge of incomingEdges) {
+        const parentNode = workflow.nodes.find((n) => n.id === inEdge.source);
+        if (parentNode?.config?.cards) cards = parentNode.config.cards;
+        if (parentNode?.config?.buttons) buttons = parentNode.config.buttons;
+      }
+    }
+
+    // 1. CAROUSEL CARDS RESOLUTION
+    if (cards.length > 0 && (event.action === 'carousel_click' || event.action === 'button_click')) {
+      for (let cIdx = 0; cIdx < cards.length; cIdx++) {
+        const card = cards[cIdx];
+        const cardBtns = card.buttons || [];
+        const isTargetCardIndex = cardIndex !== undefined && cardIndex === cIdx;
+        const matchedCardBtn = cardBtns.find((b: any) =>
+          (cardButtonId && b.id && b.id.toLowerCase() === cardButtonId.toLowerCase()) ||
+          (buttonId && b.id && b.id.toLowerCase() === buttonId.toLowerCase()) ||
+          (buttonTitle && b.title && b.title.trim().toLowerCase() === buttonTitle)
+        );
+
+        if (matchedCardBtn || isTargetCardIndex) {
+          const targetCardBtnId = matchedCardBtn?.id || cardButtonId || buttonId;
+          // Match edge by card button ID
+          if (targetCardBtnId) {
+            const edgeByBtn = nodeEdges.find(
+              (e) =>
+                e.sourceHandle === targetCardBtnId ||
+                (e.sourceHandle && e.sourceHandle.toLowerCase() === targetCardBtnId.toLowerCase()) ||
+                (e.label && e.label.toLowerCase() === targetCardBtnId.toLowerCase())
+            );
+            if (edgeByBtn) return { nextNodeId: edgeByBtn.target, sourceHandle: edgeByBtn.sourceHandle || undefined, matchedEdge: edgeByBtn };
+          }
+
+          // Match edge by card index handle (card-0, card_0, etc.)
+          const edgeByIndex = nodeEdges.find(
+            (e) =>
+              e.sourceHandle === `card-${cIdx}` ||
+              e.sourceHandle === `card_${cIdx}` ||
+              e.sourceHandle === `${cIdx}`
+          );
+          if (edgeByIndex) return { nextNodeId: edgeByIndex.target, sourceHandle: edgeByIndex.sourceHandle || undefined, matchedEdge: edgeByIndex };
+
+          // Match edge by card title or button title
+          const cardTitleLower = (card.title || matchedCardBtn?.title || '').trim().toLowerCase();
+          if (cardTitleLower) {
+            const edgeByTitle = nodeEdges.find(
+              (e) =>
+                (e.label && e.label.toLowerCase() === cardTitleLower) ||
+                (e.sourceHandle && e.sourceHandle.toLowerCase() === cardTitleLower)
+            );
+            if (edgeByTitle) return { nextNodeId: edgeByTitle.target, sourceHandle: edgeByTitle.sourceHandle || undefined, matchedEdge: edgeByTitle };
+          }
+        }
+      }
+    }
+
+    // 2. INTERACTIVE BUTTON RESOLUTION
+    if (event.action === 'button_click' || event.action === 'carousel_click') {
       const btnIndex = buttons.findIndex(
         (b: any) =>
           (buttonId && b.id && b.id.toLowerCase() === buttonId.toLowerCase()) ||
@@ -295,7 +478,7 @@ export class AdvancedWorkflowEngine {
       );
       const matchedBtn = btnIndex !== -1 ? buttons[btnIndex] : null;
 
-      // 1. Direct edge match by buttonId (e.g., sourceHandle === 'btn_catalog')
+      // 2a. Direct edge match by buttonId (e.g., sourceHandle === 'btn_catalog')
       if (buttonId) {
         const edgeById = nodeEdges.find(
           (e) =>
@@ -306,7 +489,7 @@ export class AdvancedWorkflowEngine {
         if (edgeById) return { nextNodeId: edgeById.target, sourceHandle: edgeById.sourceHandle || undefined, matchedEdge: edgeById };
       }
 
-      // 1a. List Row Match if current node is a list
+      // 2b. List Row Match if current node is a list
       if (currentNode.type === 'list' || currentNode.type === 'whatsapp_list') {
         const sections = currentNode.config?.sections || [];
         for (const sec of sections) {
@@ -327,7 +510,7 @@ export class AdvancedWorkflowEngine {
         }
       }
 
-      // 1b. Match by matchedBtn.id if different from buttonId
+      // 2c. Match by matchedBtn.id if different from buttonId
       if (matchedBtn?.id && matchedBtn.id.toLowerCase() !== buttonId.toLowerCase()) {
         const edgeByMatchedId = nodeEdges.find(
           (e) =>
@@ -338,7 +521,7 @@ export class AdvancedWorkflowEngine {
         if (edgeByMatchedId) return { nextNodeId: edgeByMatchedId.target, sourceHandle: edgeByMatchedId.sourceHandle || undefined, matchedEdge: edgeByMatchedId };
       }
 
-      // 2. Direct edge match by btnIndex (e.g., sourceHandle === 'btn-0' or 'btn_0' or '0')
+      // 2d. Direct edge match by btnIndex (e.g., sourceHandle === 'btn-0' or 'btn_0' or '0')
       if (btnIndex !== -1) {
         const edgeByIndex = nodeEdges.find(
           (e) =>
@@ -349,7 +532,7 @@ export class AdvancedWorkflowEngine {
         if (edgeByIndex) return { nextNodeId: edgeByIndex.target, sourceHandle: edgeByIndex.sourceHandle || undefined, matchedEdge: edgeByIndex };
       }
 
-      // 3. Direct edge match by button title (e.g., label or sourceHandle === 'Browse Catalog')
+      // 2e. Direct edge match by button title
       const targetTitle = buttonTitle || (matchedBtn?.title || '').trim().toLowerCase();
       if (targetTitle) {
         const edgeByTitle = nodeEdges.find(
@@ -361,46 +544,20 @@ export class AdvancedWorkflowEngine {
         if (edgeByTitle) return { nextNodeId: edgeByTitle.target, sourceHandle: edgeByTitle.sourceHandle || undefined, matchedEdge: edgeByTitle };
       }
 
-      // 4. Node config direct routing (e.g., button.nextNodeId or config.buttonRoutes)
+      // 2f. Node config direct routing (e.g., button.nextNodeId or config.buttonRoutes)
       if ((matchedBtn as any)?.nextNodeId) return { nextNodeId: (matchedBtn as any).nextNodeId, sourceHandle: buttonId };
       if ((currentNode.config as any)?.buttonRoutes?.[buttonId]) return { nextNodeId: (currentNode.config as any).buttonRoutes[buttonId], sourceHandle: buttonId };
       if ((currentNode.config as any)?.branches?.[buttonId]) return { nextNodeId: (currentNode.config as any).branches[buttonId], sourceHandle: buttonId };
 
-      // 5. If only 1 edge exists leaving this button node, follow it
+      // 2g. If only 1 edge exists leaving this button node, follow it
       if (nodeEdges.length === 1) {
         return { nextNodeId: nodeEdges[0].target, sourceHandle: nodeEdges[0].sourceHandle || undefined, matchedEdge: nodeEdges[0] };
       }
 
-      // 6. Fallback: match nth edge to nth button if counts match
+      // 2h. Fallback: match nth edge to nth button if counts match
       if (btnIndex >= 0 && btnIndex < nodeEdges.length) {
         return { nextNodeId: nodeEdges[btnIndex].target, sourceHandle: nodeEdges[btnIndex].sourceHandle || undefined, matchedEdge: nodeEdges[btnIndex] };
       }
-    }
-
-    if (event.action === 'carousel_click') {
-      const cardBtnId = (event.cardButtonId || '').trim();
-      const cardIndex = event.cardIndex !== undefined ? event.cardIndex : 0;
-
-      if (cardBtnId) {
-        const edgeByCardBtn = nodeEdges.find(
-          (e) =>
-            e.sourceHandle === cardBtnId ||
-            (e.sourceHandle && e.sourceHandle.toLowerCase() === cardBtnId.toLowerCase()) ||
-            (e.label && e.label.toLowerCase() === cardBtnId.toLowerCase())
-        );
-        if (edgeByCardBtn) return { nextNodeId: edgeByCardBtn.target, sourceHandle: edgeByCardBtn.sourceHandle || undefined, matchedEdge: edgeByCardBtn };
-      }
-
-      const edgeByCardIndex = nodeEdges.find(
-        (e) =>
-          e.sourceHandle === `card-${cardIndex}` ||
-          e.sourceHandle === `card_${cardIndex}` ||
-          e.sourceHandle === `${cardIndex}`
-      );
-      if (edgeByCardIndex) return { nextNodeId: edgeByCardIndex.target, sourceHandle: edgeByCardIndex.sourceHandle || undefined, matchedEdge: edgeByCardIndex };
-
-      if (nodeEdges.length === 1) return { nextNodeId: nodeEdges[0].target, sourceHandle: nodeEdges[0].sourceHandle || undefined, matchedEdge: nodeEdges[0] };
-      return { nextNodeId: currentNode.nextNodeId };
     }
 
     if (event.action === 'reply') {
@@ -995,7 +1152,98 @@ export class AdvancedWorkflowEngine {
           }
 
           case 'carousel':
-          case 'whatsapp_carousel':
+          case 'whatsapp_carousel': {
+            const sendResult = await this.dispatchNodeMessage(
+              currentNode,
+              context,
+              executionVariables,
+              contact
+            );
+
+            traceStep.outputResult = sendResult;
+            traceStep.metaCall = sendResult.metaCall;
+
+            if (sendResult.success) {
+              traceStep.status = 'message_sent';
+              console.log(`[MESSAGE SENT] Carousel dispatched successfully:\n` +
+                `  - node: "${currentNode.title}" (${currentNode.id})\n` +
+                `  - type: "${currentNode.type}"\n` +
+                `  - to: "${context.phoneNumber}"\n` +
+                `  - messageId: "${sendResult.messageId || 'simulated'}"`);
+              if (sendResult.messageId) {
+                metaResponses.push({
+                  messageId: sendResult.messageId,
+                  status: 'sent',
+                  timestamp: new Date().toISOString(),
+                  nodeId: currentNode.id,
+                });
+              }
+            } else {
+              traceStep.status = 'failed';
+              traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
+              stopTraversal = true;
+              console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
+            }
+
+            traceStep.completedAt = new Date().toISOString();
+            traceStep.durationMs = Date.now() - stepStart;
+
+            if (!sendResult.success) {
+              stopTraversal = true;
+              break;
+            }
+
+            // Pause if carousel has cards with interactive buttons/CTAs
+            const cards = currentNode.config?.cards || [];
+            const hasButtons = cards.some((card: any) => (card.buttons && card.buttons.length > 0) || card.ctaButton);
+            if (hasButtons) {
+              const waitStep: ExecutionTraceStep = {
+                nodeId: currentNode.id,
+                nodeType: currentNode.type,
+                nodeTitle: `Waiting for Carousel Interaction (${cards.length} cards)`,
+                status: 'waiting_user_action',
+                startedAt: new Date().toISOString(),
+                durationMs: 0,
+                outputResult: {
+                  waitingFor: 'button_click',
+                  cards: currentNode.config.cards,
+                  status: 'paused_waiting_user_action',
+                },
+              };
+              stepsTrace.push(traceStep);
+              stepsTrace.push(waitStep);
+
+              const session: WorkflowSessionState = {
+                id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                workspaceId: context.workspaceId,
+                phoneNumber: context.phoneNumber,
+                contactId: contact?.id,
+                workflowId: workflow.id,
+                executionId: execLog.executionId,
+                currentNodeId: currentNode.id,
+                waitingFor: 'button_click',
+                variables: executionVariables,
+                pausedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+              };
+              await TestCenterStore.saveSession(session);
+
+              execLog.status = 'waiting';
+              execLog.currentNodeId = currentNode.id;
+              execLog.waitingFor = 'button_click';
+              execLog.pausedAt = new Date().toISOString();
+              execLog.steps = stepsTrace;
+              execLog.metaResponses = metaResponses;
+              execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
+              await TestCenterStore.recordExecutionLog(execLog);
+
+              return execLog;
+            }
+
+            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Dispatched to ${context.phoneNumber}`);
+            break;
+          }
+
           case 'message':
           case 'whatsapp_message':
           case 'whatsapp_catalog':

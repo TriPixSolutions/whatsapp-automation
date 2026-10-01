@@ -246,9 +246,16 @@ export async function handleWebhookInboundMessages(
       if (waitingSession) {
         if (matchingNewFlows.length > 0 && !isButtonClick) {
           console.log(`[SESSION RESET] Incoming text "${triggerText}" matches fresh workflow trigger [${matchingNewFlows.map(w => w.name).join(', ')}]. Clearing previous waiting session "${waitingSession.id}".`);
-          await TestCenterStore.clearSession(fromPhone, workspaceId);
+          await TestCenterStore.clearSession(fromPhone, workspaceId, waitingSession.id);
         } else if (waitingSession.waitingFor === 'delay') {
-          continue; // Only the scheduled runner may advance a delay.
+          // Customer messaged during a delay. Evaluate if message matches an interrupt/reset trigger keyword
+          if (matchingNewFlows.length > 0 && !isButtonClick) {
+            console.log(`[DELAY STATE INTERRUPTED] Incoming text "${triggerText}" matches fresh workflow trigger [${matchingNewFlows.map(w => w.name).join(', ')}]. Clearing delayed session "${waitingSession.id}".`);
+            await TestCenterStore.clearSession(fromPhone, workspaceId, waitingSession.id);
+          } else {
+            console.log(`[DELAY STATE PRESERVED] Customer ${fromPhone} messaged during scheduled delay session "${waitingSession.id}". Message recorded in conversation history; delay preserved.`);
+            continue; // Preserves delayed workflow; scheduled worker advances when due.
+          }
         } else {
           console.log(`[SESSION FOUND] Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", Phone: "${fromPhone}", WaitingFor: "${waitingSession.waitingFor}"`);
 
@@ -261,7 +268,7 @@ export async function handleWebhookInboundMessages(
           } else if (waitingSession.waitingFor === 'carousel_selection') {
             resumeAction = 'carousel_click';
           } else if (waitingSession.waitingFor === 'reply') {
-            resumeAction = 'reply';
+            resumeAction = isButtonClick ? 'button_click' : 'reply';
           }
 
           // 9. Log Before and After Workflow Resume
@@ -278,13 +285,14 @@ export async function handleWebhookInboundMessages(
 
           console.log(`[WORKFLOW RESUME: AFTER] Resume result for workflow "${waitingSession.workflowId}": ${resumedLog ? `SUCCESS (status: "${resumedLog.status}", steps: ${resumedLog.steps?.length || 0})` : 'FAILED / NULL (Branch not resolved or node not found)'}`);
 
-          if (resumedLog) {
+          if (resumedLog && resumedLog.status !== 'failed') {
             console.log(`[Webhook Inbound] Successfully resumed waiting workflow "${waitingSession.workflowId}" for ${fromPhone}`);
             advancedWorkflowHandled = true;
             continue; // Successfully handled by active workflow session!
           } else {
-            console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}". Clearing stale session.`);
-            await TestCenterStore.clearSession(fromPhone, workspaceId);
+            const failReason = resumedLog?.steps?.find((s: any) => s.status === 'failed')?.error || 'Branch not resolved or node not found';
+            console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}": ${failReason}`);
+            await TestCenterStore.clearSession(fromPhone, workspaceId, waitingSession.id);
           }
         }
       }

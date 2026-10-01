@@ -161,7 +161,7 @@ function triggerRouteHarness(workflow, initialSession = null) {
   return { route, executions, resumes };
 }
 
-test('keyword and workflow tests use real engine delivery instead of forced simulation', async () => {
+test('keyword and workflow tests use safe sandbox delivery by default and live delivery when explicitly configured', async () => {
   const workflow = { id: 'workflow-a', workspaceId: user.workspaceId, name: 'Keyword', isActive: true,
     triggerType: 'keyword', triggerKeyword: 'hello', nodes: [{ id: 'trigger', type: 'trigger_keyword', config: { text: 'hello' } }], edges: [] };
   const h = triggerRouteHarness(workflow);
@@ -171,27 +171,40 @@ test('keyword and workflow tests use real engine delivery instead of forced simu
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
-  assert.equal(body.deliveryMode, 'test_recipient');
-  assert.equal(h.executions[0].isTestSimulation, false);
+  assert.equal(body.deliveryMode, 'sandbox');
+  assert.equal(h.executions[0].isTestSimulation, true);
 });
 
-test('standalone button click prepares and resumes the selected workflow', async () => {
+test('standalone button click without active session returns 409 and does not auto-prime; resumes with active session', async () => {
   const workflow = { id: 'workflow-buttons', workspaceId: user.workspaceId, name: 'Buttons', isActive: true,
     nodes: [
       { id: 'trigger', type: 'trigger_keyword', config: { text: 'hello' } },
       { id: 'buttons', type: 'whatsapp_button', config: { buttons: [{ id: 'btn_catalog', title: 'Browse Catalog' }] } },
     ], edges: [{ id: 'edge-a', source: 'buttons', sourceHandle: 'btn_catalog', target: 'end' }] };
   const h = triggerRouteHarness(workflow);
-  const response = await h.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
+  const unprimedResponse = await h.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
+    method: 'POST', body: JSON.stringify({ simulationType: 'button_click', workflowId: workflow.id, phoneNumber: '+15550001111', buttonId: 'btn_catalog' }),
+  }));
+  assert.equal(unprimedResponse.status, 409);
+  const unprimedBody = await unprimedResponse.json();
+  assert.equal(unprimedBody.code, 'NO_ACTIVE_SESSION');
+
+  const activeSession = {
+    id: 'session-a', workspaceId: user.workspaceId, phoneNumber: '+15550001111',
+    workflowId: workflow.id, executionId: 'execution-a', currentNodeId: 'buttons',
+    waitingFor: 'button_click', pausedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(),
+  };
+  const hActive = triggerRouteHarness(workflow, activeSession);
+  const response = await hActive.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
     method: 'POST', body: JSON.stringify({ simulationType: 'button_click', workflowId: workflow.id, phoneNumber: '+15550001111', buttonId: 'btn_catalog' }),
   }));
   assert.equal(response.status, 200);
-  assert.equal(h.executions.length, 1);
-  assert.equal(h.resumes[0].event.action, 'button_click');
-  assert.equal(h.resumes[0].isSimulation, false);
+  assert.equal(hActive.resumes.length, 1);
+  assert.equal(hActive.resumes[0].event.action, 'button_click');
+  assert.equal(hActive.resumes[0].isSimulation, true);
 });
 
-test('standalone carousel click follows the carousel branch before resuming selection', async () => {
+test('standalone carousel click requires active session and follows carousel branch', async () => {
   const workflow = { id: 'workflow-carousel', workspaceId: user.workspaceId, name: 'Carousel', isActive: true,
     nodes: [
       { id: 'trigger', type: 'trigger_keyword', config: { text: 'hello' } },
@@ -203,9 +216,21 @@ test('standalone carousel click follows the carousel branch before resuming sele
       { id: 'edge-b', source: 'carousel', target: 'wait' },
     ] };
   const h = triggerRouteHarness(workflow);
-  const response = await h.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
+  const unprimedResponse = await h.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
+    method: 'POST', body: JSON.stringify({ simulationType: 'carousel_click', workflowId: workflow.id, phoneNumber: '+15550001111', cardIndex: 0, cardButtonId: 'buy_shoes' }),
+  }));
+  assert.equal(unprimedResponse.status, 409);
+
+  const activeSession = {
+    id: 'session-c', workspaceId: user.workspaceId, phoneNumber: '+15550001111',
+    workflowId: workflow.id, executionId: 'execution-c', currentNodeId: 'carousel',
+    waitingFor: 'button_click', pausedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60000).toISOString(),
+  };
+  const hActive = triggerRouteHarness(workflow, activeSession);
+  const response = await hActive.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
     method: 'POST', body: JSON.stringify({ simulationType: 'carousel_click', workflowId: workflow.id, phoneNumber: '+15550001111', cardIndex: 0, cardButtonId: 'buy_shoes' }),
   }));
   assert.equal(response.status, 200);
-  assert.deepEqual(h.resumes.map(item => item.event.action), ['button_click', 'carousel_click']);
+  assert.equal(hActive.resumes.length, 1);
+  assert.equal(hActive.resumes[0].event.action, 'carousel_click');
 });
