@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
-import { encryptToken, decryptToken } from '@/lib/crypto';
 import { getAdminClient } from '@/lib/supabase/server';
 import axios from 'axios';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 /**
  * GET /api/meta/connection
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
     const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
     const settings = await SettingsDB.get(targetWorkspaceId);
 
-    const { wabaId, phoneNumberId, accessToken, verifyToken, webhookUrl, appId } = settings;
+    const { wabaId, phoneNumberId, accessToken, verifyToken, webhookUrl, appId, appSecret } = settings;
 
     const isConfigured = Boolean(
       phoneNumberId &&
@@ -55,8 +54,9 @@ export async function GET(request: NextRequest) {
         error: isConfigured ? null : 'Access token is missing, mock, or placeholder',
       },
       webhookHealth: {
-        status: verifyToken ? 'healthy' : 'pending_configuration',
+        status: verifyToken && appSecret ? 'healthy' : 'pending_configuration',
         verifyTokenSet: Boolean(verifyToken),
+        appSecretSet: Boolean(appSecret),
         webhookUrl: webhookUrl || '/api/webhook/whatsapp',
       },
       phoneNumberHealth: {
@@ -152,16 +152,26 @@ export async function POST(request: NextRequest) {
 
     const targetWorkspaceId = user.workspaceId || workspaceId || DEFAULT_WORKSPACE_ID;
 
-    if (!phoneNumberId || !accessToken) {
+    if (!phoneNumberId) {
       return NextResponse.json(
-        { error: 'Phone Number ID and Access Token are required.' },
+        { error: 'Phone Number ID is required.' },
         { status: 400 }
       );
     }
 
-    const cleanToken = accessToken.trim();
+    const current = await SettingsDB.get(targetWorkspaceId);
+    const isMasked = (value: unknown) =>
+      typeof value === 'string' && (value.includes('••••') || value.includes('****'));
+    const resolvedToken = !accessToken || isMasked(accessToken) ? current.accessToken : accessToken;
+    const resolvedAppSecret = !appSecret || isMasked(appSecret) ? current.appSecret : appSecret;
+
+    const cleanToken = resolvedToken?.trim();
     const cleanPhoneId = phoneNumberId.trim();
     const cleanWabaId = (wabaId || '').trim();
+
+    if (!cleanToken) {
+      return NextResponse.json({ error: 'A valid Meta access token is required.' }, { status: 400 });
+    }
 
     // 1. Live Validation Probe against Meta Graph API
     let verifiedName = 'WhatsApp Business Account';
@@ -227,7 +237,7 @@ export async function POST(request: NextRequest) {
         accessToken: cleanToken,
         verifyToken,
         appId: appId || undefined,
-        appSecret: appSecret || undefined,
+        appSecret: resolvedAppSecret || undefined,
         adAccountId: businessId || undefined,
         catalogId: catalogId || undefined,
       },

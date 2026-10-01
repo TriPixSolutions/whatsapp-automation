@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     if (isLiveConfigured) {
       try {
         const cleanActId = adAccountId!.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
-        const metaUrl = new URL(`https://graph.facebook.com/v19.0/${cleanActId}/insights`);
+        const metaUrl = new URL(`https://graph.facebook.com/v25.0/${cleanActId}/insights`);
         metaUrl.searchParams.set('fields', 'spend,impressions,clicks,cpc,ctr,actions');
         metaUrl.searchParams.set('date_preset', datePreset);
         metaUrl.searchParams.set('access_token', accessToken!);

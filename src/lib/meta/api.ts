@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 export interface MetaApiResult {
   success: boolean;
@@ -114,7 +114,7 @@ export class MetaWhatsAppClient {
 
   /**
    * 1. Send Standard Text Message
-   * POST https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages
+   * POST https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages
    */
   static async sendText(options: SendTextOptions): Promise<MetaApiResult> {
     const { phoneNumberId, accessToken, to, text } = options;
@@ -132,14 +132,10 @@ export class MetaWhatsAppClient {
       },
     };
 
-    const maskedToken = accessToken
-      ? `${accessToken.substring(0, Math.min(8, accessToken.length))}...${accessToken.substring(Math.max(0, accessToken.length - 4))}`
-      : 'None';
-
     console.log(`[Meta Client] Outbound Request to Meta WhatsApp Cloud API:`);
     console.log(`   - Endpoint: POST ${url}`);
     console.log(`   - Phone Number ID: ${phoneNumberId}`);
-    console.log(`   - Access Token: ${maskedToken} (Length: ${accessToken ? accessToken.length : 0})`);
+    console.log(`   - Access Token configured: ${Boolean(accessToken)} (Length: ${accessToken ? accessToken.length : 0})`);
     console.log(`   - Recipient (Sanitized): ${recipient}`);
     console.log('   - Request Payload:', JSON.stringify(payload, null, 2));
 
@@ -526,7 +522,7 @@ export class MetaWhatsAppClient {
 
   /**
    * 7. Upload Media to Meta Cloud API
-   * POST https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/media
+   * POST https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/media
    */
   static async uploadMedia(options: {
     phoneNumberId: string;
@@ -784,5 +780,4 @@ export class MetaWhatsAppClient {
 
 export * from './catalog';
 export * from './checkout';
-
 

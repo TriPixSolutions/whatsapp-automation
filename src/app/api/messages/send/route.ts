@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -32,7 +31,8 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await WhatsAppMessageService.send({
-      workspaceId: body.workspaceId || DEFAULT_WORKSPACE_ID,
+      // The signed session is the only source of workspace authority.
+      workspaceId: user.workspaceId!,
       to: toPhone,
       type: messageType,
       text: messageText,

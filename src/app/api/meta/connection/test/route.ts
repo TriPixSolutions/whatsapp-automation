@@ -7,7 +7,7 @@ import axios from 'axios';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 /**
  * POST /api/meta/connection/test
@@ -26,7 +26,12 @@ export async function POST(request: NextRequest) {
 
     const phoneNumberId = (body.phoneNumberId || settings.phoneNumberId || '').trim();
     const wabaId = (body.wabaId || settings.wabaId || '').trim();
-    const accessToken = (body.accessToken || settings.accessToken || '').trim();
+    const submittedToken = String(body.accessToken || '').trim();
+    const accessToken = (
+      !submittedToken || submittedToken.includes('••••') || submittedToken.includes('****')
+        ? settings.accessToken
+        : submittedToken
+    ).trim();
     const testPhoneNumber = (body.testPhoneNumber || body.to || body.phoneNumber || '').trim();
 
     if (!phoneNumberId || !accessToken) {

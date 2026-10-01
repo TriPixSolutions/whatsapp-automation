@@ -6,7 +6,7 @@ import axios from 'axios';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 /**
  * GET /api/meta/diagnostics

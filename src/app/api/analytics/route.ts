@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MessagesDB, CampaignsDB, AutomationsDB, ConversationsDB, ContactsDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { MessagesDB, CampaignsDB, AutomationsDB, ConversationsDB, ContactsDB, SettingsDB } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -12,8 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
 
     // Fetch live statistics
     const stats = await MessagesDB.getStats(targetWorkspaceId);

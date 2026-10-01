@@ -138,8 +138,7 @@ export class WhatsAppMessageService {
         return { success: false, error: err, phoneNumberIdUsed: phoneNumberId, isSimulated: false };
       }
       if (isPlaceholder) {
-        const masked = `${accessToken.substring(0, Math.min(8, accessToken.length))}...${accessToken.substring(Math.max(0, accessToken.length - 4))}`;
-        const err = `Real WhatsApp delivery failed: Placeholder or test token detected (${masked}). A live System User Access Token from Meta Business Manager is required.`;
+        const err = 'Real WhatsApp delivery failed: Placeholder, masked, or test token detected. Enter a live System User Access Token from Meta Business Manager.';
         console.error('[WhatsApp Message Service]', err);
         return { success: false, error: err, phoneNumberIdUsed: phoneNumberId, isSimulated: false };
       }

@@ -528,8 +528,10 @@ export const TestCenterStore = {
     return event;
   },
 
-  getButtonLogs(limit = 50): ButtonTestEvent[] {
-    return globalState.buttonLogs.slice(0, limit);
+  getButtonLogs(limit = 50, workspaceId?: string): ButtonTestEvent[] {
+    return globalState.buttonLogs
+      .filter(event => !workspaceId || event.workspaceId === workspaceId)
+      .slice(0, limit);
   },
 
   // CAROUSEL TESTING LAB
@@ -542,8 +544,10 @@ export const TestCenterStore = {
     return event;
   },
 
-  getCarouselLogs(limit = 50): CarouselTestEvent[] {
-    return globalState.carouselLogs.slice(0, limit);
+  getCarouselLogs(limit = 50, workspaceId?: string): CarouselTestEvent[] {
+    return globalState.carouselLogs
+      .filter(event => !workspaceId || event.workspaceId === workspaceId)
+      .slice(0, limit);
   },
 
   // SANDBOX RECIPIENTS

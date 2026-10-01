@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MessagesDB, ContactsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { MessagesDB } from '@/lib/db';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const phoneNumber = searchParams.get('phone');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
     const allMessages = await MessagesDB.list({
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId: user.workspaceId!,
       phoneNumber: phoneNumber || undefined,
       limit,
     });

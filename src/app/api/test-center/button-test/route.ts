@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import { DEFAULT_WORKSPACE_ID, MessagesDB } from '@/lib/db';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const workspaceId = user.workspaceId!;
     const body = await request.json();
     const {
       action = 'send_test', // 'send_test' | 'simulate_click'
@@ -27,6 +30,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'simulate_click') {
       const event = TestCenterStore.recordButtonEvent({
+        workspaceId,
         id: `btn_evt_${Date.now()}`,
         timestamp: new Date().toISOString(),
         phoneNumber: cleanPhone,
@@ -57,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     if (buttonType === 'quick_reply') {
       metaResult = await WhatsAppMessageService.send({
-        workspaceId: DEFAULT_WORKSPACE_ID,
+        workspaceId,
         to: cleanPhone,
         type: 'button',
         headerText,
@@ -79,7 +83,7 @@ export async function POST(request: NextRequest) {
           : `${bodyText}\n\n🎟 Promo Code: *${couponCode}* (Tap to copy)`;
 
       metaResult = await WhatsAppMessageService.send({
-        workspaceId: DEFAULT_WORKSPACE_ID,
+        workspaceId,
         to: cleanPhone,
         type: 'text',
         text: ctaText,
@@ -88,6 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const event = TestCenterStore.recordButtonEvent({
+      workspaceId,
       id: `btn_evt_${Date.now()}`,
       timestamp: new Date().toISOString(),
       phoneNumber: cleanPhone,
@@ -113,7 +118,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const logs = TestCenterStore.getButtonLogs(100);
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const logs = TestCenterStore.getButtonLogs(100, user.workspaceId!);
     return NextResponse.json(logs);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

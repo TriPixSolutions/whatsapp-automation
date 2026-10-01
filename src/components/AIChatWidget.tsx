@@ -317,7 +317,7 @@ export function AIChatWidget() {
                 <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/60 p-3 rounded-xl border border-indigo-100 text-[11px] text-slate-600 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-[#7C3AED] shrink-0" />
                   <span>
-                    Official Meta WhatsApp Cloud API v18.0 Verified Webhook Architecture.
+                    Official Meta WhatsApp Cloud API v25.0 Verified Webhook Architecture.
                   </span>
                 </div>
               </div>

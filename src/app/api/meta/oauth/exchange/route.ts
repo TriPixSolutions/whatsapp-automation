@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Call live Meta Graph API OAuth Exchange
-    const metaUrl = new URL('https://graph.facebook.com/v19.0/oauth/access_token');
+    const metaUrl = new URL('https://graph.facebook.com/v25.0/oauth/access_token');
     metaUrl.searchParams.set('grant_type', 'fb_exchange_token');
     metaUrl.searchParams.set('client_id', appId);
     metaUrl.searchParams.set('client_secret', appSecret);

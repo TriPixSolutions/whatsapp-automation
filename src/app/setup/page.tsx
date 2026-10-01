@@ -32,6 +32,7 @@ export default function WhatsAppConnectionWizardPage() {
 
   // Form State
   const [accessToken, setAccessToken] = useState('');
+  const [appSecret, setAppSecret] = useState('');
   const [wabaId, setWabaId] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [displayPhone, setDisplayPhone] = useState('');
@@ -76,11 +77,25 @@ export default function WhatsAppConnectionWizardPage() {
         if (data.phoneNumberHealth?.verifiedName) setBusinessName(data.phoneNumberHealth.verifiedName);
         if (data.phoneNumberHealth?.qualityRating) setQualityRating(data.phoneNumberHealth.qualityRating);
         if (data.connectionStatus === 'connected') {
-          setPermissionsVerified(true);
-          setPermissionsList((prev) => prev.map((p) => ({ ...p, status: 'valid' })));
+          setPermissionsList((prev) => prev.map((p) => ({
+            ...p,
+            status: p.name === 'webhook_inbound_stream' && data.webhookHealth?.status !== 'healthy'
+              ? 'pending'
+              : 'valid',
+          })));
         }
       })
       .catch((e) => console.warn('Could not load connection:', e));
+
+    fetch('/api/settings')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        if (data.accessToken) setAccessToken(data.accessToken);
+        if (data.appSecret) setAppSecret(data.appSecret);
+        if (data.verifyToken) setVerifyToken(data.verifyToken);
+      })
+      .catch((e) => console.warn('Could not load saved credentials:', e));
   }, []);
 
   // STEP 1: Connect Meta Account Proceed
@@ -88,6 +103,10 @@ export default function WhatsAppConnectionWizardPage() {
     setStepError(null);
     if (!accessToken.trim()) {
       setStepError('Please enter your Meta System User Access Token.');
+      return;
+    }
+    if (!appSecret.trim()) {
+      setStepError('Please enter your Meta App Secret. It is required to verify incoming webhook signatures.');
       return;
     }
     setCurrentStep(2);
@@ -107,13 +126,14 @@ export default function WhatsAppConnectionWizardPage() {
 
     setIsSaving(true);
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch('/api/meta/connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           wabaId: wabaId.trim(),
           phoneNumberId: phoneNumberId.trim(),
           accessToken: accessToken.trim(),
+          appSecret: appSecret.trim(),
           verifyToken: verifyToken.trim(),
         }),
       });
@@ -121,7 +141,8 @@ export default function WhatsAppConnectionWizardPage() {
       if (res.ok) {
         setCurrentStep(3);
       } else {
-        setStepError('Failed to save settings. Please check your credentials.');
+        const data = await res.json().catch(() => ({}));
+        setStepError(data.error || 'Meta rejected these credentials. Check the token, WABA ID, and Phone Number ID.');
       }
     } catch (err: any) {
       setStepError(err.message || 'Error saving settings.');
@@ -136,29 +157,22 @@ export default function WhatsAppConnectionWizardPage() {
     setStepError(null);
 
     try {
-      const connRes = await fetch('/api/meta/connection');
-      if (connRes.ok) {
-        const data = await connRes.json();
-        if (data.phoneNumberHealth?.displayPhoneNumber) {
-          setDisplayPhone(data.phoneNumberHealth.displayPhoneNumber);
-        }
-        if (data.phoneNumberHealth?.verifiedName) {
-          setBusinessName(data.phoneNumberHealth.verifiedName);
-        }
-        if (data.phoneNumberHealth?.qualityRating) {
-          setQualityRating(data.phoneNumberHealth.qualityRating);
-        }
-      }
-
+      const verifyRes = await fetch('/api/test-center/meta-validate');
+      const data = await verifyRes.json();
+      const messagingValid = Boolean(data.valid);
+      const webhookValid = Boolean(data.webhookActive);
       setPermissionsList([
-        { name: 'whatsapp_business_messaging', label: 'WhatsApp Message Dispatch', status: 'valid' },
-        { name: 'whatsapp_business_management', label: 'Account & Number Management', status: 'valid' },
-        { name: 'webhook_inbound_stream', label: 'Real-time Webhook Receiver', status: 'valid' },
+        { name: 'whatsapp_business_messaging', label: 'WhatsApp Message Dispatch', status: messagingValid ? 'valid' : 'pending' },
+        { name: 'whatsapp_business_management', label: 'Account & Number Management', status: messagingValid ? 'valid' : 'pending' },
+        { name: 'webhook_inbound_stream', label: 'Real-time Webhook Receiver', status: webhookValid ? 'valid' : 'pending' },
       ]);
-      setPermissionsVerified(true);
+      setPermissionsVerified(messagingValid && webhookValid);
+      if (!messagingValid || !webhookValid) {
+        setStepError(data.error || 'Meta credentials or webhook configuration are incomplete.');
+      }
     } catch (err: any) {
-      setStepError('Permissions verification encountered an issue. Continuing setup.');
-      setPermissionsVerified(true);
+      setStepError(err.message || 'Permissions verification failed.');
+      setPermissionsVerified(false);
     } finally {
       setIsVerifyingPermissions(false);
     }
@@ -180,9 +194,9 @@ export default function WhatsAppConnectionWizardPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'text',
+          type: 'template',
           phoneNumber: testPhoneNumber.trim(),
-          text: 'Hello from your official WhatsApp Business connection. Your setup is verified and active.',
+          templateName: 'hello_world',
         }),
       });
 
@@ -303,6 +317,26 @@ export default function WhatsAppConnectionWizardPage() {
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
                   Generated in Meta Business Manager under System Users with WhatsApp management permissions.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Meta App Secret
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="password"
+                    value={appSecret}
+                    onChange={(e) => setAppSecret(e.target.value)}
+                    placeholder="Meta App Dashboard > App settings > Basic"
+                    autoComplete="new-password"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-slate-800 focus:outline-hidden focus:border-emerald-500"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Stored encrypted and used only to verify Meta webhook signatures.
                 </p>
               </div>
 
@@ -472,7 +506,8 @@ export default function WhatsAppConnectionWizardPage() {
                 <button
                   type="button"
                   onClick={() => setCurrentStep(4)}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                  disabled={!permissionsVerified}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>Proceed to Test Message</span>
                   <ChevronRight className="w-4 h-4" />

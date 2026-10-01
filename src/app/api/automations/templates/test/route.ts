@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WorkflowTemplatesStore } from '@/lib/automations/workflowTemplatesStore';
 import { AdvancedWorkflowEngine } from '@/lib/automations/advancedWorkflowEngine';
-import { DEFAULT_WORKSPACE_ID, ContactsDB, MessagesDB, ConversationsDB } from '@/lib/db';
+import { ContactsDB, MessagesDB, ConversationsDB } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';

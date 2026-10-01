@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MessagesDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { MessagesDB } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
     const phoneNumber = searchParams.get('phoneNumber') || undefined;
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 100;
 

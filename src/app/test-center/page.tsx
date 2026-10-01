@@ -53,6 +53,7 @@ export default function WhatsAppTestCenterPage() {
 
   // Configuration Fields
   const [accessToken, setAccessToken] = useState('');
+  const [appSecret, setAppSecret] = useState('');
   const [wabaId, setWabaId] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [verifyToken, setVerifyToken] = useState('tripix_verify_token_2026');
@@ -94,7 +95,7 @@ export default function WhatsAppTestCenterPage() {
   const [testClickedButtonTitle, setTestClickedButtonTitle] = useState('Browse Catalog');
   const [testCardIndex, setTestCardIndex] = useState(0);
   const [testCardButtonId, setTestCardButtonId] = useState('buy_shoes');
-  const [testTemplateName, setTestTemplateName] = useState('teaser_alert');
+  const [testTemplateName, setTestTemplateName] = useState('hello_world');
 
   // Execution & Diagnostics State
   const [isExecuting, setIsExecuting] = useState(false);
@@ -140,6 +141,7 @@ export default function WhatsAppTestCenterPage() {
       if (res.ok) {
         const data = await res.json();
         setAccessToken(data.accessToken || '');
+        setAppSecret(data.appSecret || '');
         setWabaId(data.wabaId || '');
         setPhoneNumberId(data.phoneNumberId || '');
         setVerifyToken(data.verifyToken || 'tripix_verify_token_2026');
@@ -160,13 +162,8 @@ export default function WhatsAppTestCenterPage() {
       const data = await res.json();
       setLatencyMs(Date.now() - start);
 
-      if (res.ok && data.valid) {
-        setConnectionStatus('connected');
-        setWebhookStatus('active');
-      } else {
-        setConnectionStatus(data.hasCredentials ? 'connected' : 'disconnected');
-        setWebhookStatus(data.webhookActive ? 'active' : 'error');
-      }
+      setConnectionStatus(res.ok && data.valid ? 'connected' : 'disconnected');
+      setWebhookStatus(res.ok && data.webhookActive ? 'active' : 'error');
     } catch {
       setConnectionStatus('disconnected');
       setWebhookStatus('error');
@@ -221,6 +218,7 @@ export default function WhatsAppTestCenterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accessToken,
+          appSecret,
           wabaId,
           phoneNumberId,
           verifyToken,
@@ -428,6 +426,7 @@ export default function WhatsAppTestCenterPage() {
                     {isTestMode ? 'Test Mode Active' : 'Production Mode Active'}
                   </span>
                 </div>
+
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
                   {isTestMode
                     ? 'Isolated sandbox: Dispatches to test recipient numbers only, saving traces and logs separately.'
@@ -518,6 +517,24 @@ export default function WhatsAppTestCenterPage() {
                     >
                       {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
+                  </div>
+                </div>
+
+                {/* App Secret */}
+                <div className="md:col-span-2">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                    Meta App Secret (required for incoming webhooks)
+                  </label>
+                  <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus-within:bg-white focus-within:border-slate-900 transition-colors">
+                    <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input
+                      type="password"
+                      value={appSecret}
+                      onChange={(e) => setAppSecret(e.target.value)}
+                      placeholder="Meta App Dashboard > App settings > Basic"
+                      autoComplete="new-password"
+                      className="text-xs font-mono font-medium text-slate-800 bg-transparent outline-none w-full"
+                    />
                   </div>
                 </div>
 

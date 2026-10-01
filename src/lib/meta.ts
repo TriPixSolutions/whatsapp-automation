@@ -1,5 +1,5 @@
-// Meta WhatsApp Cloud API (v18.0+) Client & Utilities
-// Official Facebook Graph API endpoint: https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages
+// Meta WhatsApp Cloud API (v25.0+) Client & Utilities
+// Official Facebook Graph API endpoint: https://graph.facebook.com/v25.0/{PHONE_NUMBER_ID}/messages
 
 import {
   MetaWhatsAppClient,

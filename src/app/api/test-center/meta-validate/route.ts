@@ -1,20 +1,20 @@
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
-import { SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { SettingsDB } from '@/lib/db';
 import { MetaValidationResult } from '@/types/automations';
 import axios from 'axios';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 export async function GET(request: NextRequest) {
   const user = await getAuthorizedUser(request);
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const settings = await SettingsDB.get(user.workspaceId!);
-    const { phoneNumberId, wabaId, accessToken, verifyToken } = settings;
+    const { phoneNumberId, wabaId, accessToken, verifyToken, appSecret } = settings;
 
     const hasToken = Boolean(
       accessToken &&
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         qualityRating = phoneProbe.data.quality_rating || qualityRating;
       } catch (err: any) {
         probeError = err.response?.data?.error?.message || err.message;
-        apiReachable = err.response?.status !== undefined; // API endpoint responded
+        apiReachable = false;
       }
 
       // Check templates probe
@@ -80,13 +80,19 @@ export async function GET(request: NextRequest) {
       templateAvailable = true;
     }
 
+    const hasCredentials = hasToken && hasPhone;
+    const webhookActive = hasVerifyToken && Boolean(appSecret);
+    const valid = hasCredentials && apiReachable && permissionsAvailable;
+
     const checklist = [
       {
         id: 'chk_webhook_active',
         name: 'Webhook Active',
         description: 'Inbound WhatsApp webhook endpoint /api/webhook/whatsapp responds to HTTP events',
-        status: 'pass' as const,
-        details: 'Active and listening for events',
+        status: webhookActive ? ('pass' as const) : ('fail' as const),
+        details: webhookActive
+          ? 'Listener is ready to verify signed Meta events'
+          : 'Add both a webhook verify token and Meta App Secret',
         critical: true,
       },
       {
@@ -101,18 +107,18 @@ export async function GET(request: NextRequest) {
         id: 'chk_access_token',
         name: 'Access Token Valid',
         description: 'System User Permanent Access Token with required WhatsApp permissions',
-        status: hasToken ? ('pass' as const) : ('fail' as const),
-        details: hasToken
-          ? `Token configured (Length: ${accessToken.length} chars)`
-          : 'Live token missing or using placeholder sample token',
+        status: permissionsAvailable ? ('pass' as const) : ('fail' as const),
+        details: permissionsAvailable
+          ? `Token verified (Length: ${accessToken.length} chars)`
+          : (probeError || 'Live token missing, expired, or using a placeholder'),
         critical: true,
       },
       {
         id: 'chk_phone_number',
         name: 'Phone Number Connected',
         description: 'Verified WhatsApp Phone Number ID attached to Meta Cloud API',
-        status: hasPhone ? ('pass' as const) : ('fail' as const),
-        details: hasPhone ? `Phone Number ID: ${phoneNumberId}` : 'Phone Number ID not set',
+        status: apiReachable ? ('pass' as const) : ('fail' as const),
+        details: apiReachable ? `Phone Number ID verified: ${phoneNumberId}` : (probeError || 'Phone Number ID not verified'),
         critical: true,
       },
       {
@@ -127,7 +133,7 @@ export async function GET(request: NextRequest) {
         id: 'chk_permissions',
         name: 'Permissions Available',
         description: 'whatsapp_business_messaging and whatsapp_business_management scopes granted',
-        status: permissionsAvailable ? ('pass' as const) : hasToken ? ('warn' as const) : ('fail' as const),
+        status: permissionsAvailable ? ('pass' as const) : ('fail' as const),
         details: permissionsAvailable
           ? 'Scopes verified: messaging, management, templates'
           : 'Ensure System User has Admin/Full Control access',
@@ -144,8 +150,8 @@ export async function GET(request: NextRequest) {
       {
         id: 'chk_api_reachable',
         name: 'API Reachable',
-        description: 'Meta Graph API v18.0 endpoint responds with low latency (<500ms)',
-        status: apiReachable ? ('pass' as const) : ('warn' as const),
+        description: `Meta Graph API ${META_GRAPH_VERSION} endpoint responds successfully`,
+        status: apiReachable ? ('pass' as const) : ('fail' as const),
         details: apiReachable ? 'Meta Graph API responding normally' : (probeError || 'Network probe timeout'),
         critical: true,
       },
@@ -173,7 +179,13 @@ export async function GET(request: NextRequest) {
       },
     };
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      valid,
+      hasCredentials,
+      webhookActive,
+      error: valid ? null : (probeError || 'Meta credentials could not be verified.'),
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -2,7 +2,7 @@
 
 > **Stabilization in progress:** accounts, settings, messages, conversations, workflows, webhook claims, campaigns and scheduled follow-ups now require a working Supabase database plus random `AUTH_SESSION_SECRET` and `WORKER_SECRET` values. Run `npm run check:setup`, `npm run check:production`, `npm test`, and `npm run build`. See [the phase 5 checkpoint](docs/PHASE_5.md) for implemented fixes and remaining work. Older capability and deployment claims below are not a production-readiness guarantee.
 
-> **The enterprise-grade commercial platform engineered to capture more leads, close more sales, and deliver instant 24/7 customer support directly inside WhatsApp.** Built for high-growth businesses and modern e-commerce brands with official Meta Cloud API v18.0 integration, autonomous AI sales assistants, and Hostinger Cloud Startup PM2 clustering.
+> **The enterprise-grade commercial platform engineered to capture more leads, close more sales, and deliver instant 24/7 customer support directly inside WhatsApp.** Built for high-growth businesses and modern e-commerce brands with official Meta Cloud API v25.0 integration, autonomous AI sales assistants, and Hostinger Cloud Startup PM2 clustering.
 
 ---
 
@@ -58,7 +58,7 @@ whatsapp-auto-saas/
 │   │   ├── settings/                # WABA credentials & security key vault
 │   │   └── api/
 │   │       ├── ai/chat/             # Gemini/OpenAI streaming assistant
-│   │       ├── webhook/whatsapp/    # Official Meta Cloud API v18.0 webhook
+│   │       ├── webhook/whatsapp/    # Official Meta Cloud API v25.0 webhook
 │   │       ├── catalog/sync/        # Meta Commerce Catalog batch sync
 │   │       └── campaigns/dispatch/  # Async queue broadcast dispatcher
 │   ├── components/
@@ -75,7 +75,7 @@ whatsapp-auto-saas/
 │   │   ├── PublicNav.tsx            # Sticky header with active path indicators
 │   │   └── PublicFooter.tsx         # Comprehensive legal & platform footer
 │   └── lib/
-│       ├── meta/                    # Official Meta Graph API v18.0 client
+│       ├── meta/                    # Official Meta Graph API v25.0 client
 │       ├── webhook/                 # Handshake, checkout, inbound & AI assistant
 │       └── db/                      # In-memory and persistent storage drivers
 ```

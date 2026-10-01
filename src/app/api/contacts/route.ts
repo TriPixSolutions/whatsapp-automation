@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ContactsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { ContactsDB } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
@@ -56,7 +56,6 @@ export async function POST(request: NextRequest) {
       tags = ['vip'],
       optinStatus,
       optin_status,
-      workspaceId = DEFAULT_WORKSPACE_ID,
     } = body;
 
     const rawPhone = phoneNumber || phone_number;

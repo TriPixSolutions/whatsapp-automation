@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ContactsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { ContactsDB } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export async function POST(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { contacts, workspaceId: bodyWsId } = body;
+    const { contacts } = body;
     const workspaceId = user.workspaceId!;
 
     if (!Array.isArray(contacts) || contacts.length === 0) {

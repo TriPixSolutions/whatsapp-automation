@@ -2,7 +2,7 @@ import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { AdvancedWorkflowEngine } from '@/lib/automations/advancedWorkflowEngine';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
-import { DEFAULT_WORKSPACE_ID, ContactsDB, MessagesDB, ConversationsDB } from '@/lib/db';
+import { ContactsDB, MessagesDB, ConversationsDB } from '@/lib/db';
 import { AutomationTriggerType } from '@/types/automations';
 
 export const runtime = 'nodejs';
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
           type: 'text',
           status: 'delivered',
           content: text || 'Hello',
-        });
+        }, workspaceId);
         await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           type: 'text',
           status: 'delivered',
           content: text || 'Pricing',
-        });
+        }, workspaceId);
         await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
         };
         // Record in Button Testing Lab
         TestCenterStore.recordButtonEvent({
+          workspaceId,
           id: `btn_evt_${Date.now()}`,
           timestamp: new Date().toISOString(),
           phoneNumber: cleanPhone,
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
           status: 'delivered',
           content: `Button clicked: ${buttonTitle || buttonId}`,
           payload: triggerPayload,
-        });
+        }, workspaceId);
         await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
@@ -122,6 +123,7 @@ export async function POST(request: NextRequest) {
         };
         // Record in Carousel Testing Lab
         TestCenterStore.recordCarouselEvent({
+          workspaceId,
           id: `car_evt_${Date.now()}`,
           timestamp: new Date().toISOString(),
           phoneNumber: cleanPhone,
@@ -142,7 +144,7 @@ export async function POST(request: NextRequest) {
           status: 'delivered',
           content: `Carousel card #${(cardIndex || 0) + 1} clicked`,
           payload: triggerPayload,
-        });
+        }, workspaceId);
         await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
@@ -156,6 +158,7 @@ export async function POST(request: NextRequest) {
           url: 'https://example.com/shop',
         };
         TestCenterStore.recordButtonEvent({
+          workspaceId,
           id: `cta_evt_${Date.now()}`,
           timestamp: new Date().toISOString(),
           phoneNumber: cleanPhone,
@@ -195,7 +198,7 @@ export async function POST(request: NextRequest) {
           status: 'delivered',
           content: `List selected: ${buttonTitle || buttonId || 'VIP Priority Support'}`,
           payload: triggerPayload,
-        });
+        }, workspaceId);
         await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
@@ -217,7 +220,7 @@ export async function POST(request: NextRequest) {
           status: 'delivered',
           content: 'WhatsApp Flow submitted: Registration Form',
           payload: triggerPayload,
-        });
+        }, workspaceId);
         await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 

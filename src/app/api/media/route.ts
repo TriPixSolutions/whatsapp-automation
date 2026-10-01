@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthorizedUser } from '@/lib/auth-server';
-import { SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { SettingsDB } from '@/lib/db';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
 import { getAdminClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
@@ -106,12 +106,14 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const supabase = getAdminClient();
     if (supabase) {
       const { data } = await supabase
         .from('media_assets')
         .select('*')
-        .eq('workspace_id', DEFAULT_WORKSPACE_ID)
+        .eq('workspace_id', user.workspaceId!)
         .order('created_at', { ascending: false });
 
       if (data) return NextResponse.json(data);

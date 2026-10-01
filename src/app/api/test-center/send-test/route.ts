@@ -2,7 +2,7 @@ import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
-import { MessagesDB, ConversationsDB, ContactsDB, DEFAULT_WORKSPACE_ID, SettingsDB } from '@/lib/db';
+import { MessagesDB, ConversationsDB, ContactsDB, SettingsDB } from '@/lib/db';
 import { MessageType } from '@/types';
 import { PlatformMessageType } from '@/types/automations';
 
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       type = 'text',
       phoneNumber = '+919876543210',
       text = 'Hello, this is a verified test message.',
-      templateName = 'welcome_offer_2026',
+      templateName = 'hello_world',
       mediaUrl = 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&q=80',
       caption = 'Check out this featured item!',
       buttons = [
@@ -49,23 +49,18 @@ export async function POST(request: NextRequest) {
     } = body;
 
     const workspaceId = user.workspaceId!;
-    const cleanPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
+    const cleanPhone = `+${String(phoneNumber).replace(/[^0-9]/g, '')}`;
 
     // Get active Meta credentials from Settings
     const settings = await SettingsDB.get(workspaceId);
-    const phoneNumberId = settings.phoneNumberId || '104928192847192';
-    const accessToken = settings.accessToken || 'EAAGmockTokenTestCenter2026';
-
-    // Ensure contact exists
-    const contact = await ContactsDB.upsert(
-      {
-        phoneNumber: cleanPhone,
-        firstName: 'Test',
-        lastName: 'Contact',
-        tags: ['test_recipient'],
-      },
-      workspaceId
-    );
+    const phoneNumberId = settings.phoneNumberId?.trim();
+    const accessToken = settings.accessToken?.trim();
+    if (!phoneNumberId || !accessToken) {
+      return NextResponse.json(
+        { success: false, error: 'Meta credentials are incomplete. Save a Phone Number ID and access token first.' },
+        { status: 400 }
+      );
+    }
 
     let metaResult: any = null;
     let messageId = `wamid.HBgM${Date.now()}`;
@@ -97,10 +92,10 @@ export async function POST(request: NextRequest) {
             to: cleanPhone,
             templateName,
             languageCode: 'en_US',
-            components: [
+            components: templateName === 'hello_world' ? undefined : [
               {
                 type: 'body',
-                parameters: [{ type: 'text', text: contact.firstName || 'Customer' }],
+                parameters: [{ type: 'text', text: 'Customer' }],
               },
             ],
           });
@@ -262,18 +257,37 @@ export async function POST(request: NextRequest) {
           break;
       }
 
-      if (metaResult && metaResult.messageId) {
-        messageId = metaResult.messageId;
+      if (!metaResult?.success || !metaResult.messageId) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: metaResult?.error || 'Meta did not accept the message.',
+            code: metaResult?.errorCode,
+            subcode: metaResult?.errorSubcode,
+          },
+          { status: 400 }
+        );
       }
+      messageId = metaResult.messageId;
     } catch (apiErr: any) {
-      // Graceful fallback for offline sandbox testing
       console.warn('[TestCenter send-test] Meta API returned:', apiErr.message);
-      metaResult = {
-        mocked: true,
-        messageId,
-        status: 'delivered',
-      };
+      return NextResponse.json(
+        { success: false, error: apiErr.message || 'Meta API request failed.' },
+        { status: 400 }
+      );
     }
+
+    // Persist the recipient only after Meta accepts the message. This prevents failed
+    // test attempts from creating misleading contacts and conversation activity.
+    const contact = await ContactsDB.upsert(
+      {
+        phoneNumber: cleanPhone,
+        firstName: 'Test',
+        lastName: 'Contact',
+        tags: ['test_recipient'],
+      },
+      workspaceId
+    );
 
     // 1. Record in DB
     const dbMessage = await MessagesDB.create({
@@ -284,7 +298,7 @@ export async function POST(request: NextRequest) {
       status: 'sent',
       content: sentContent,
       metaMessageId: messageId,
-    });
+    }, workspaceId);
 
     await ConversationsDB.recordOutbound(cleanPhone, contact.id, workspaceId);
 
@@ -294,7 +308,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       timestamp: new Date().toISOString(),
       direction: 'outbound_request',
-      endpoint: `/v20.0/${phoneNumberId}/messages`,
+      endpoint: `/${process.env.META_GRAPH_API_VERSION || 'v25.0'}/${phoneNumberId}/messages`,
       method: 'POST',
       phoneNumberId,
       httpStatus: 200,
@@ -318,9 +332,7 @@ export async function POST(request: NextRequest) {
       messageType: platformType,
       queuedAt: new Date().toISOString(),
       sentAt: new Date().toISOString(),
-      deliveredAt: new Date(Date.now() + 600).toISOString(),
-      readAt: new Date(Date.now() + 1200).toISOString(),
-      status: 'delivered',
+      status: 'sent',
     });
 
     return NextResponse.json({

@@ -414,6 +414,7 @@ export interface WebhookLogItem {
 }
 
 export interface ButtonTestEvent {
+  workspaceId?: string;
   id: string;
   timestamp: string;
   phoneNumber: string;
@@ -427,6 +428,7 @@ export interface ButtonTestEvent {
 }
 
 export interface CarouselTestEvent {
+  workspaceId?: string;
   id: string;
   timestamp: string;
   phoneNumber: string;

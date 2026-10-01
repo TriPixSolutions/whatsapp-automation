@@ -8,7 +8,7 @@ import {
 
 export * from './catalogTypes';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 function cleanPhone(phone: string): string {
   return phone.replace(/[^0-9]/g, '');

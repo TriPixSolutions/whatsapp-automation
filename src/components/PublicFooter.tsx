@@ -16,7 +16,7 @@ export function PublicFooter() {
             </p>
             <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-600 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>Direct Meta Cloud API v18.0 &bull; 99.9% Uptime SLA</span>
+              <span>Direct Meta Cloud API v25.0 &bull; 99.9% Uptime SLA</span>
             </div>
           </div>
 

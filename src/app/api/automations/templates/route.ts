@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WorkflowTemplatesStore } from '@/lib/automations/workflowTemplatesStore';
 import { getAuthorizedUser } from '@/lib/auth-server';
-import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

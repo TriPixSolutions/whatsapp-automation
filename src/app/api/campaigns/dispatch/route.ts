@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ContactsDB, CampaignsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { ContactsDB, CampaignsDB } from '@/lib/db';
 import { enqueueCampaignJob, manageCampaignState } from '@/lib/queue/campaignQueue';
 import { getAuthorizedUser } from '@/lib/auth-server';
 

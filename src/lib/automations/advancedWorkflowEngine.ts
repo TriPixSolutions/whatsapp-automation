@@ -162,6 +162,13 @@ export class AdvancedWorkflowEngine {
       ''
     ).toString().trim();
 
+    // An explicit operator/API run starts the selected workflow even when its
+    // normal entry node waits for an inbound keyword. If test text is supplied,
+    // the normal trigger checks below still validate it.
+    if (['manual_trigger', 'api_trigger', 'webhook_trigger'].includes(context.triggerType) && !incomingText) {
+      return { matched: true, incomingText, expectedKeywords };
+    }
+
     // 1. Any incoming message trigger
     if (currentNode.type === 'trigger_incoming' || workflow.triggerType === 'incoming_message') {
       if (!expectedKeywords) {
@@ -1513,7 +1520,7 @@ export class AdvancedWorkflowEngine {
         workspaceId: context.workspaceId,
         timestamp: now,
         direction: 'outbound_request',
-        endpoint: `https://graph.facebook.com/v18.0/${settings.phoneNumberId || 'sandbox_phone_id'}/messages`,
+        endpoint: `https://graph.facebook.com/v25.0/${settings.phoneNumberId || 'sandbox_phone_id'}/messages`,
         method: 'POST',
         phoneNumberId: settings.phoneNumberId || 'sandbox_phone_id',
         wabaId: settings.wabaId || 'sandbox_waba_id',
@@ -1534,7 +1541,7 @@ export class AdvancedWorkflowEngine {
         success: true,
         messageId: simulatedMessageId,
         metaCall: {
-          endpoint: 'POST /v18.0/{PHONE_NUMBER_ID}/messages (Meta Sandbox)',
+          endpoint: 'POST /v25.0/{PHONE_NUMBER_ID}/messages (Meta Sandbox)',
           requestPayload: callPayload,
           responseStatus: 200,
           responseData: { messageId: simulatedMessageId, status: 'sent_sandbox' },
@@ -1667,7 +1674,7 @@ export class AdvancedWorkflowEngine {
         success: false,
         error: errorMsg,
         metaCall: {
-          endpoint: 'POST /v18.0/{PHONE_NUMBER_ID}/messages',
+          endpoint: 'POST /v25.0/{PHONE_NUMBER_ID}/messages',
           requestPayload: callPayload,
           responseStatus: serviceResult.errorCode || 400,
           responseData: serviceResult.details || { error: errorMsg },
@@ -1695,7 +1702,7 @@ export class AdvancedWorkflowEngine {
       workspaceId: context.workspaceId,
       timestamp: now,
       direction: 'outbound_request',
-      endpoint: `https://graph.facebook.com/v18.0/${settings.phoneNumberId}/messages`,
+      endpoint: `https://graph.facebook.com/v25.0/${settings.phoneNumberId}/messages`,
       method: 'POST',
       phoneNumberId: settings.phoneNumberId,
       wabaId: settings.wabaId,
@@ -1712,7 +1719,7 @@ export class AdvancedWorkflowEngine {
       success: true,
       messageId,
       metaCall: {
-        endpoint: 'POST /v18.0/{PHONE_NUMBER_ID}/messages',
+        endpoint: 'POST /v25.0/{PHONE_NUMBER_ID}/messages',
         requestPayload: callPayload,
         responseStatus: 200,
         responseData: serviceResult.details || { messages: [{ id: messageId }] },

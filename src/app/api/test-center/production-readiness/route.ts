@@ -1,6 +1,6 @@
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
-import { SettingsDB, ContactsDB, MessagesDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { SettingsDB, ContactsDB, MessagesDB } from '@/lib/db';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { ProductionReadinessReport } from '@/types/automations';
 
@@ -81,20 +81,21 @@ export async function GET(request: NextRequest) {
 
     // 3. Webhook Health
     const hasVerifyToken = Boolean(settings.verifyToken && settings.verifyToken.length >= 4);
-    if (hasVerifyToken) {
+    const hasAppSecret = Boolean(settings.appSecret);
+    if (hasVerifyToken && hasAppSecret) {
       checks.push({
         category: 'Webhook Health',
         name: 'Webhook Verification Token',
         status: 'pass',
-        message: 'Verify token configured and deduplication replay filter active.',
+        message: 'Verify token and signed webhook validation are configured.',
       });
     } else {
       checks.push({
         category: 'Webhook Health',
         name: 'Webhook Verification Token',
         status: 'fail',
-        message: 'Webhook verify token is not set.',
-        remediation: 'Set your Meta Webhook verify token in Settings.',
+        message: hasVerifyToken ? 'Meta App Secret is missing.' : 'Webhook verify token is not set.',
+        remediation: 'Set both the webhook verify token and Meta App Secret in the Setup Wizard.',
       });
     }
 

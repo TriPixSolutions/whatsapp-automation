@@ -14,7 +14,7 @@ const { Worker } = require('bullmq');
 const Redis = require('ioredis');
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
+const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 // Initialize Redis Client
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';

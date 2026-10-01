@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     q: 'Will my phone number get banned for sending bulk broadcasts?',
-    a: 'No. Unlike unofficial scraping bots that trigger immediate bans, our platform connects directly to the official Meta Cloud API v18.0. All broadcasts use Meta-approved templates with 100% compliance.',
+    a: 'No. Unlike unofficial scraping bots that trigger immediate bans, our platform connects directly to the official Meta Cloud API v25.0. All broadcasts use Meta-approved templates with 100% compliance.',
   },
   {
     q: 'How does the AI assistant know what to answer my customers?',

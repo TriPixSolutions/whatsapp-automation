@@ -73,7 +73,7 @@ async function checkMeta() {
   const token = process.env.META_ACCESS_TOKEN;
   const phoneId = process.env.META_PHONE_NUMBER_ID;
   const wabaId = process.env.META_WABA_ID;
-  const version = process.env.META_GRAPH_API_VERSION || 'v18.0';
+  const version = process.env.META_GRAPH_API_VERSION || 'v25.0';
   if (![token, phoneId, wabaId].every(configured)) {
     record('Meta WhatsApp credentials', false, 'token, Phone Number ID or WABA ID is missing');
     return;

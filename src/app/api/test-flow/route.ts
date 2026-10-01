@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ContactsDB, MessagesDB, AutomationsDB, CampaignsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { ContactsDB, MessagesDB, AutomationsDB, CampaignsDB } from '@/lib/db';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,9 +13,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const { action, testPhone = '+15550192831' } = body;
-    const workspaceId = DEFAULT_WORKSPACE_ID;
+    const workspaceId = user.workspaceId!;
 
     // =========================================================================
     // TEST FLOW 1: Outbound Bulk 'teaser_alert' Campaign
@@ -213,7 +216,8 @@ export async function POST(request: NextRequest) {
             text: { body: 'I would like more information please' },
           },
         ],
-        [{ profile: { name: 'Sarah Connor' } }]
+        [{ profile: { name: 'Sarah Connor' } }],
+        workspaceId
       );
       auditTrail.push('Step 6: Customer inbound WhatsApp message processed via unified webhook');
       auditTrail.push('Step 7: 24-Hour WhatsApp conversation window OPENED for free-form messaging');
@@ -223,10 +227,10 @@ export async function POST(request: NextRequest) {
       const outboundMessages = await MessagesDB.list({ workspaceId, phoneNumber: testPhone, limit: 5 });
       const latestMsg = outboundMessages[0];
       if (latestMsg?.metaMessageId) {
-        handleWebhookStatuses([
+        await handleWebhookStatuses([
           { id: latestMsg.metaMessageId, status: 'delivered' },
           { id: latestMsg.metaMessageId, status: 'read' },
-        ]);
+        ], workspaceId);
         auditTrail.push(`Step 9: Message delivery status receipt updated: DELIVERED -> READ for ${latestMsg.metaMessageId}`);
       }
 

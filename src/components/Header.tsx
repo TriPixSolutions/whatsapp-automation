@@ -100,7 +100,7 @@ export function Header({ title, subtitle }: HeaderProps) {
         {/* Meta Status Pill */}
         <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          <span>Meta Cloud API v18.0 Connected</span>
+          <span>Meta Cloud API v25.0 Connected</span>
         </div>
 
         {/* New Broadcast CTA */}

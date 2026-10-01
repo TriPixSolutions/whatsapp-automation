@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const workspaceId = user.workspaceId!;
     const body = await request.json();
     const {
       action = 'send_test', // 'send_test' | 'simulate_click'
@@ -42,6 +45,7 @@ export async function POST(request: NextRequest) {
     if (action === 'simulate_click') {
       const targetCard = cards[cardIndex] || cards[0];
       const event = TestCenterStore.recordCarouselEvent({
+        workspaceId,
         id: `car_evt_${Date.now()}`,
         timestamp: new Date().toISOString(),
         phoneNumber: cleanPhone,
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     // Dispatch carousel to recipient
     const metaResult = await WhatsAppMessageService.send({
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId,
       to: cleanPhone,
       type: 'carousel',
       bodyText: `Swipe through our ${carouselTitle} below:`,
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
     // Record initial view events for each card
     cards.forEach((card: any, idx: number) => {
       TestCenterStore.recordCarouselEvent({
+        workspaceId,
         id: `car_evt_${Date.now()}_${idx}`,
         timestamp: new Date().toISOString(),
         phoneNumber: cleanPhone,
@@ -101,7 +106,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const logs = TestCenterStore.getCarouselLogs(100);
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const logs = TestCenterStore.getCarouselLogs(100, user.workspaceId!);
     return NextResponse.json(logs);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
