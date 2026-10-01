@@ -53,6 +53,7 @@ export default function WhatsAppTestCenterPage() {
 
   // Configuration Fields
   const [accessToken, setAccessToken] = useState('');
+  const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
   const [wabaId, setWabaId] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
@@ -141,6 +142,7 @@ export default function WhatsAppTestCenterPage() {
       if (res.ok) {
         const data = await res.json();
         setAccessToken(data.accessToken || '');
+        setAppId(data.appId || '');
         setAppSecret(data.appSecret || '');
         setWabaId(data.wabaId || '');
         setPhoneNumberId(data.phoneNumberId || '');
@@ -213,11 +215,12 @@ export default function WhatsAppTestCenterPage() {
   const handleSaveConfig = async () => {
     setIsSavingConfig(true);
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch('/api/meta/connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           accessToken,
+          appId,
           appSecret,
           wabaId,
           phoneNumberId,
@@ -517,6 +520,24 @@ export default function WhatsAppTestCenterPage() {
                     >
                       {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
+                  </div>
+                </div>
+
+                {/* App Secret */}
+                <div className="md:col-span-2">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                    Meta App ID (required for incoming automations)
+                  </label>
+                  <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus-within:bg-white focus-within:border-slate-900 transition-colors">
+                    <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={appId}
+                      onChange={(e) => setAppId(e.target.value.replace(/[^0-9]/g, ''))}
+                      placeholder="Meta App Dashboard > App settings > Basic"
+                      className="text-xs font-mono font-medium text-slate-800 bg-transparent outline-none w-full"
+                    />
                   </div>
                 </div>
 

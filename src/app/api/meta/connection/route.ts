@@ -177,6 +177,8 @@ export async function POST(request: NextRequest) {
     let verifiedName = 'WhatsApp Business Account';
     let displayPhone = cleanPhoneId;
     let qualityRating = 'GREEN';
+    let webhookConfigured = false;
+    let webhookConfigurationError: string | null = null;
 
     const isLive = !cleanToken.includes('SAMPLE_TOKEN') && !cleanToken.startsWith('MOCK_');
 
@@ -227,6 +229,7 @@ export async function POST(request: NextRequest) {
           // Proceed even if already subscribed or permissions pending
         }
       }
+
     }
 
     // 3. Encrypt and Persist Connection Settings
@@ -243,6 +246,38 @@ export async function POST(request: NextRequest) {
       },
       targetWorkspaceId
     );
+
+    // Persist first because Meta immediately calls the callback URL with the
+    // verify token while this request is registering the subscription.
+    if (isLive && appId && resolvedAppSecret && verifyToken) {
+      const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin}/api/webhook/whatsapp`;
+      try {
+        await axios.post(
+          `https://graph.facebook.com/${META_GRAPH_VERSION}/${String(appId).trim()}/subscriptions`,
+          null,
+          {
+            params: {
+              object: 'whatsapp_business_account',
+              callback_url: callbackUrl,
+              verify_token: verifyToken,
+              fields: 'messages',
+              include_values: true,
+            },
+            headers: {
+              Authorization: `Bearer ${String(appId).trim()}|${resolvedAppSecret}`,
+            },
+            timeout: 10000,
+          }
+        );
+        webhookConfigured = true;
+      } catch (webhookErr: any) {
+        const metaError = webhookErr.response?.data?.error;
+        webhookConfigurationError = metaError?.message || webhookErr.message || 'Meta webhook callback registration failed.';
+        console.warn('[Meta Webhook Configuration Warning]:', webhookConfigurationError);
+      }
+    } else {
+      webhookConfigurationError = 'Meta App ID, App Secret, and webhook verify token are required for inbound automation.';
+    }
 
     // 4. Update Supabase Phone Numbers and Meta Connection tables
     const supabase = getAdminClient();
@@ -270,7 +305,8 @@ export async function POST(request: NextRequest) {
         verifiedName,
         qualityRating,
         tokenHealth: 'valid',
-        webhookHealth: 'subscribed',
+        webhookHealth: webhookConfigured ? 'subscribed' : 'configuration_required',
+        webhookConfigurationError,
       },
     });
   } catch (error: any) {

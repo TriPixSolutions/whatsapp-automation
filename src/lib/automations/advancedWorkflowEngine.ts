@@ -697,6 +697,7 @@ export class AdvancedWorkflowEngine {
       try {
         let nextNodeIdToFollow: string | undefined = currentNode.nextNodeId;
         let branchHandleToFollow: string | undefined = undefined;
+        let stopTraversal = false;
 
         // Process Node Type
         switch (currentNode.type) {
@@ -802,9 +803,13 @@ export class AdvancedWorkflowEngine {
 
             traceStep.completedAt = new Date().toISOString();
             traceStep.durationMs = Date.now() - stepStart;
-            stepsTrace.push(traceStep);
 
             console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Interactive buttons dispatched to ${context.phoneNumber}`);
+
+            if (!sendResult.success) {
+              stopTraversal = true;
+              break;
+            }
 
             // 2. PAUSE WORKFLOW EXECUTION: Interactive buttons require user click!
             const buttons = currentNode.config?.buttons || [];
@@ -822,6 +827,7 @@ export class AdvancedWorkflowEngine {
                   status: 'paused_waiting_user_action',
                 },
               };
+              stepsTrace.push(traceStep);
               stepsTrace.push(waitStep);
 
               // Persist active session
@@ -892,7 +898,11 @@ export class AdvancedWorkflowEngine {
 
             traceStep.completedAt = new Date().toISOString();
             traceStep.durationMs = Date.now() - stepStart;
-            stepsTrace.push(traceStep);
+
+            if (!sendResult.success) {
+              stopTraversal = true;
+              break;
+            }
 
             // Pause if list has sections and rows waiting for user selection
             const sections = currentNode.config?.sections || [];
@@ -910,6 +920,7 @@ export class AdvancedWorkflowEngine {
                   status: 'paused_waiting_user_action',
                 },
               };
+              stepsTrace.push(traceStep);
               stepsTrace.push(waitStep);
 
               const session: WorkflowSessionState = {
@@ -1017,6 +1028,7 @@ export class AdvancedWorkflowEngine {
             } else {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
+              stopTraversal = true;
               console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
             }
             console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Dispatched to ${context.phoneNumber}`);
@@ -1331,7 +1343,7 @@ export class AdvancedWorkflowEngine {
         }
 
         // Visual Edge Graph Navigation check
-        if (workflow.edges && workflow.edges.length > 0) {
+        if (!stopTraversal && workflow.edges && workflow.edges.length > 0) {
           if (branchHandleToFollow) {
             const branchEdge = workflow.edges.find(
               (e) => e.source === currentNode?.id && e.sourceHandle === branchHandleToFollow
@@ -1355,7 +1367,7 @@ export class AdvancedWorkflowEngine {
         console.log(`[NEXT NODE EXECUTED] Node "${currentNode.title}" (${currentNode.id}) [${currentNode.type}] executed successfully for ${context.phoneNumber} (Status: ${traceStep.status})`);
 
         // Terminate on explicit stop or failed non-recoverable error
-        if (currentNode.type === 'end' || !nextNodeIdToFollow) {
+        if (stopTraversal || currentNode.type === 'end' || !nextNodeIdToFollow) {
           break;
         }
 

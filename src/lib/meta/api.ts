@@ -313,10 +313,23 @@ export class MetaWhatsAppClient {
     const { phoneNumberId, accessToken, to, templateName, bodyText, cards } = options;
     const recipient = this.cleanPhone(to);
     const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
+    const normalizedCards: CarouselCard[] = (cards || []).map((card: any, idx) => ({
+      headerImage: card.headerImage || card.headerImageUrl || undefined,
+      title: String(card.title || card.bodyText || `Product ${idx + 1}`).slice(0, 60),
+      description: String(card.description || card.bodyText || card.title || `Product ${idx + 1}`).slice(0, 200),
+      buttons: (card.buttons || []).map((button: any, buttonIdx: number) => ({
+        id: String(button.id || button.payload || `card_${idx}_button_${buttonIdx}`),
+        title: String(button.title || button.text || 'Select').slice(0, 20),
+      })),
+    }));
+
+    if (normalizedCards.length === 0) {
+      return { success: false, error: 'Carousel requires at least one configured card.' };
+    }
 
     // If templateName is provided, send via Meta Carousel Template API
     if (templateName) {
-      const carouselCards = cards.map((card, idx) => ({
+      const carouselCards = normalizedCards.map((card, idx) => ({
         card_index: idx,
         components: [
           ...(card.headerImage
@@ -369,7 +382,7 @@ export class MetaWhatsAppClient {
     const fallbackSections: ListSection[] = [
       {
         title: 'Featured Carousel Items',
-        rows: cards.map((c, idx) => ({
+        rows: normalizedCards.map((c, idx) => ({
           id: c.buttons[0]?.id || `card_${idx}`,
           title: c.title.substring(0, 24),
           description: c.description.substring(0, 72),
@@ -780,4 +793,3 @@ export class MetaWhatsAppClient {
 
 export * from './catalog';
 export * from './checkout';
-

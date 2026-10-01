@@ -32,6 +32,7 @@ export default function WhatsAppConnectionWizardPage() {
 
   // Form State
   const [accessToken, setAccessToken] = useState('');
+  const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
   const [wabaId, setWabaId] = useState('');
   const [phoneNumberId, setPhoneNumberId] = useState('');
@@ -92,6 +93,7 @@ export default function WhatsAppConnectionWizardPage() {
       .then((data) => {
         if (!data) return;
         if (data.accessToken) setAccessToken(data.accessToken);
+        if (data.appId) setAppId(data.appId);
         if (data.appSecret) setAppSecret(data.appSecret);
         if (data.verifyToken) setVerifyToken(data.verifyToken);
       })
@@ -107,6 +109,10 @@ export default function WhatsAppConnectionWizardPage() {
     }
     if (!appSecret.trim()) {
       setStepError('Please enter your Meta App Secret. It is required to verify incoming webhook signatures.');
+      return;
+    }
+    if (!appId.trim()) {
+      setStepError('Please enter your Meta App ID. It is required to register the webhook callback.');
       return;
     }
     setCurrentStep(2);
@@ -133,6 +139,7 @@ export default function WhatsAppConnectionWizardPage() {
           wabaId: wabaId.trim(),
           phoneNumberId: phoneNumberId.trim(),
           accessToken: accessToken.trim(),
+          appId: appId.trim(),
           appSecret: appSecret.trim(),
           verifyToken: verifyToken.trim(),
         }),
@@ -301,6 +308,20 @@ export default function WhatsAppConnectionWizardPage() {
             </div>
 
             <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                  Meta App ID
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={appId}
+                  onChange={(e) => setAppId(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="Meta App Dashboard > App settings > Basic"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-hidden focus:border-emerald-500"
+                />
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
                   Meta System User Access Token

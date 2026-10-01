@@ -32,16 +32,19 @@ export async function POST(request: NextRequest) {
       ],
       carouselCards = [
         {
-          headerImageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80',
-          bodyText: 'Signature Red Athletic Sneakers',
-          buttons: [{ type: 'quick_reply', text: 'Buy Now', payload: 'buy_card_1' }],
+          headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80',
+          title: 'Runner Pro Sneakers',
+          description: 'Signature red athletic sneakers',
+          buttons: [{ id: 'buy_card_1', title: 'Buy Now' }],
         },
         {
-          headerImageUrl: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80',
-          bodyText: 'Minimalist Steel Chronograph Watch',
-          buttons: [{ type: 'quick_reply', text: 'View Details', payload: 'buy_card_2' }],
+          headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80',
+          title: 'Chronos Smart Watch',
+          description: 'Minimalist steel chronograph watch',
+          buttons: [{ id: 'buy_card_2', title: 'View Details' }],
         },
       ],
+      carouselTemplateName,
       flowId = 'flow_reg_9921',
       flowToken = 'token_abc123',
       location = { latitude: 28.6139, longitude: 77.2090, name: 'Connaught Place', address: 'New Delhi, India' },
@@ -196,7 +199,10 @@ export async function POST(request: NextRequest) {
             phoneNumberId,
             accessToken,
             to: cleanPhone,
-            templateName: 'product_carousel_v1',
+            // Native WhatsApp carousels require an approved carousel template.
+            // Without one, the Meta client sends a valid interactive product list.
+            templateName: carouselTemplateName || undefined,
+            bodyText: text,
             cards: carouselCards,
           });
           break;

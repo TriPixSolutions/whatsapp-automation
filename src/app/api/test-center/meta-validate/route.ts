@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const settings = await SettingsDB.get(user.workspaceId!);
-    const { phoneNumberId, wabaId, accessToken, verifyToken, appSecret } = settings;
+    const { phoneNumberId, wabaId, accessToken, verifyToken, appSecret, appId } = settings;
 
     const hasToken = Boolean(
       accessToken &&
@@ -81,7 +81,29 @@ export async function GET(request: NextRequest) {
     }
 
     const hasCredentials = hasToken && hasPhone;
-    const webhookActive = hasVerifyToken && Boolean(appSecret);
+    let webhookActive = false;
+    let webhookError: string | null = null;
+    if (hasVerifyToken && appSecret && appId) {
+      try {
+        const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin}/api/webhook/whatsapp`;
+        const webhookProbe = await axios.get(
+          `https://graph.facebook.com/${META_GRAPH_VERSION}/${appId}/subscriptions`,
+          {
+            headers: { Authorization: `Bearer ${appId}|${appSecret}` },
+            timeout: 6000,
+          }
+        );
+        const subscription = (webhookProbe.data?.data || []).find(
+          (item: any) => item.object === 'whatsapp_business_account'
+        );
+        webhookActive = Boolean(subscription && (!subscription.callback_url || subscription.callback_url === callbackUrl));
+        if (!webhookActive) webhookError = 'Meta has no WhatsApp webhook callback registered for this app.';
+      } catch (err: any) {
+        webhookError = err.response?.data?.error?.message || err.message || 'Webhook subscription could not be verified.';
+      }
+    } else {
+      webhookError = 'Add the Meta App ID, App Secret, and webhook verify token.';
+    }
     const valid = hasCredentials && apiReachable && permissionsAvailable;
 
     const checklist = [
@@ -92,7 +114,7 @@ export async function GET(request: NextRequest) {
         status: webhookActive ? ('pass' as const) : ('fail' as const),
         details: webhookActive
           ? 'Listener is ready to verify signed Meta events'
-          : 'Add both a webhook verify token and Meta App Secret',
+          : webhookError || 'Configure the Meta WhatsApp webhook callback',
         critical: true,
       },
       {
@@ -184,7 +206,9 @@ export async function GET(request: NextRequest) {
       valid,
       hasCredentials,
       webhookActive,
-      error: valid ? null : (probeError || 'Meta credentials could not be verified.'),
+      error: !valid
+        ? (probeError || 'Meta credentials could not be verified.')
+        : (!webhookActive ? webhookError : null),
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

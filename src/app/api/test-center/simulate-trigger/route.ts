@@ -259,7 +259,14 @@ export async function POST(request: NextRequest) {
 
     // 2. PRIORITY 1: If there is an active waiting session for this recipient, RESUME it!
     const activeSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
-    if (activeSession && ['button_click', 'carousel_click', 'cta_click', 'incoming_message'].includes(simulationType)) {
+    const sessionMatchesAction = Boolean(
+      activeSession && (
+        ((simulationType === 'button_click' || simulationType === 'cta_click') && activeSession.waitingFor === 'button_click') ||
+        (simulationType === 'carousel_click' && ['reply', 'carousel_click'].includes(activeSession.waitingFor)) ||
+        (simulationType === 'incoming_message' && activeSession.waitingFor === 'reply')
+      )
+    );
+    if (activeSession && sessionMatchesAction) {
       const resumeAction = simulationType === 'carousel_click'
         ? 'carousel_click'
         : simulationType === 'incoming_message'
@@ -276,7 +283,7 @@ export async function POST(request: NextRequest) {
           cardButtonId,
           text: text || triggerPayload?.text,
         },
-        true // isTestSimulation
+        false
       );
 
       if (resumed) {
@@ -309,10 +316,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Interaction tests need a workflow that actually contains the requested
+    // interactive node. The newest workflow is not necessarily suitable.
+    const allWorkflows = await TestCenterStore.listWorkflows(workspaceId);
+    const compatibleNodeTypes = simulationType === 'button_click'
+      ? ['button', 'whatsapp_button']
+      : simulationType === 'carousel_click'
+      ? ['carousel', 'whatsapp_carousel']
+      : [];
+    if (compatibleNodeTypes.length > 0 && !targetWorkflows.some((wf) =>
+      wf.nodes.some((node) => compatibleNodeTypes.includes(node.type)))) {
+      const compatible = allWorkflows.find((wf) =>
+        wf.isActive && wf.nodes.some((node) => compatibleNodeTypes.includes(node.type)));
+      if (compatible) targetWorkflows = [compatible];
+    }
+
     // If still no matching workflow, use the primary seed workflow
     if (targetWorkflows.length === 0) {
-      const allWfs = await TestCenterStore.listWorkflows(workspaceId);
-      if (allWfs.length > 0) targetWorkflows.push(allWfs[0]);
+      if (allWorkflows.length > 0) targetWorkflows.push(allWorkflows[0]);
     }
 
     if (targetWorkflows.length === 0) {
@@ -320,6 +341,124 @@ export async function POST(request: NextRequest) {
         { error: 'No active workflow found to simulate against.' },
         { status: 404 }
       );
+    }
+
+    // A click action is normally received after a workflow has paused. For an
+    // independent Test Center action, prepare that state automatically and then
+    // exercise the same resume path used by a real webhook.
+    if (simulationType === 'button_click' || simulationType === 'carousel_click') {
+      const workflow = targetWorkflows[0];
+      if (activeSession && !sessionMatchesAction) {
+        await TestCenterStore.clearSession(cleanPhone, workspaceId, activeSession.id);
+      }
+
+      const primed = await AdvancedWorkflowEngine.executeWorkflow(workflow, {
+        workflowId: workflow.id,
+        workspaceId,
+        phoneNumber: cleanPhone,
+        triggerType: 'manual_trigger',
+        triggerPayload: {},
+        debugMode,
+        isTestSimulation: false,
+      });
+
+      if (primed.status === 'failed') {
+        const failedStep = [...(primed.steps || [])].reverse().find((step) => step.status === 'failed');
+        return NextResponse.json({
+          success: false,
+          error: failedStep?.error || `Workflow "${workflow.name}" failed while preparing the interaction test.`,
+          failedNode: failedStep?.nodeTitle,
+          activeExecution: primed,
+        }, { status: 502 });
+      }
+
+      let preparedSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
+
+      // Carousel interactions in the sample workflow are reached through the
+      // catalog button. Follow the branch that leads to a carousel first.
+      if (simulationType === 'carousel_click' && preparedSession?.waitingFor === 'button_click') {
+        const pausedNode = workflow.nodes.find((node) => node.id === preparedSession?.currentNodeId);
+        const outgoing = (workflow.edges || []).filter((edge) => edge.source === pausedNode?.id);
+        const nodeById = new Map(workflow.nodes.map((node) => [node.id, node]));
+        const reachesCarousel = (startId: string) => {
+          const queue = [startId];
+          const visited = new Set<string>();
+          while (queue.length > 0) {
+            const id = queue.shift()!;
+            if (visited.has(id)) continue;
+            visited.add(id);
+            const node = nodeById.get(id);
+            if (node && ['carousel', 'whatsapp_carousel'].includes(node.type)) return true;
+            for (const edge of workflow.edges || []) if (edge.source === id) queue.push(edge.target);
+            if (node?.nextNodeId) queue.push(node.nextNodeId);
+          }
+          return false;
+        };
+        const carouselEdge = outgoing.find((edge) => reachesCarousel(edge.target));
+        if (carouselEdge) {
+          const catalogButton = pausedNode?.config?.buttons?.find((button: any) =>
+            button.id === carouselEdge.sourceHandle || button.title === carouselEdge.label);
+          await AdvancedWorkflowEngine.resumeWorkflowExecution(preparedSession, {
+            action: 'button_click',
+            buttonId: carouselEdge.sourceHandle || catalogButton?.id,
+            buttonTitle: carouselEdge.label || catalogButton?.title,
+          }, false);
+          preparedSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
+        }
+      }
+
+      if (!preparedSession || !(
+        (simulationType === 'button_click' && preparedSession.waitingFor === 'button_click') ||
+        (simulationType === 'carousel_click' && ['reply', 'carousel_click'].includes(preparedSession.waitingFor))
+      )) {
+        return NextResponse.json({
+          success: false,
+          error: `Workflow "${workflow.name}" could not reach a ${simulationType === 'button_click' ? 'button' : 'carousel'} interaction node.`,
+          activeExecution: primed,
+        }, { status: 409 });
+      }
+
+      const resumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(preparedSession, simulationType === 'button_click'
+        ? {
+            action: 'button_click',
+            buttonId: buttonId || triggerPayload.buttonId,
+            buttonTitle: buttonTitle || triggerPayload.buttonTitle,
+          }
+        : {
+            action: 'carousel_click',
+            cardIndex,
+            cardButtonId: cardButtonId || triggerPayload.cardButtonId,
+          }, false);
+
+      if (!resumed) {
+        return NextResponse.json({
+          success: false,
+          error: `No matching workflow branch was found for this ${simulationType.replace('_', ' ')}.`,
+          activeExecution: primed,
+        }, { status: 409 });
+      }
+
+      if (resumed.status === 'failed') {
+        const failedStep = [...(resumed.steps || [])].reverse().find((step) => step.status === 'failed');
+        return NextResponse.json({
+          success: false,
+          error: failedStep?.error || `Workflow branch failed after ${simulationType.replace('_', ' ')}.`,
+          failedNode: failedStep?.nodeTitle,
+          activeExecution: resumed,
+        }, { status: 502 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        simulationType,
+        deliveryMode: isSandbox ? 'test_recipient' : 'production',
+        phoneNumber: cleanPhone,
+        resumed: true,
+        matchedWorkflowsCount: 1,
+        executions: [resumed],
+        activeExecution: resumed,
+        status: resumed.status,
+      });
     }
 
     // 3. Execute matched workflows
@@ -332,19 +471,29 @@ export async function POST(request: NextRequest) {
         triggerType,
         triggerPayload,
         debugMode,
-        isTestSimulation: true,
+        // Test Center actions exercise real delivery. "Test mode" limits the
+        // recipient; it does not replace Meta calls with fabricated receipts.
+        isTestSimulation: false,
       });
       executionResults.push(execResult);
     }
 
+    const failedExecution = executionResults.find((execution) => execution.status === 'failed');
+    const failedStep = failedExecution
+      ? [...(failedExecution.steps || [])].reverse().find((step) => step.status === 'failed')
+      : undefined;
+
     return NextResponse.json({
-      success: true,
+      success: !failedExecution,
       simulationType,
       phoneNumber: cleanPhone,
+      deliveryMode: isSandbox ? 'test_recipient' : 'production',
       matchedWorkflowsCount: targetWorkflows.length,
       executions: executionResults,
       activeExecution: executionResults[0],
-    });
+      error: failedStep?.error,
+      failedNode: failedStep?.nodeTitle,
+    }, { status: failedExecution ? 502 : 200 });
   } catch (err: any) {
     console.error('[Simulate Trigger API Error]:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
