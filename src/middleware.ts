@@ -7,6 +7,7 @@ const PUBLIC_PAGE_PREFIXES = [
   '/',
   '/privacy-policy',
   '/terms-of-service',
+  '/data-deletion',
   '/auth/login',
   '/auth/signup',
 ];
