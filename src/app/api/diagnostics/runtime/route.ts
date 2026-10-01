@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { AdvancedWorkflowEngine } from '@/lib/automations/advancedWorkflowEngine';
@@ -11,37 +12,39 @@ export const dynamic = 'force-dynamic';
  * Complete real-time audit & diagnostics report for all 11 verification steps
  */
 export async function GET(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    const wsId = DEFAULT_WORKSPACE_ID;
-    const settings = SettingsDB.get(wsId);
-    const workflows = TestCenterStore.listWorkflows(wsId);
+    const wsId = user.workspaceId!;
+    const settings = await SettingsDB.get(wsId);
+    const workflows = await TestCenterStore.listWorkflows(wsId);
 
     // Step 1 & 8: Workflows in DB & Active status
     const activeWorkflows = workflows.filter((w) => w.isActive);
 
     // Step 2: Trigger Match tests
-    const matchHello = AdvancedWorkflowEngine.matchWorkflows('keyword', { text: 'hello' }, wsId);
-    const matchHi = AdvancedWorkflowEngine.matchWorkflows('keyword', { text: 'hi' }, wsId);
-    const matchStart = AdvancedWorkflowEngine.matchWorkflows('keyword', { text: 'start' }, wsId);
+    const matchHello = await AdvancedWorkflowEngine.matchWorkflows('keyword', { text: 'hello' }, wsId);
+    const matchHi = await AdvancedWorkflowEngine.matchWorkflows('keyword', { text: 'hi' }, wsId);
+    const matchStart = await AdvancedWorkflowEngine.matchWorkflows('keyword', { text: 'start' }, wsId);
 
     // Step 10: Environment variables validation
     const envAudit = {
       META_ACCESS_TOKEN: {
-        present: Boolean(process.env.META_ACCESS_TOKEN || settings.accessToken),
+        present: Boolean(settings.accessToken),
         isPlaceholder: Boolean(
-          (process.env.META_ACCESS_TOKEN || settings.accessToken || '').includes('AI_GENERATED') ||
-          (process.env.META_ACCESS_TOKEN || settings.accessToken || '').includes('SAMPLE') ||
-          (process.env.META_ACCESS_TOKEN || settings.accessToken || '').startsWith('MOCK_')
+          (settings.accessToken || '').includes('AI_GENERATED') ||
+          (settings.accessToken || '').includes('SAMPLE') ||
+          (settings.accessToken || '').startsWith('MOCK_')
         ),
-        preview: (process.env.META_ACCESS_TOKEN || settings.accessToken || '').substring(0, 15),
+        preview: settings.accessToken ? '[configured]' : '',
       },
       META_PHONE_NUMBER_ID: {
-        present: Boolean(process.env.META_PHONE_NUMBER_ID || settings.phoneNumberId),
-        value: process.env.META_PHONE_NUMBER_ID || settings.phoneNumberId || '',
+        present: Boolean(settings.phoneNumberId),
+        value: settings.phoneNumberId || '',
       },
       META_WABA_ID: {
-        present: Boolean(process.env.META_WABA_ID || settings.wabaId),
-        value: process.env.META_WABA_ID || settings.wabaId || '',
+        present: Boolean(settings.wabaId),
+        value: settings.wabaId || '',
       },
       META_WEBHOOK_VERIFY_TOKEN: {
         present: Boolean(process.env.META_WEBHOOK_VERIFY_TOKEN || settings.verifyToken),
@@ -60,8 +63,8 @@ export async function GET(request: NextRequest) {
       WEBHOOK_RECEIVED: 'YES',
     };
 
-    const latestExecutions = TestCenterStore.getExecutionLogs({ limit: 5 });
-    const latestWebhooks = TestCenterStore.getWebhookLogs(5);
+    const latestExecutions = await TestCenterStore.getExecutionLogs({ workspaceId: wsId, limit: 5 });
+    const latestWebhooks = TestCenterStore.getWebhookLogs(wsId, 5);
 
     return NextResponse.json({
       success: true,

@@ -12,6 +12,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
+  const state = searchParams.get('state');
+  if (!state || state !== request.cookies.get('pf_oauth_state')?.value) {
+    return NextResponse.json({ error: 'Invalid OAuth state. Start Google sign-in again.' }, { status: 400 });
+  }
   const error = searchParams.get('error');
 
   if (error || !code) {
@@ -49,27 +53,28 @@ export async function GET(request: NextRequest) {
     });
 
     const profile = await profileRes.json();
-    if (!profileRes.ok || !profile.email) {
+    if (!profileRes.ok || !profile.email || profile.email_verified !== true) {
       throw new Error('Failed to fetch Google profile');
     }
 
     const { email, name, picture } = profile;
 
     // 3. Find or create user in database
-    let user = UsersDB.getByEmail(email);
+    let user = await UsersDB.getByEmail(email);
 
     if (!user) {
-      user = UsersDB.create({
+      user = await UsersDB.create({
         email,
         name: name || email.split('@')[0],
         provider: 'google',
         avatarUrl: picture || undefined,
         status: 'approved',
-        role: 'employee',
+        role: 'owner',
         company: '',
       });
     }
 
+    if (user.status !== 'approved') return NextResponse.json({ error: 'Account access is not approved' }, { status: 403 });
     const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
     const response = NextResponse.redirect(new URL(redirectTo, request.url));
 
@@ -79,9 +84,10 @@ export async function GET(request: NextRequest) {
       name: user.name,
       role: user.role,
       status: user.status,
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId: user.workspaceId!,
     };
 
+    response.cookies.set('pf_oauth_state', '', { path: '/api/auth/google', maxAge: 0 });
     setSessionCookies(response, sessionPayload);
     return response;
   } catch (err: any) {

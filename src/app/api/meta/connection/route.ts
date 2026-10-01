@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
-    const settings = SettingsDB.get(targetWorkspaceId);
+    const settings = await SettingsDB.get(targetWorkspaceId);
 
     const { wabaId, phoneNumberId, accessToken, verifyToken, webhookUrl, appId } = settings;
 
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Encrypt and Persist Connection Settings
-    const updatedSettings = SettingsDB.update(
+    const updatedSettings = await SettingsDB.update(
       {
         wabaId: cleanWabaId,
         phoneNumberId: cleanPhoneId,
@@ -238,18 +238,11 @@ export async function POST(request: NextRequest) {
     const supabase = getAdminClient();
     if (supabase) {
       try {
-        await supabase.from('phone_numbers').upsert(
-          {
-            workspace_id: targetWorkspaceId,
-            phone_number_id: cleanPhoneId,
-            display_phone_number: displayPhone,
-            verified_name: verifiedName,
-            quality_rating: qualityRating,
-            is_default: true,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'phone_number_id' }
-        );
+        const { error } = await supabase.from('phone_numbers').update({
+          display_phone_number: displayPhone, verified_name: verifiedName,
+          quality_rating: qualityRating, updated_at: new Date().toISOString(),
+        }).eq('phone_number_id', cleanPhoneId).eq('workspace_id', targetWorkspaceId);
+        if (error) throw error;
       } catch (dbErr: any) {
         console.warn('[Supabase Phone Number Sync Warning]:', dbErr.message);
       }

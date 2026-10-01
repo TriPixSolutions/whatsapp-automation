@@ -45,45 +45,13 @@ export async function getAuthorizedUser(
       }
     }
 
-    if (!sessionPayload || !sessionPayload.userId) {
-      // In local development sandbox mode only, allow dev fallback if explicitly enabled
-      if (process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_AUTH_BYPASS === 'true') {
-        const defaultAdmin = UsersDB.getByEmail('admin@tripixsolutions.com') || UsersDB.getAll()[0];
-        if (defaultAdmin) return defaultAdmin;
-      }
-      return null;
-    }
-
-    // 3. Look up user in real database by session userId or email
-    let user = UsersDB.getById(sessionPayload.userId) || UsersDB.getByEmail(sessionPayload.email);
-
-    // 4. Verify user status & RBAC permissions
-    if (user) {
-      if (user.role === 'super_admin' || user.role === 'owner') {
-        return user;
-      }
-      if (user.status === 'rejected') {
-        return null;
-      }
-      if (!options.allowPending && user.status !== 'approved') {
-        return null;
-      }
-      return user;
-    }
-
-    // 5. Fallback for authenticated session user in database
-    if (sessionPayload.userId && sessionPayload.email) {
-      user = UsersDB.create({
-        id: sessionPayload.userId,
-        email: sessionPayload.email,
-        name: sessionPayload.name || sessionPayload.email.split('@')[0],
-        role: sessionPayload.role || 'employee',
-        status: sessionPayload.status || 'approved',
-      });
-      return user;
-    }
-
-    return null;
+    if (!sessionPayload?.userId) return null;
+    const user = await UsersDB.getById(sessionPayload.userId, sessionPayload.workspaceId);
+    if (!user || user.email !== sessionPayload.email) return null;
+    const workspaceId = user.workspaceId || user.workspace_id;
+    if (!workspaceId || workspaceId !== sessionPayload.workspaceId) return null;
+    if (user.status === 'rejected' || (!options.allowPending && user.status !== 'approved')) return null;
+    return user;
   } catch (error) {
     console.error('[auth-server] Error verifying authorization:', error);
     return null;

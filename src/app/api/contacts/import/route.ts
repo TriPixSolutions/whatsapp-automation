@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { contacts, workspaceId: bodyWsId } = body;
-    const workspaceId = bodyWsId || DEFAULT_WORKSPACE_ID;
+    const workspaceId = user.workspaceId!;
 
     if (!Array.isArray(contacts) || contacts.length === 0) {
       return NextResponse.json({ error: 'No contact records provided.' }, { status: 400 });
@@ -28,14 +28,13 @@ export async function POST(request: NextRequest) {
         ? c.tags.split(',').map((t: string) => t.trim().toLowerCase()).filter(Boolean)
         : ['vip'];
 
-      ContactsDB.upsert({
-        workspaceId,
+      await ContactsDB.upsert({
         phoneNumber: rawPhone,
         firstName: c.first_name || c.firstName || '',
         lastName: c.last_name || c.lastName || '',
         tags,
         optinStatus: c.optin_status !== undefined ? Boolean(c.optin_status) : true,
-      });
+      }, workspaceId);
       imported++;
     }
 

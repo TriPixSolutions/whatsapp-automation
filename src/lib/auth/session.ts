@@ -88,22 +88,6 @@ export async function getServerSession(): Promise<SessionPayload | null> {
       if (verified) return verified;
     }
 
-    // Fallback: If legacy cookie exists, inspect but ensure valid format
-    const legacyAuth = cookieStore.get(LEGACY_AUTH_COOKIE)?.value;
-    const legacyUserId = cookieStore.get(LEGACY_USER_ID_COOKIE)?.value;
-    const legacyRole = (cookieStore.get(LEGACY_ROLE_COOKIE)?.value as UserRole) || 'employee';
-    const legacyStatus = (cookieStore.get(LEGACY_STATUS_COOKIE)?.value as UserStatus) || 'approved';
-
-    if (legacyAuth === 'authenticated' && legacyUserId) {
-      return {
-        userId: legacyUserId,
-        email: `${legacyUserId}@session.local`,
-        role: legacyRole,
-        status: legacyStatus,
-        workspaceId: DEFAULT_WORKSPACE_ID,
-      };
-    }
-
     return null;
   } catch (err) {
     console.error('[Session Error] Failed to read server session:', err);

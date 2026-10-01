@@ -15,6 +15,8 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     const category = searchParams.get('category') || undefined;
@@ -47,8 +49,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
-    const targetWorkspaceId = user?.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
     const { action = 'import', templateId, customName } = body;
 
     if (!templateId) {
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'import') {
-      const result = WorkflowTemplatesStore.importTemplate(templateId, targetWorkspaceId, customName);
+      const result = await WorkflowTemplatesStore.importTemplate(templateId, targetWorkspaceId, customName);
       return NextResponse.json(result, { status: 201 });
     }
 

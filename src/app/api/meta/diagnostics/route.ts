@@ -1,5 +1,6 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
-import { SettingsDB, WebhookEventsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { SettingsDB, WebhookEventsDB } from '@/lib/db';
 import axios from 'axios';
 
 export const runtime = 'nodejs';
@@ -17,12 +18,14 @@ const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
  * - Meta Compliance Endpoints (Privacy Policy, Terms, Data Deletion)
  */
 export async function GET(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const host = request.headers.get('host') || 'localhost:3000';
   const protocol = host.includes('localhost') ? 'http' : 'https';
   const origin = `${protocol}://${host}`;
 
-  const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
-  const { phoneNumberId, wabaId, accessToken, verifyToken, appId } = settings;
+  const settings = await SettingsDB.get(user.workspaceId!);
+  const { phoneNumberId, wabaId, accessToken, verifyToken, appSecret } = settings;
 
   const isConfigured = Boolean(
     phoneNumberId &&
@@ -30,10 +33,12 @@ export async function GET(request: NextRequest) {
     !accessToken.includes('SAMPLE_TOKEN') &&
     !accessToken.startsWith('MOCK_')
   );
+  const lastEventProcessedAt = await WebhookEventsDB.latestProcessedAt(user.workspaceId!);
+  const webhookConfigured = Boolean(verifyToken && appSecret);
 
   const report: any = {
     timestamp: new Date().toISOString(),
-    overallReadiness: 'READY_FOR_REVIEW',
+    overallReadiness: isConfigured && webhookConfigured ? 'CONFIGURED_UNVERIFIED' : 'CONFIGURATION_INCOMPLETE',
     metaApiVersion: META_GRAPH_VERSION,
     complianceEndpoints: {
       privacyPolicyUrl: `${origin}/privacy-policy`,
@@ -41,47 +46,38 @@ export async function GET(request: NextRequest) {
       dataDeletionCallbackUrl: `${origin}/api/meta/data-deletion`,
       dataDeletionStatusUrl: `${origin}/data-deletion/status`,
       webhookUrl: `${origin}/api/webhook/whatsapp`,
-      complianceStatus: 'VERIFIED_COMPLIANT',
+      complianceStatus: 'ENDPOINTS_DECLARED',
     },
     webhook: {
-      status: verifyToken ? 'configured' : 'missing_verify_token',
+      status: webhookConfigured ? 'configured' : 'incomplete',
       verifyTokenSet: Boolean(verifyToken),
+      signatureSecretSet: Boolean(appSecret),
       endpointAvailable: true,
-      lastEventProcessed: true,
+      lastEventProcessed: Boolean(lastEventProcessedAt),
+      lastEventProcessedAt,
     },
     token: {
       status: isConfigured ? 'valid' : 'unconfigured',
-      type: 'System User Permanent Token',
-      permissions: [
-        'whatsapp_business_management',
-        'whatsapp_business_messaging',
-        'business_management',
-      ],
-      expiresIn: 'Never (System User Token)',
+      type: 'not_probed',
+      permissions: 'not_probed',
+      expiresIn: 'not_probed',
     },
     phoneNumber: {
       status: isConfigured ? 'registered' : 'unconfigured',
       phoneNumberId: phoneNumberId || 'None',
-      qualityRating: 'GREEN',
-      codeVerificationStatus: 'VERIFIED',
+      qualityRating: 'not_probed',
+      codeVerificationStatus: 'not_probed',
     },
     waba: {
-      status: wabaId ? 'active' : 'unconfigured',
+      status: wabaId ? 'configured_unverified' : 'unconfigured',
       wabaId: wabaId || 'None',
-      name: 'TriPix Solutions WABA',
-      currency: 'USD',
-      timezone: 'UTC',
     },
     checklist: [
-      { item: 'Webhook Verification Endpoint (GET handshake)', passed: true },
-      { item: 'Inbound Webhook Signature Authentication (X-Hub-Signature-256)', passed: true },
-      { item: 'Event Deduplication & Replay Protection', passed: true },
-      { item: 'Bidirectional Messaging (Text, Media, Templates, Interactive)', passed: true },
-      { item: '24-Hour Policy Window Enforcement (#131047)', passed: true },
-      { item: 'Automated Follow-Up Cancellation on Customer Reply', passed: true },
-      { item: 'Meta Data Deletion Callback & Confirmation Endpoint', passed: true },
-      { item: 'Public Privacy Policy with Meta Platform Disclosures', passed: true },
-      { item: 'Terms of Service with Commercial WhatsApp Policy', passed: true },
+      { item: 'Webhook verification token configured', passed: Boolean(verifyToken) },
+      { item: 'Inbound webhook signature secret configured', passed: Boolean(appSecret) },
+      { item: 'A webhook event has completed', passed: Boolean(lastEventProcessedAt) },
+      { item: 'WhatsApp sender credentials configured', passed: isConfigured },
+      { item: 'WABA ID configured', passed: Boolean(wabaId) },
     ],
   };
 
@@ -107,9 +103,14 @@ export async function GET(request: NextRequest) {
         qualityRating: probeRes.data.quality_rating,
         codeVerificationStatus: probeRes.data.code_verification_status,
       };
+      report.token.status = 'live_probe_succeeded';
+      report.overallReadiness = webhookConfigured && lastEventProcessedAt
+        ? 'LIVE_CONNECTION_VERIFIED'
+        : 'META_API_VERIFIED_WEBHOOK_PENDING';
     } catch (err: any) {
       report.phoneNumber.liveProbeError = err.response?.data?.error?.message || err.message;
       report.token.status = 'probe_failed';
+      report.overallReadiness = 'LIVE_PROBE_FAILED';
     }
   }
 

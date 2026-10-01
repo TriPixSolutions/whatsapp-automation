@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const limit = Number(searchParams.get('limit') || 100);
-    const logs = TestCenterStore.getMetaLogs(limit);
+    const logs = TestCenterStore.getMetaLogs(user.workspaceId!, limit);
     return NextResponse.json(logs);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

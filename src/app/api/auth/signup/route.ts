@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+import { publicUser } from '@/lib/auth/publicUser';
 import { NextResponse } from 'next/server';
 import { UsersDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { setSessionCookies } from '@/lib/auth/session';
@@ -15,6 +17,8 @@ export async function POST(req: Request) {
     const company = (body.company || '').trim();
     const provider = body.provider || 'email';
 
+    if (provider !== 'email') return NextResponse.json({ error: 'Use Google OAuth to sign up with Google.' }, { status: 400 });
+
     if (!email || !email.includes('@')) {
       return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
     }
@@ -25,14 +29,15 @@ export async function POST(req: Request) {
 
     // Check if user already exists
     const avatarUrl = (body.avatarUrl || body.picture || '').trim();
-    let user = UsersDB.getByEmail(email);
+    let user = await UsersDB.getByEmail(email);
 
     if (user) {
       return NextResponse.json({ error: 'An account with this email already exists. Please sign in.' }, { status: 409 });
     }
 
-    user = UsersDB.create({
+    user = await UsersDB.create({
       email,
+      workspaceId: randomUUID(),
       password,
       name: name || email.split('@')[0],
       avatarUrl: avatarUrl || undefined,
@@ -48,12 +53,12 @@ export async function POST(req: Request) {
       name: user.name,
       role: user.role,
       status: user.status,
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId: user.workspaceId!,
     };
 
     const response = NextResponse.json({
       success: true,
-      user,
+      user: publicUser(user),
       redirectTo: '/dashboard',
     });
 

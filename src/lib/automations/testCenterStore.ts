@@ -10,12 +10,14 @@ import {
   PlatformMessageType,
 } from '@/types/automations';
 import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { WorkflowsDB, WorkflowSessionsDB, WorkflowExecutionsDB } from '@/lib/db/workflows';
 import * as fs from 'fs';
 import * as path from 'path';
 
 // Data persistence file path in local data folder
 const DATA_DIR = path.join(process.cwd(), 'data');
 const STORE_FILE = path.join(DATA_DIR, 'test_center_store.json');
+const normalizeWorkspace = (id: string) => id === 'default' ? DEFAULT_WORKSPACE_ID : id;
 
 interface TestCenterState {
   workflows: Record<string, WorkflowDefinition>;
@@ -261,9 +263,10 @@ function persistStore(immediate = false) {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
-      fs.writeFileSync(STORE_FILE, JSON.stringify(globalState, null, 2), 'utf8');
+      fs.writeFileSync(`${STORE_FILE}.tmp`, JSON.stringify(globalState, null, 2), 'utf8');
+      fs.renameSync(`${STORE_FILE}.tmp`, STORE_FILE);
     } catch (e) {
-      console.warn('[TestCenterStore] Immediate persistence warning:', e);
+      throw new Error('Workflow state could not be persisted', { cause: e });
     }
     return;
   }
@@ -273,7 +276,8 @@ function persistStore(immediate = false) {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
-      fs.writeFileSync(STORE_FILE, JSON.stringify(globalState, null, 2), 'utf8');
+      fs.writeFileSync(`${STORE_FILE}.tmp`, JSON.stringify(globalState, null, 2), 'utf8');
+      fs.renameSync(`${STORE_FILE}.tmp`, STORE_FILE);
     } catch (e) {
       console.warn('[TestCenterStore] Persistence warning:', e);
     }
@@ -289,7 +293,7 @@ function syncFromDisk() {
         globalState.workflows = { ...globalState.workflows, ...parsed.workflows };
       }
       if (parsed.workflowSessions) {
-        // Disk is authoritative for multi-process PM2 cluster workers
+        // Disk preserves scheduled sessions across process restarts.
         globalState.workflowSessions = parsed.workflowSessions;
       }
     }
@@ -330,84 +334,26 @@ try {
   // non-blocking
 }
 
-seedDefaultWorkflows();
-
 export const TestCenterStore = {
   // WORKFLOWS
-  listWorkflows(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowDefinition[] {
-    syncFromDisk();
-    const effectiveWsId = (workspaceId === 'default' || !workspaceId) ? DEFAULT_WORKSPACE_ID : workspaceId;
-    let list = Object.values(globalState.workflows).filter(
-      (w) =>
-        !w.workspaceId ||
-        w.workspaceId === effectiveWsId ||
-        (w.workspaceId === 'default' && effectiveWsId === DEFAULT_WORKSPACE_ID) ||
-        (w.workspaceId === DEFAULT_WORKSPACE_ID && effectiveWsId === 'default')
-    );
-    if (list.length === 0 && Object.keys(globalState.workflows).length > 0) {
-      list = Object.values(globalState.workflows);
-    }
-    return list;
+  async listWorkflows(workspaceId = DEFAULT_WORKSPACE_ID): Promise<WorkflowDefinition[]> {
+    return WorkflowsDB.list(workspaceId);
   },
 
-  getWorkflow(id: string): WorkflowDefinition | null {
-    if (!globalState.workflows[id]) {
-      syncFromDisk();
-    }
-    if (globalState.workflows[id]) {
-      return globalState.workflows[id];
-    }
-    // Check built-in templates fallback if workflow was generated from a template
-    try {
-      const { BUILTIN_WORKFLOW_TEMPLATES } = require('./workflowTemplatesData');
-      const matchedTpl = BUILTIN_WORKFLOW_TEMPLATES.find((t: any) =>
-        t.id === id || id.startsWith(`test_${t.id}`) || id.includes(t.id)
-      );
-      if (matchedTpl) {
-        const reconstructed: WorkflowDefinition = {
-          id,
-          workspaceId: DEFAULT_WORKSPACE_ID,
-          name: matchedTpl.name,
-          description: matchedTpl.description,
-          triggerType: matchedTpl.triggerType || 'keyword',
-          triggerKeyword: matchedTpl.triggerKeyword || 'hello',
-          triggerMatchPattern: 'contains',
-          isActive: true,
-          debugModeEnabled: true,
-          executionCount: 0,
-          nodes: JSON.parse(JSON.stringify(matchedTpl.nodes)),
-          edges: JSON.parse(JSON.stringify(matchedTpl.edges)),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        globalState.workflows[id] = reconstructed;
-        persistStore(true);
-        return reconstructed;
-      }
-    } catch {
-      // non-blocking
-    }
-    return null;
+  async getWorkflow(id: string, workspaceId: string): Promise<WorkflowDefinition | null> {
+    return WorkflowsDB.get(id, workspaceId);
   },
 
-  saveWorkflow(workflow: WorkflowDefinition): WorkflowDefinition {
-    workflow.updatedAt = new Date().toISOString();
-    globalState.workflows[workflow.id] = workflow;
-    persistStore(true);
-    return workflow;
+  async saveWorkflow(workflow: WorkflowDefinition): Promise<WorkflowDefinition> {
+    return WorkflowsDB.save(workflow);
   },
 
-  deleteWorkflow(id: string): boolean {
-    if (globalState.workflows[id]) {
-      delete globalState.workflows[id];
-      persistStore(true);
-      return true;
-    }
-    return false;
+  async deleteWorkflow(id: string, workspaceId: string): Promise<boolean> {
+    return WorkflowsDB.delete(id, workspaceId);
   },
 
-  duplicateWorkflow(id: string): WorkflowDefinition | null {
-    const original = globalState.workflows[id];
+  async duplicateWorkflow(id: string, workspaceId: string): Promise<WorkflowDefinition | null> {
+    const original = await WorkflowsDB.get(id, workspaceId);
     if (!original) return null;
     const newId = `wf_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const copy: WorkflowDefinition = JSON.parse(JSON.stringify(original));
@@ -428,53 +374,36 @@ export const TestCenterStore = {
         repliedCount: 0,
       };
     }
-    globalState.workflows[newId] = copy;
-    persistStore();
-    return copy;
+    return WorkflowsDB.save(copy);
   },
 
-  createWorkflowVersion(id: string): WorkflowDefinition | null {
-    const current = globalState.workflows[id];
+  async createWorkflowVersion(id: string, workspaceId: string): Promise<WorkflowDefinition | null> {
+    const current = await WorkflowsDB.get(id, workspaceId);
     if (!current) return null;
     const versionNum = ((current as any).version || 1) + 1;
     (current as any).version = versionNum;
     current.updatedAt = new Date().toISOString();
-    persistStore();
-    return current;
+    return WorkflowsDB.save(current);
   },
 
   // EXECUTION LOGS
-  recordExecutionLog(log: WorkflowExecutionLog): WorkflowExecutionLog {
-    globalState.executionLogs.unshift(log);
-    if (globalState.executionLogs.length > 500) {
-      globalState.executionLogs = globalState.executionLogs.slice(0, 500);
-    }
-    persistStore();
-    return log;
+  async recordExecutionLog(log: WorkflowExecutionLog): Promise<WorkflowExecutionLog> {
+    return WorkflowExecutionsDB.save(log);
   },
 
-  updateExecutionStep(executionId: string, stepId: string, partial: any) {
-    const exec = globalState.executionLogs.find((l) => l.executionId === executionId || l.id === executionId);
+  async updateExecutionStep(executionId: string, stepId: string, partial: any, workspaceId: string) {
+    const exec = await WorkflowExecutionsDB.get(executionId, workspaceId);
     if (exec) {
       const step = exec.steps.find((s) => s.nodeId === stepId);
       if (step) {
         Object.assign(step, partial);
-        persistStore();
+        await WorkflowExecutionsDB.save(exec);
       }
     }
   },
 
-  getExecutionLogs(filters?: { workflowId?: string; phoneNumber?: string; limit?: number }): WorkflowExecutionLog[] {
-    let result = [...globalState.executionLogs];
-    if (filters?.workflowId) {
-      result = result.filter((l) => l.workflowId === filters.workflowId);
-    }
-    if (filters?.phoneNumber) {
-      const clean = filters.phoneNumber.replace(/[^0-9]/g, '');
-      result = result.filter((l) => l.phoneNumber.replace(/[^0-9]/g, '').includes(clean));
-    }
-    const limit = filters?.limit || 50;
-    return result.slice(0, limit);
+  async getExecutionLogs(filters: { workspaceId: string; workflowId?: string; phoneNumber?: string; limit?: number }): Promise<WorkflowExecutionLog[]> {
+    return WorkflowExecutionsDB.list(filters);
   },
 
   // DELIVERY RECEIPTS
@@ -512,11 +441,11 @@ export const TestCenterStore = {
     }
   },
 
-  getDeliveryReceipts(limit = 100): MessageDeliveryReceipt[] {
-    return globalState.deliveryReceipts.slice(0, limit);
+  getDeliveryReceipts(workspaceId: string, limit = 100): MessageDeliveryReceipt[] {
+    return globalState.deliveryReceipts.filter(item => item.workspaceId === workspaceId).slice(0, limit);
   },
-  listDeliveryReceipts(limit = 100): MessageDeliveryReceipt[] {
-    return globalState.deliveryReceipts.slice(0, limit);
+  listDeliveryReceipts(workspaceId: string, limit = 100): MessageDeliveryReceipt[] {
+    return this.getDeliveryReceipts(workspaceId, limit);
   },
 
   // META API LOGS
@@ -529,11 +458,11 @@ export const TestCenterStore = {
     return log;
   },
 
-  getMetaLogs(limit = 100): MetaApiLog[] {
-    return globalState.metaLogs.slice(0, limit);
+  getMetaLogs(workspaceId: string, limit = 100): MetaApiLog[] {
+    return globalState.metaLogs.filter(item => item.workspaceId === workspaceId).slice(0, limit);
   },
-  listMetaLogs(limit = 100): MetaApiLog[] {
-    return globalState.metaLogs.slice(0, limit);
+  listMetaLogs(workspaceId: string, limit = 100): MetaApiLog[] {
+    return this.getMetaLogs(workspaceId, limit);
   },
 
   // WEBHOOK LOGS
@@ -546,124 +475,47 @@ export const TestCenterStore = {
     return log;
   },
 
-  getWebhookLogs(limit = 100): WebhookLogItem[] {
-    return globalState.webhookLogs.slice(0, limit);
+  getWebhookLogs(workspaceId: string, limit = 100): WebhookLogItem[] {
+    return globalState.webhookLogs.filter(item => item.workspaceId === workspaceId).slice(0, limit);
   },
-  listWebhookLogs(limit = 100): WebhookLogItem[] {
-    return globalState.webhookLogs.slice(0, limit);
+  listWebhookLogs(workspaceId: string, limit = 100): WebhookLogItem[] {
+    return this.getWebhookLogs(workspaceId, limit);
   },
-  listExecutionLogs(filters?: { workflowId?: string; phoneNumber?: string; limit?: number }): WorkflowExecutionLog[] {
+  async listExecutionLogs(filters: { workspaceId: string; workflowId?: string; phoneNumber?: string; limit?: number }): Promise<WorkflowExecutionLog[]> {
     return this.getExecutionLogs(filters);
   },
 
-  getExecutionLog(executionId: string): WorkflowExecutionLog | null {
-    return globalState.executionLogs.find((l) => l.executionId === executionId || l.id === executionId) || null;
+  async getExecutionLog(executionId: string, workspaceId: string): Promise<WorkflowExecutionLog | null> {
+    return WorkflowExecutionsDB.get(executionId, workspaceId);
   },
 
-  updateExecutionLog(log: WorkflowExecutionLog): WorkflowExecutionLog {
-    const idx = globalState.executionLogs.findIndex((l) => l.executionId === log.executionId || l.id === log.id);
-    if (idx !== -1) {
-      globalState.executionLogs[idx] = log;
-    } else {
-      globalState.executionLogs.unshift(log);
-    }
-    persistStore();
-    return log;
+  async updateExecutionLog(log: WorkflowExecutionLog): Promise<WorkflowExecutionLog> {
+    return WorkflowExecutionsDB.save(log);
   },
 
   // WORKFLOW SESSION MANAGEMENT (Waiting / Paused State)
-  saveSession(session: WorkflowSessionState): WorkflowSessionState {
-    const cleanPhone = `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
-    const wsId = session.workspaceId || DEFAULT_WORKSPACE_ID;
-    const key = `${wsId}:${cleanPhone}`;
-    globalState.workflowSessions[key] = {
-      ...session,
-      workspaceId: wsId,
-      phoneNumber: cleanPhone,
-    };
-    persistStore(true);
-    console.log(`[SESSION CREATED] Session ID: "${session.id}", Workflow: "${session.workflowId}", Node: "${session.currentNodeId}", Phone: "${cleanPhone}", WaitingFor: "${session.waitingFor}"`);
-    return globalState.workflowSessions[key];
+  async saveSession(session: WorkflowSessionState): Promise<WorkflowSessionState> {
+    return WorkflowSessionsDB.save(session);
   },
 
-  getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): WorkflowSessionState | null {
-    const cleanPhone = `+${phoneNumber.replace(/[^0-9]/g, '')}`;
-    // Always sync fresh from disk to coordinate across PM2 cluster workers
-    syncFromDisk();
-
-    const key = `${workspaceId}:${cleanPhone}`;
-    let session = globalState.workflowSessions[key];
-
-    // Check alias key if workspace is default
-    if (!session && (workspaceId === 'default' || workspaceId === DEFAULT_WORKSPACE_ID)) {
-      const altWsId = workspaceId === 'default' ? DEFAULT_WORKSPACE_ID : 'default';
-      session = globalState.workflowSessions[`${altWsId}:${cleanPhone}`];
-    }
-
-    // Fallback search by clean phone across any matching session
-    if (!session) {
-      for (const [k, s] of Object.entries(globalState.workflowSessions)) {
-        const sPhone = `+${s.phoneNumber.replace(/[^0-9]/g, '')}`;
-        if (sPhone === cleanPhone) {
-          session = s;
-          break;
-        }
-      }
-    }
-
-    if (!session) {
-      console.log(`[SESSION NOT FOUND] No active session found for phone: "${cleanPhone}", Workspace: "${workspaceId}"`);
-      return null;
-    }
-
-    // Check expiration (24h default)
-    if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
-      for (const [k, s] of Object.entries(globalState.workflowSessions)) {
-        if (s.id === session.id) {
-          delete globalState.workflowSessions[k];
-        }
-      }
-      persistStore(true);
-      console.log(`[SESSION NOT FOUND] Session for phone "${cleanPhone}" expired and was removed`);
-      return null;
-    }
-
-    // Verify referenced workflow exists or can be resolved
-    const wf = this.getWorkflow(session.workflowId);
-    if (!wf) {
-      console.warn(`[ORPHANED SESSION PURGED] Purging session "${session.id}" for phone "${cleanPhone}" because workflow "${session.workflowId}" does not exist.`);
-      this.clearSession(phoneNumber, workspaceId);
-      return null;
-    }
-
-    console.log(`[SESSION FOUND] Session ID: "${session.id}", Workflow: "${session.workflowId}", Node: "${session.currentNodeId}", Phone: "${cleanPhone}", WaitingFor: "${session.waitingFor}"`);
-    return session;
+  async getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): Promise<WorkflowSessionState | null> {
+    return WorkflowSessionsDB.get(phoneNumber, workspaceId);
   },
 
-  clearSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): boolean {
-    const cleanPhone = `+${phoneNumber.replace(/[^0-9]/g, '')}`;
-    let cleared = false;
-    for (const [key, session] of Object.entries(globalState.workflowSessions)) {
-      const sPhone = `+${session.phoneNumber.replace(/[^0-9]/g, '')}`;
-      if (sPhone === cleanPhone) {
-        delete globalState.workflowSessions[key];
-        cleared = true;
-      }
-    }
-    if (cleared) {
-      persistStore(true);
-      console.log(`[SESSION CLEARED] Cleared active session for phone: "${cleanPhone}", Workspace: "${workspaceId}"`);
-    }
-    return cleared;
+  async clearSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID, expectedId?: string): Promise<boolean> {
+    return WorkflowSessionsDB.delete(phoneNumber, workspaceId, expectedId);
   },
 
-  listActiveSessions(workspaceId = DEFAULT_WORKSPACE_ID): WorkflowSessionState[] {
-    const now = Date.now();
-    return Object.values(globalState.workflowSessions).filter(
-      (s) =>
-        (s.workspaceId === workspaceId || workspaceId === DEFAULT_WORKSPACE_ID || s.workspaceId === 'default') &&
-        (!s.expiresAt || new Date(s.expiresAt).getTime() > now)
-    );
+  async listActiveSessions(workspaceId = DEFAULT_WORKSPACE_ID): Promise<WorkflowSessionState[]> {
+    return WorkflowSessionsDB.list(workspaceId);
+  },
+
+  async claimDueDelaySessions(limit = 10) {
+    return WorkflowSessionsDB.claimDueDelays(limit);
+  },
+
+  async releaseSessionClaim(sessionId: string, claimToken: string): Promise<void> {
+    return WorkflowSessionsDB.releaseClaim(sessionId, claimToken);
   },
 
   // BUTTON TESTING LAB

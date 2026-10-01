@@ -360,6 +360,7 @@ export interface WorkflowExecutionLog {
 
 export interface MessageDeliveryReceipt {
   id: string;
+  workspaceId: string;
   metaMessageId: string;
   phoneNumber: string;
   contactName?: string;
@@ -398,6 +399,7 @@ export interface MetaApiLog {
 
 export interface WebhookLogItem {
   id: string;
+  workspaceId: string;
   timestamp: string;
   direction: 'incoming' | 'outgoing';
   source: string;

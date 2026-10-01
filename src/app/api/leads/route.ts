@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { LeadCapturePipeline } from '@/lib/leads/leadPipeline';
 import { getAdminClient } from '@/lib/supabase/server';
@@ -27,6 +28,9 @@ function detectIntent(text: string, tags: string[] = []): string {
 }
 
 export async function GET(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const workspaceId = user.workspaceId!;
   try {
     const { searchParams } = new URL(request.url);
     const filterIntent = searchParams.get('intent');
@@ -34,10 +38,10 @@ export async function GET(request: NextRequest) {
     const search = (searchParams.get('search') || '').toLowerCase();
 
     // 1. Fetch contacts from local DB repository
-    const contacts = ContactsDB.list({ limit: 200 });
+    const contacts = await ContactsDB.list({ workspaceId, limit: 200 });
 
     // 2. Fetch all messages to associate the latest conversation message
-    const allMessages = MessagesDB.list({ limit: 1000 });
+    const allMessages = await MessagesDB.list({ workspaceId, limit: 1000 });
 
     const leads = contacts.map((contact) => {
       // Find latest message for this contact
@@ -112,6 +116,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const workspaceId = user.workspaceId!;
   try {
     const body = await request.json();
     const { phoneNumber, phone_number, firstName, first_name, lastName, last_name, source = 'meta_leads', tags, metadata } = body;
@@ -122,6 +129,7 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await LeadCapturePipeline.ingest({
+      workspaceId,
       phoneNumber: rawPhone,
       firstName: firstName || first_name,
       lastName: lastName || last_name,
@@ -141,13 +149,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const workspaceId = user.workspaceId!;
   try {
     const body = await request.json();
     const { id, phoneNumber, status, assignedAgent, tag } = body;
 
-    let contact = id ? ContactsDB.getById(id) : null;
+    let contact = id ? await ContactsDB.getById(id, workspaceId) : null;
     if (!contact && phoneNumber) {
-      contact = ContactsDB.getByPhone(phoneNumber);
+      contact = await ContactsDB.getByPhone(phoneNumber, workspaceId);
     }
 
     if (!contact) {
@@ -166,12 +177,12 @@ export async function PATCH(request: NextRequest) {
     if (tag) currentTags.add(tag);
     if (status === 'priority') currentTags.add('priority');
 
-    const updated = ContactsDB.upsert({
+    const updated = await ContactsDB.upsert({
       ...contact,
       phoneNumber: contact.phoneNumber,
       tags: Array.from(currentTags),
       metadata: updatedMeta,
-    });
+    }, workspaceId);
 
     return NextResponse.json({ success: true, contact: updated });
   } catch (err: any) {

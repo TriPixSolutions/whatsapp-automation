@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
@@ -19,6 +19,11 @@ export const getAdminClient = (): SupabaseClient | null => {
   }
   if (!cachedAdminClient) {
     cachedAdminClient = createClient(supabaseUrl, serviceRoleKey, {
+      global: {
+        fetch: (input, init) => fetch(input, { ...init, signal: init?.signal
+          ? AbortSignal.any([init.signal, AbortSignal.timeout(10000)])
+          : AbortSignal.timeout(10000) }),
+      },
       auth: {
         persistSession: false,
         autoRefreshToken: false,

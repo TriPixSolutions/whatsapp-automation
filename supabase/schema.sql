@@ -477,32 +477,32 @@ ALTER TABLE public.data_deletions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.integrations ENABLE ROW LEVEL SECURITY;
 
 -- Service Role Full Access (For server APIs & Background Queue Workers)
-CREATE POLICY "Service Role Full Access Users" ON public.users FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Workspaces" ON public.workspaces FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Members" ON public.workspace_members FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Meta" ON public.meta_connections FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Phones" ON public.phone_numbers FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Companies" ON public.companies FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Contacts" ON public.contacts FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Tags" ON public.contact_tags FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Activities" ON public.contact_activities FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Notes" ON public.contact_notes FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Conversations" ON public.conversations FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Messages" ON public.messages FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Statuses" ON public.message_statuses FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Templates" ON public.templates FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Campaigns" ON public.campaigns FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access CampaignContacts" ON public.campaign_contacts FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Automations" ON public.automations FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Steps" ON public.automation_steps FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Jobs" ON public.scheduled_jobs FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access WebhookEvents" ON public.webhook_events FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Canned" ON public.canned_responses FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access ApiKeys" ON public.api_keys FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Media" ON public.media_assets FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Audit" ON public.audit_logs FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Deletions" ON public.data_deletions FOR ALL USING (true);
-CREATE POLICY "Service Role Full Access Integrations" ON public.integrations FOR ALL USING (true);
+CREATE POLICY "Service Role Full Access Users" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Workspaces" ON public.workspaces FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Members" ON public.workspace_members FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Meta" ON public.meta_connections FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Phones" ON public.phone_numbers FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Companies" ON public.companies FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Contacts" ON public.contacts FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Tags" ON public.contact_tags FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Activities" ON public.contact_activities FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Notes" ON public.contact_notes FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Conversations" ON public.conversations FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Messages" ON public.messages FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Statuses" ON public.message_statuses FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Templates" ON public.templates FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Campaigns" ON public.campaigns FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access CampaignContacts" ON public.campaign_contacts FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Automations" ON public.automations FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Steps" ON public.automation_steps FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Jobs" ON public.scheduled_jobs FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access WebhookEvents" ON public.webhook_events FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Canned" ON public.canned_responses FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access ApiKeys" ON public.api_keys FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Media" ON public.media_assets FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Audit" ON public.audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Deletions" ON public.data_deletions FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Integrations" ON public.integrations FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Authenticated Tenant Client Isolation Policies
 CREATE POLICY "Tenant User Access Workspaces" ON public.workspaces FOR SELECT USING (
@@ -532,3 +532,212 @@ CREATE POLICY "Tenant User Access Automations" ON public.automations FOR ALL USI
 CREATE POLICY "Tenant User Access Campaigns" ON public.campaigns FOR ALL USING (
   workspace_id IN (SELECT workspace_id FROM public.workspace_members WHERE user_id = auth.uid())
 );
+
+-- Phase 3 conversation persistence functions
+BEGIN;
+CREATE TABLE IF NOT EXISTS public.conversation_events (
+  workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  event_id TEXT NOT NULL,
+  contact_id UUID NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (workspace_id, event_id)
+);
+ALTER TABLE public.conversation_events ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.record_conversation_event(
+  p_workspace_id UUID, p_contact_id UUID, p_phone_number TEXT,
+  p_direction TEXT, p_event_id TEXT, p_occurred_at TIMESTAMPTZ
+) RETURNS SETOF public.conversations LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = public AS $$
+DECLARE inserted_count INTEGER;
+occurred_at TIMESTAMPTZ := LEAST(COALESCE(p_occurred_at, now()), now());
+BEGIN
+  IF p_direction NOT IN ('inbound', 'outbound') OR p_event_id IS NULL OR p_event_id = '' THEN
+    RAISE EXCEPTION 'Invalid conversation event';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.contacts WHERE id = p_contact_id AND workspace_id = p_workspace_id) THEN
+    RAISE EXCEPTION 'Contact does not belong to workspace';
+  END IF;
+  INSERT INTO public.conversation_events(workspace_id, event_id, contact_id)
+    VALUES(p_workspace_id, p_event_id, p_contact_id) ON CONFLICT DO NOTHING;
+  GET DIAGNOSTICS inserted_count = ROW_COUNT;
+  IF inserted_count = 0 THEN
+    RETURN QUERY SELECT * FROM public.conversations WHERE workspace_id = p_workspace_id AND contact_id = p_contact_id;
+    RETURN;
+  END IF;
+  RETURN QUERY INSERT INTO public.conversations AS current (
+    workspace_id, contact_id, phone_number, last_inbound_at, last_outbound_at,
+    window_expires_at, unread_count, state, updated_at
+  ) VALUES (
+    p_workspace_id, p_contact_id, p_phone_number,
+    CASE WHEN p_direction = 'inbound' THEN occurred_at END,
+    CASE WHEN p_direction = 'outbound' THEN occurred_at END,
+    CASE WHEN p_direction = 'inbound' THEN occurred_at + interval '24 hours' END,
+    CASE WHEN p_direction = 'inbound' THEN 1 ELSE 0 END,
+    CASE WHEN p_direction = 'inbound' THEN 'open' ELSE 'closed' END, now()
+  ) ON CONFLICT (workspace_id, contact_id) DO UPDATE SET
+    phone_number = EXCLUDED.phone_number,
+    last_inbound_at = GREATEST(current.last_inbound_at, EXCLUDED.last_inbound_at),
+    last_outbound_at = GREATEST(current.last_outbound_at, EXCLUDED.last_outbound_at),
+    window_expires_at = GREATEST(current.window_expires_at, EXCLUDED.window_expires_at),
+    unread_count = current.unread_count + CASE WHEN p_direction = 'inbound' THEN 1 ELSE 0 END,
+    state = CASE WHEN p_direction = 'inbound' THEN 'open' ELSE current.state END,
+    updated_at = now()
+  RETURNING *;
+END $$;
+
+CREATE OR REPLACE FUNCTION public.inbox_conversations(p_workspace_id UUID, p_limit INTEGER DEFAULT 100)
+RETURNS TABLE(phone_number TEXT, contact_name TEXT, last_message TEXT, last_time TIMESTAMPTZ, unread_count INTEGER, status TEXT)
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$
+  WITH latest AS (
+    SELECT DISTINCT ON (m.phone_number) m.* FROM public.messages m
+    WHERE m.workspace_id = p_workspace_id ORDER BY m.phone_number, m.created_at DESC, m.id DESC
+  )
+  SELECT latest.phone_number, COALESCE(NULLIF(trim(c.first_name || ' ' || c.last_name), ''), latest.phone_number),
+    latest.content, latest.created_at, COALESCE(conv.unread_count, 0), latest.status
+  FROM latest
+  LEFT JOIN public.contacts c ON c.id = latest.contact_id AND c.workspace_id = p_workspace_id
+  LEFT JOIN public.conversations conv ON conv.contact_id = c.id AND conv.workspace_id = p_workspace_id
+  ORDER BY latest.created_at DESC LIMIT GREATEST(1, LEAST(p_limit, 500));
+$$;
+REVOKE ALL ON FUNCTION public.record_conversation_event(UUID, UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.inbox_conversations(UUID, INTEGER) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_conversation_event(UUID, UUID, TEXT, TEXT, TEXT, TIMESTAMPTZ) TO service_role;
+GRANT EXECUTE ON FUNCTION public.inbox_conversations(UUID, INTEGER) TO service_role;
+GRANT ALL ON public.conversation_events TO service_role;
+COMMIT;
+
+-- Phase 4 durable workflow runtime
+BEGIN;
+CREATE TABLE IF NOT EXISTS public.workflow_definitions (
+  id TEXT PRIMARY KEY,
+  workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  execution_count INTEGER NOT NULL DEFAULT 0,
+  definition JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_definitions_workspace ON public.workflow_definitions(workspace_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.workflow_executions (
+  id TEXT PRIMARY KEY,
+  workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  workflow_id TEXT NOT NULL REFERENCES public.workflow_definitions(id) ON DELETE CASCADE,
+  phone_number TEXT NOT NULL,
+  contact_id UUID REFERENCES public.contacts(id) ON DELETE SET NULL,
+  status TEXT NOT NULL CHECK (status IN ('running','waiting','paused','completed','failed','cancelled')),
+  started_at TIMESTAMPTZ NOT NULL,
+  completed_at TIMESTAMPTZ,
+  log_data JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_executions_workspace ON public.workflow_executions(workspace_id, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.workflow_sessions (
+  id TEXT PRIMARY KEY,
+  workspace_id UUID NOT NULL REFERENCES public.workspaces(id) ON DELETE CASCADE,
+  phone_number TEXT NOT NULL,
+  workflow_id TEXT NOT NULL REFERENCES public.workflow_definitions(id) ON DELETE CASCADE,
+  execution_id TEXT NOT NULL,
+  current_node_id TEXT NOT NULL,
+  waiting_for TEXT NOT NULL CHECK (waiting_for IN ('button_click','reply','carousel_selection','delay')),
+  paused_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  session_data JSONB NOT NULL,
+  claimed_at TIMESTAMPTZ,
+  claim_token UUID,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(workspace_id, phone_number)
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_sessions_due ON public.workflow_sessions(expires_at) WHERE waiting_for = 'delay';
+
+ALTER TABLE public.workflow_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflow_executions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.workflow_sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Service Role Full Access Workflow Definitions" ON public.workflow_definitions FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Workflow Executions" ON public.workflow_executions FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service Role Full Access Workflow Sessions" ON public.workflow_sessions FOR ALL TO service_role USING (true) WITH CHECK (true);
+GRANT ALL ON public.workflow_definitions, public.workflow_executions, public.workflow_sessions TO service_role;
+
+CREATE OR REPLACE FUNCTION public.claim_due_workflow_delays(p_limit INTEGER, p_claim_token UUID)
+RETURNS SETOF public.workflow_sessions LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
+BEGIN
+  RETURN QUERY
+  WITH due AS (
+    SELECT id FROM public.workflow_sessions
+    WHERE waiting_for = 'delay' AND expires_at <= now()
+      AND (claimed_at IS NULL OR claimed_at < now() - interval '5 minutes')
+    ORDER BY expires_at FOR UPDATE SKIP LOCKED LIMIT GREATEST(1, LEAST(p_limit, 100))
+  )
+  UPDATE public.workflow_sessions s SET claimed_at = now(), claim_token = p_claim_token, updated_at = now()
+  FROM due WHERE s.id = due.id RETURNING s.*;
+END $$;
+REVOKE ALL ON FUNCTION public.claim_due_workflow_delays(INTEGER, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_due_workflow_delays(INTEGER, UUID) TO service_role;
+COMMIT;
+
+-- Phase 5 durable webhook claims
+BEGIN;
+ALTER TABLE public.webhook_events ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+ALTER TABLE public.webhook_events ADD COLUMN IF NOT EXISTS claim_token UUID;
+ALTER TABLE public.webhook_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ;
+ALTER TABLE public.webhook_events ADD COLUMN IF NOT EXISTS last_error TEXT;
+ALTER TABLE public.webhook_events ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.webhook_events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_webhook_events_state ON public.webhook_events(status, claimed_at);
+
+CREATE OR REPLACE FUNCTION public.claim_webhook_event(
+  p_workspace_id UUID, p_meta_event_id TEXT, p_event_type TEXT, p_payload JSONB, p_claim_token UUID
+) RETURNS TEXT LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
+DECLARE current_status TEXT;
+DECLARE current_claimed_at TIMESTAMPTZ;
+BEGIN
+  INSERT INTO public.webhook_events(workspace_id, meta_event_id, event_type, payload, status,
+    claimed_at, claim_token, attempt_count, updated_at)
+  VALUES(p_workspace_id, p_meta_event_id, p_event_type, p_payload, 'received',
+    now(), p_claim_token, 1, now())
+  ON CONFLICT (workspace_id, meta_event_id) DO NOTHING;
+  IF FOUND THEN RETURN 'claimed'; END IF;
+  SELECT status, claimed_at INTO current_status, current_claimed_at
+  FROM public.webhook_events WHERE workspace_id = p_workspace_id AND meta_event_id = p_meta_event_id
+  FOR UPDATE;
+  IF current_status = 'processed' OR current_status = 'ignored' THEN RETURN 'processed'; END IF;
+  IF current_status = 'received' AND current_claimed_at >= now() - interval '5 minutes' THEN RETURN 'busy'; END IF;
+  UPDATE public.webhook_events SET status = 'received', event_type = p_event_type, payload = p_payload,
+    claimed_at = now(), claim_token = p_claim_token, last_error = null,
+    attempt_count = attempt_count + 1, updated_at = now()
+  WHERE workspace_id = p_workspace_id AND meta_event_id = p_meta_event_id;
+  RETURN 'claimed';
+END $$;
+REVOKE ALL ON FUNCTION public.claim_webhook_event(UUID, TEXT, TEXT, JSONB, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_webhook_event(UUID, TEXT, TEXT, JSONB, UUID) TO service_role;
+COMMIT;
+
+-- Phase 5 durable scheduled-job claims
+BEGIN;
+ALTER TABLE public.scheduled_jobs ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+ALTER TABLE public.scheduled_jobs ADD COLUMN IF NOT EXISTS claim_token UUID;
+ALTER TABLE public.scheduled_jobs ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.scheduled_jobs ADD COLUMN IF NOT EXISTS max_attempts INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE public.scheduled_jobs ADD COLUMN IF NOT EXISTS last_error TEXT;
+ALTER TABLE public.scheduled_jobs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_due_claim ON public.scheduled_jobs(job_type, status, scheduled_at, claimed_at);
+CREATE OR REPLACE FUNCTION public.claim_due_scheduled_jobs(p_job_type TEXT, p_limit INTEGER, p_claim_token UUID)
+RETURNS SETOF public.scheduled_jobs LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
+BEGIN
+  RETURN QUERY
+  WITH due AS (
+    SELECT id FROM public.scheduled_jobs
+    WHERE job_type = p_job_type AND scheduled_at <= now() AND attempt_count < max_attempts
+      AND (status = 'pending' OR (status = 'running' AND claimed_at < now() - interval '5 minutes'))
+    ORDER BY scheduled_at FOR UPDATE SKIP LOCKED LIMIT GREATEST(1, LEAST(p_limit, 100))
+  )
+  UPDATE public.scheduled_jobs j SET status = 'running', claimed_at = now(), claim_token = p_claim_token,
+    attempt_count = j.attempt_count + 1, updated_at = now()
+  FROM due WHERE j.id = due.id RETURNING j.*;
+END $$;
+REVOKE ALL ON FUNCTION public.claim_due_scheduled_jobs(TEXT, INTEGER, UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_due_scheduled_jobs(TEXT, INTEGER, UUID) TO service_role;
+COMMIT;

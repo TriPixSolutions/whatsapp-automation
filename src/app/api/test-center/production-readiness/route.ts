@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { SettingsDB, ContactsDB, MessagesDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
@@ -7,9 +8,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
-    const workflows = TestCenterStore.listWorkflows(DEFAULT_WORKSPACE_ID);
+    const settings = await SettingsDB.get(user.workspaceId!);
+    const workflows = await TestCenterStore.listWorkflows(user.workspaceId!);
     const sandboxSettings = TestCenterStore.getSandboxSettings();
 
     const checks: ProductionReadinessReport['checks'] = [];
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
         });
 
         // Check Workflow Pause & Resume State
-        const activeSessions = TestCenterStore.listActiveSessions(DEFAULT_WORKSPACE_ID);
+        const activeSessions = await TestCenterStore.listActiveSessions(user.workspaceId!);
         checks.push({
           category: 'Workflow Logic',
           name: 'Interactive Button Pause & Session Engine',
@@ -119,7 +122,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 5. Message Delivery (wamid verification)
-    const recentDeliveries = TestCenterStore.getDeliveryReceipts(20);
+    const recentDeliveries = TestCenterStore.getDeliveryReceipts(user.workspaceId!, 20);
     const hasFailedDeliveries = recentDeliveries.some((d) => d.status === 'failed');
     if (recentDeliveries.length > 0 && !hasFailedDeliveries) {
       checks.push({
@@ -155,8 +158,8 @@ export async function GET(request: NextRequest) {
 
     // 7. Database Health
     try {
-      const contactsCount = ContactsDB.list({ workspaceId: DEFAULT_WORKSPACE_ID }).length;
-      const messagesCount = MessagesDB.list({ workspaceId: DEFAULT_WORKSPACE_ID }).length;
+      const contactsCount = (await ContactsDB.list({ workspaceId: user.workspaceId! })).length;
+      const messagesCount = (await MessagesDB.list({ workspaceId: user.workspaceId! })).length;
       checks.push({
         category: 'Database Health',
         name: 'Persistence & Multi-Tenant Store',

@@ -71,8 +71,8 @@ export function Header({ title, subtitle }: HeaderProps) {
     };
   }, [menuOpen]);
 
-  const handleSignOut = () => {
-    clearClientAuthCookies();
+  const handleSignOut = async () => {
+    await clearClientAuthCookies();
     router.push('/auth/login');
     router.refresh();
   };

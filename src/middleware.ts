@@ -1,3 +1,4 @@
+import { verifyEdgeSession } from '@/lib/auth/token';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -16,10 +17,11 @@ const PUBLIC_API_PREFIXES = [
   '/api/meta/data-deletion',
   '/api/health',
   '/api/auth/login',
+  '/api/auth/logout',
   '/api/auth/signup',
   '/api/auth/me',
   '/api/auth/google',
-  '/api/auth/request-access',
+  '/api/ai/chat', // Public website assistant
 ];
 
 // Workspace page routes that require authenticated status
@@ -41,22 +43,6 @@ const WORKSPACE_PAGES = [
   '/leads',
 ];
 
-// Workspace API routes that perform Meta messaging or data mutations
-const WORKSPACE_API_PREFIXES = [
-  '/api/messages',
-  '/api/campaigns',
-  '/api/automations',
-  '/api/contacts',
-  '/api/leads',
-  '/api/settings',
-  '/api/meta/stats',
-  '/api/meta/oauth',
-  '/api/meta/connection',
-  '/api/meta/diagnostics',
-  '/api/media',
-  '/api/test-flow',
-];
-
 /**
  * Edge-safe URL redirect constructor
  */
@@ -68,27 +54,6 @@ function createEdgeRedirect(path: string, request: NextRequest, redirectParam?: 
     url.searchParams.set('redirect', redirectParam);
   }
   return NextResponse.redirect(url);
-}
-
-/**
- * Edge-safe lightweight JWT decoder
- */
-function decodeJwtPayload(token: string): any | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    let payloadStr = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    while (payloadStr.length % 4) payloadStr += '=';
-    const json = atob(payloadStr);
-    const payload = JSON.parse(json);
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      return null;
-    }
-    return payload;
-  } catch {
-    return null;
-  }
 }
 
 // In-memory sliding window IP rate limiter (Defense-in-depth protection)
@@ -112,7 +77,7 @@ function isRateLimited(ip: string, limit: number, windowMs: number): boolean {
   return false;
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || '127.0.0.1';
 
@@ -143,15 +108,9 @@ export function middleware(request: NextRequest) {
       sessionToken = authHeader.substring(7).trim();
     }
   }
-  const decodedSession = sessionToken ? decodeJwtPayload(sessionToken) : null;
+  const decodedSession = sessionToken ? await verifyEdgeSession(sessionToken) : null;
 
-  const authCookie = request.cookies.get('pf_auth');
-  const roleCookie = request.cookies.get('pf_role');
-  const statusCookie = request.cookies.get('pf_status');
-
-  const isAuthenticated = Boolean(decodedSession || authCookie?.value === 'authenticated');
-  const role = decodedSession?.role || roleCookie?.value || 'employee';
-  const status = decodedSession?.status || statusCookie?.value || (isAuthenticated && (role === 'super_admin' || role === 'owner') ? 'approved' : 'pending_approval');
+  const isAuthenticated = Boolean(decodedSession);
 
   // 1. Backward compatibility & Route Aliasing (redirect legacy routes cleanly)
   if (
@@ -169,6 +128,9 @@ export function middleware(request: NextRequest) {
     return createEdgeRedirect(isAuthenticated ? '/dashboard' : '/auth/login', request);
   }
 
+  // This exact endpoint verifies its separate worker credential in the Node handler.
+  if (pathname === '/api/internal/workflow-delays') return NextResponse.next();
+
   // 2. Allow public APIs unconditionally
   if (PUBLIC_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
@@ -185,7 +147,7 @@ export function middleware(request: NextRequest) {
   }
 
   // 4. Workspace API Protection
-  const isWorkspaceApi = WORKSPACE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  const isWorkspaceApi = pathname.startsWith('/api/');
   if (isWorkspaceApi) {
     if (!isAuthenticated) {
       return NextResponse.json({ error: 'Unauthorized: Session required.' }, { status: 401 });

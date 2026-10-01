@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { WorkflowTemplatesStore } from '@/lib/automations/workflowTemplatesStore';
 import { AdvancedWorkflowEngine } from '@/lib/automations/advancedWorkflowEngine';
 import { DEFAULT_WORKSPACE_ID, ContactsDB, MessagesDB, ConversationsDB } from '@/lib/db';
+import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,13 +13,15 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
     const {
       templateId,
       phoneNumber = '+919876543210',
-      workspaceId = DEFAULT_WORKSPACE_ID,
       customTriggerText,
     } = body;
+    const workspaceId = user.workspaceId!;
 
     if (!templateId) {
       return NextResponse.json({ error: 'templateId is required' }, { status: 400 });
@@ -29,11 +32,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Template "${templateId}" not found` }, { status: 404 });
     }
 
-    const transientWorkflow = WorkflowTemplatesStore.getTransientWorkflow(templateId, workspaceId);
+    const transientWorkflow = await WorkflowTemplatesStore.getTransientWorkflow(templateId, workspaceId);
     const cleanPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
 
     // Ensure contact exists
-    const contact = ContactsDB.upsert(
+    const contact = await ContactsDB.upsert(
       {
         phoneNumber: cleanPhone,
         firstName: 'Template',
@@ -45,15 +48,15 @@ export async function POST(request: NextRequest) {
 
     // Record incoming test message
     const triggerKeyword = customTriggerText || template.triggerKeyword || 'hello';
-    MessagesDB.create({
+    await MessagesDB.create({
       phoneNumber: cleanPhone,
       contactId: contact.id,
       direction: 'inbound',
       type: 'text',
       status: 'delivered',
       content: triggerKeyword,
-    });
-    ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+    }, workspaceId);
+    await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
 
     // Execute through AdvancedWorkflowEngine
     const executionLog = await AdvancedWorkflowEngine.executeWorkflow(transientWorkflow, {

@@ -1,7 +1,7 @@
 import { WorkflowTemplate, TemplateImportResult, TemplateCategory } from '@/types/workflowTemplates';
 import { BUILTIN_WORKFLOW_TEMPLATES } from './workflowTemplatesData';
 import { TestCenterStore } from './testCenterStore';
-import { AutomationsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { WorkflowDefinition } from '@/types/automations';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -78,11 +78,11 @@ export const WorkflowTemplatesStore = {
   /**
    * Imports a template into the active workspace as a live/editable Workflow DAG
    */
-  importTemplate(
+  async importTemplate(
     templateId: string,
     workspaceId = DEFAULT_WORKSPACE_ID,
     customName?: string
-  ): TemplateImportResult {
+  ): Promise<TemplateImportResult> {
     const template = this.getTemplate(templateId);
     if (!template) {
       throw new Error(`Template "${templateId}" not found`);
@@ -123,25 +123,7 @@ export const WorkflowTemplatesStore = {
     };
 
     // Save into TestCenterStore
-    TestCenterStore.saveWorkflow(newWorkflow);
-
-    // Sync into legacy AutomationsDB for full platform visibility
-    try {
-      AutomationsDB.create(
-        {
-          id: newWorkflow.id,
-          name: newWorkflow.name,
-          triggerKeyword: newWorkflow.triggerKeyword,
-          triggerType: 'keyword',
-          actionType: 'buttons',
-          actionPayload: { body: 'DAG Flow', buttons: [] } as any,
-          isActive: true,
-        },
-        workspaceId
-      );
-    } catch {
-      // non-blocking
-    }
+    await TestCenterStore.saveWorkflow(newWorkflow);
 
     return {
       success: true,
@@ -181,7 +163,7 @@ export const WorkflowTemplatesStore = {
   /**
    * Converts a template into a transient WorkflowDefinition for dry-run or testing
    */
-  getTransientWorkflow(templateId: string, workspaceId = DEFAULT_WORKSPACE_ID): WorkflowDefinition {
+  async getTransientWorkflow(templateId: string, workspaceId = DEFAULT_WORKSPACE_ID): Promise<WorkflowDefinition> {
     const template = this.getTemplate(templateId);
     if (!template) {
       throw new Error(`Template "${templateId}" not found`);
@@ -205,7 +187,7 @@ export const WorkflowTemplatesStore = {
     };
 
     // Save transient workflow so paused sessions can resolve branches & resume seamlessly
-    TestCenterStore.saveWorkflow(transientWf);
+    await TestCenterStore.saveWorkflow(transientWf);
 
     return transientWf;
   },

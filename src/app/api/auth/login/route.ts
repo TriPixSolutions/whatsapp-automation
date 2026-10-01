@@ -1,3 +1,4 @@
+import { publicUser } from '@/lib/auth/publicUser';
 import { NextResponse } from 'next/server';
 import { UsersDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { setSessionCookies } from '@/lib/auth/session';
@@ -10,38 +11,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const identifier = (body.emailOrUsername || body.email || body.username || '').trim();
-    const password = (body.password || '').trim();
+    const password = typeof body.password === 'string' ? body.password : '';
     const provider = body.provider || 'email';
     const requestedRedirect = body.redirect || '';
 
-    // 1. Google OAuth sign-in flow
-    if (provider === 'google') {
-      const email = identifier.toLowerCase() || `google.user.${Date.now()}@example.com`;
-      let user = UsersDB.getByEmail(email);
-      if (!user) {
-        user = UsersDB.create({
-          email,
-          name: body.name || email.split('@')[0],
-          avatarUrl: body.avatarUrl || body.picture || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-          provider: 'google',
-          role: 'employee',
-          status: 'approved',
-        });
-      }
-
-      const redirectTo = user.status === 'approved' ? '/dashboard' : '/pending';
-      const sessionPayload: SessionPayload = {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        status: user.status,
-        workspaceId: DEFAULT_WORKSPACE_ID,
-      };
-
-      const response = NextResponse.json({ success: true, user, redirectTo });
-      setSessionCookies(response, sessionPayload);
-      return response;
+    if (provider !== 'email') {
+      return NextResponse.json({ error: 'Use /api/auth/google to sign in with Google.' }, { status: 400 });
     }
 
     // 2. Email & Password Authentication
@@ -50,7 +25,7 @@ export async function POST(req: Request) {
     }
 
     const cleanEmail = identifier.toLowerCase();
-    const user = UsersDB.verifyCredentials(cleanEmail, password);
+    const user = await UsersDB.verifyCredentials(cleanEmail, password);
 
     if (!user) {
       return NextResponse.json({ error: 'Invalid credentials. Please verify your email and password.' }, { status: 401 });
@@ -62,7 +37,7 @@ export async function POST(req: Request) {
 
     let redirectTo = '/dashboard';
     if (user.status === 'approved') {
-      if (requestedRedirect && !requestedRedirect.includes('admin') && !requestedRedirect.includes('super-admin') && !requestedRedirect.includes('pending')) {
+      if (typeof requestedRedirect === 'string' && requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//') && !requestedRedirect.includes('\\') && !requestedRedirect.includes('admin') && !requestedRedirect.includes('super-admin') && !requestedRedirect.includes('pending')) {
         redirectTo = requestedRedirect;
       } else {
         redirectTo = '/dashboard';
@@ -75,12 +50,12 @@ export async function POST(req: Request) {
       name: user.name,
       role: user.role,
       status: user.status,
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId: user.workspaceId || user.workspace_id || DEFAULT_WORKSPACE_ID,
     };
 
     const response = NextResponse.json({
       success: true,
-      user,
+      user: publicUser(user),
       redirectTo,
     });
 

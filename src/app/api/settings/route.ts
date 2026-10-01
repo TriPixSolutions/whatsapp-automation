@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
-    const settings = SettingsDB.get(targetWorkspaceId);
+    const settings = await SettingsDB.get(targetWorkspaceId);
     return NextResponse.json({
       ...settings,
       accessToken: maskToken(settings.accessToken),
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
     const body = await request.json();
-    const current = SettingsDB.get(targetWorkspaceId);
+    const current = await SettingsDB.get(targetWorkspaceId);
 
     // Guard against saving masked token bullets back into database
     let tokenToSave = body.accessToken;
@@ -48,13 +48,14 @@ export async function POST(request: NextRequest) {
       secretToSave = current.appSecret;
     }
 
-    const updated = SettingsDB.update(
+    const updated = await SettingsDB.update(
       {
         name: body.name || current.name,
         wabaId: body.wabaId !== undefined ? body.wabaId : current.wabaId,
         phoneNumberId: body.phoneNumberId !== undefined ? body.phoneNumberId : current.phoneNumberId,
         accessToken: tokenToSave,
         appSecret: secretToSave,
+        appId: body.appId !== undefined ? body.appId : current.appId,
         verifyToken: body.verifyToken || current.verifyToken,
         catalogId: body.catalogId !== undefined ? body.catalogId : current.catalogId,
         adAccountId: body.adAccountId !== undefined ? body.adAccountId : current.adAccountId,

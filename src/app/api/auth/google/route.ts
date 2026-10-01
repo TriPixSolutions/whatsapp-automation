@@ -1,21 +1,6 @@
+import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * Google OAuth flow using the project's cookie-based auth system.
- *
- * GET /api/auth/google         → Redirects user to Google's consent screen
- * GET /api/auth/google/callback → Handles the OAuth callback from Google
- *
- * This file is intentionally a stub that redirects to the actual handlers
- * while NextAuth is NOT used (project uses custom cookie-based RBAC).
- *
- * To fully enable Google OAuth:
- * 1. Create a Google Cloud project at https://console.cloud.google.com/
- * 2. Enable the "Google+ API" and "People API"
- * 3. Create OAuth 2.0 credentials (Web Application)
- * 4. Add http://localhost:3000/api/auth/google/callback to Authorized redirect URIs
- * 5. Fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env.local
- */
 export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID;
 
@@ -28,14 +13,18 @@ export async function GET(request: NextRequest) {
 
   const redirectUri = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/google/callback`;
 
+  const state = randomBytes(32).toString('hex');
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
+    state,
     scope: 'openid email profile',
     access_type: 'offline',
     prompt: 'consent',
   });
 
-  return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  const response = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  response.cookies.set('pf_oauth_state', state, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/api/auth/google', maxAge: 600 });
+  return response;
 }

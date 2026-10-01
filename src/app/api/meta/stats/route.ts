@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { SettingsDB, CampaignsDB, MessagesDB, ContactsDB } from '@/lib/db';
 
@@ -14,17 +15,19 @@ export const dynamic = 'force-dynamic';
  * Gracefully provides local real-usage analytics when Meta credentials are unconfigured or in sandbox mode.
  */
 export async function GET(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const { searchParams } = new URL(request.url);
     const datePreset = searchParams.get('date_preset') || 'last_30d';
 
-    const settings = SettingsDB.get();
-    const campaigns = CampaignsDB.list();
-    const allMessages = MessagesDB.list();
-    const totalContacts = ContactsDB.count();
+    const settings = await SettingsDB.get(user.workspaceId!);
+    const campaigns = await CampaignsDB.list(user.workspaceId!);
+    const allMessages = await MessagesDB.list({ workspaceId: user.workspaceId! });
+    const totalContacts = await ContactsDB.count(user.workspaceId!);
 
-    const adAccountId = settings.adAccountId || process.env.META_AD_ACCOUNT_ID;
-    const accessToken = settings.accessToken || process.env.META_ACCESS_TOKEN;
+    const adAccountId = settings.adAccountId;
+    const accessToken = settings.accessToken;
 
     const isLiveConfigured = Boolean(
       adAccountId &&

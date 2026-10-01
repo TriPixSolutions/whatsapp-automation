@@ -1,3 +1,4 @@
+import { getSessionSecret, validSessionPayload } from './token';
 import crypto from 'crypto';
 import { UserRole, UserStatus } from '@/types';
 
@@ -10,15 +11,6 @@ export interface SessionPayload {
   name?: string;
   exp?: number;
   iat?: number;
-}
-
-function getJwtSecret(): string {
-  return (
-    process.env.JWT_SECRET ||
-    process.env.ENCRYPTION_KEY ||
-    process.env.NEXTAUTH_SECRET ||
-    'production_secure_tripix_jwt_secret_key_minimum_32_characters_long'
-  );
 }
 
 function base64UrlEncode(str: string): string {
@@ -53,7 +45,7 @@ export function signJwt(payload: SessionPayload, expiresInSeconds = 60 * 60 * 24
   const encodedPayload = base64UrlEncode(JSON.stringify(fullPayload));
   const data = `${encodedHeader}.${encodedPayload}`;
 
-  const secret = getJwtSecret();
+  const secret = getSessionSecret();
   const signature = crypto.createHmac('sha256', secret).update(data).digest('base64');
   const encodedSignature = signature.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
@@ -64,32 +56,19 @@ export function signJwt(payload: SessionPayload, expiresInSeconds = 60 * 60 * 24
  * Verify and decode an HMAC-SHA256 JWT
  */
 export function verifyJwt(token: string): SessionPayload | null {
-  if (!token || typeof token !== 'string') return null;
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-
-  const [encodedHeader, encodedPayload, encodedSignature] = parts;
-  const data = `${encodedHeader}.${encodedPayload}`;
-  const secret = getJwtSecret();
-
-  const expectedSignature = crypto.createHmac('sha256', secret).update(data).digest('base64');
-  const normalizedExpected = expectedSignature.replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-  // Timing safe comparison
-  const sigBuf = Buffer.from(encodedSignature);
-  const expBuf = Buffer.from(normalizedExpected);
-  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-    return null;
-  }
-
   try {
-    const payload: SessionPayload = JSON.parse(base64UrlDecode(encodedPayload));
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
-      // Expired token
-      return null;
-    }
-    return payload;
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, signature] = parts;
+    const metadata = JSON.parse(base64UrlDecode(header));
+    if (metadata.alg !== 'HS256' || metadata.typ !== 'JWT') return null;
+    const expected = crypto.createHmac('sha256', getSessionSecret()).update(`${header}.${body}`).digest('base64url');
+    const actualBytes = Buffer.from(signature);
+    const expectedBytes = Buffer.from(expected);
+    if (actualBytes.length !== expectedBytes.length || !crypto.timingSafeEqual(actualBytes, expectedBytes)) return null;
+    const payload = JSON.parse(base64UrlDecode(body));
+    return validSessionPayload(payload) ? payload : null;
   } catch {
     return null;
   }

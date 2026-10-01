@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const limit = Number(searchParams.get('limit') || 100);
-    const logs = TestCenterStore.getWebhookLogs(limit);
+    const logs = TestCenterStore.getWebhookLogs(user.workspaceId!, limit);
     return NextResponse.json(logs);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { action, logId } = body;
 
     if (action === 'replay' && logId) {
-      const logs = TestCenterStore.getWebhookLogs(500);
+      const logs = TestCenterStore.getWebhookLogs(user.workspaceId!, 500);
       const targetLog = logs.find((l) => l.id === logId);
 
       if (!targetLog) {
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
       // Record replayed execution log
       const replayedLog = TestCenterStore.recordWebhookLog({
         id: `wh_replay_${Date.now()}`,
+        workspaceId: user.workspaceId!,
         timestamp: new Date().toISOString(),
         direction: 'incoming',
         source: 'Manual Replay Engine',

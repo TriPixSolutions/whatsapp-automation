@@ -32,8 +32,10 @@ export function setClientAuthCookies(user: { id: string; role: string; status: s
   }
 }
 
-export function clearClientAuthCookies(): void {
+export async function clearClientAuthCookies(): Promise<void> {
   if (typeof window === 'undefined') return;
+  const response = await fetch('/api/auth/logout', { method: 'POST' });
+  if (!response.ok) throw new Error('Sign out failed. Please try again.');
   const expired = '; path=/; max-age=0; SameSite=Lax';
   document.cookie = `${AUTH_COOKIE_NAME}=${expired}`;
   document.cookie = `${USER_ID_COOKIE_NAME}=${expired}`;

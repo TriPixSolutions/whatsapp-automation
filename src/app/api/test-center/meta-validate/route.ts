@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { MetaValidationResult } from '@/types/automations';
@@ -9,8 +10,10 @@ export const dynamic = 'force-dynamic';
 const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
 
 export async function GET(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
+    const settings = await SettingsDB.get(user.workspaceId!);
     const { phoneNumberId, wabaId, accessToken, verifyToken } = settings;
 
     const hasToken = Boolean(

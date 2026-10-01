@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       const signedRequest = formData.get('signed_request') as string;
 
       if (signedRequest) {
-        const settings = SettingsDB.get();
+        const settings = await SettingsDB.get();
         const appSecret = settings.appSecret || process.env.META_APP_SECRET || '';
         const parsed = parseSignedRequest(signedRequest, appSecret);
         if (parsed?.user_id) {

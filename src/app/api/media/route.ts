@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthorizedUser();
+    const user = await getAuthorizedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     const fileSize = buffer.length;
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
 
-    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
+    const settings = await SettingsDB.get(user.workspaceId!);
     const { phoneNumberId, accessToken } = settings;
 
     let metaMediaId: string | undefined;
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           .from('media_assets')
           .insert({
             id: assetId,
-            workspace_id: DEFAULT_WORKSPACE_ID,
+            workspace_id: user.workspaceId,
             meta_media_id: metaMediaId,
             file_name: filename,
             file_size_bytes: fileSize,

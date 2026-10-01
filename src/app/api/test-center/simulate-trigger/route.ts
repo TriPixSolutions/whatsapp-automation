@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { AdvancedWorkflowEngine } from '@/lib/automations/advancedWorkflowEngine';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
@@ -8,6 +9,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await request.json();
     const {
@@ -27,11 +30,11 @@ export async function POST(request: NextRequest) {
       isSandbox = false,
     } = body;
 
-    const workspaceId = DEFAULT_WORKSPACE_ID;
+    const workspaceId = user.workspaceId!;
     const cleanPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
 
     // 1. Ensure contact exists and record simulation event
-    const contact = ContactsDB.upsert(
+    const contact = await ContactsDB.upsert(
       {
         phoneNumber: cleanPhone,
         firstName: leadData?.firstName || 'Test',
@@ -50,7 +53,7 @@ export async function POST(request: NextRequest) {
         triggerType = 'incoming_message';
         triggerPayload = { text: text || 'Hello', from: cleanPhone };
         // Log inbound message in conversation inbox
-        MessagesDB.create({
+        await MessagesDB.create({
           phoneNumber: cleanPhone,
           contactId: contact.id,
           direction: 'inbound',
@@ -58,14 +61,14 @@ export async function POST(request: NextRequest) {
           status: 'delivered',
           content: text || 'Hello',
         });
-        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
       // 4. Simulate Keyword Trigger
       case 'keyword_trigger':
         triggerType = 'keyword';
         triggerPayload = { text: text || 'Pricing', keyword: text || 'Pricing' };
-        MessagesDB.create({
+        await MessagesDB.create({
           phoneNumber: cleanPhone,
           contactId: contact.id,
           direction: 'inbound',
@@ -73,7 +76,7 @@ export async function POST(request: NextRequest) {
           status: 'delivered',
           content: text || 'Pricing',
         });
-        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
       // 5. Simulate Button Click
@@ -97,7 +100,7 @@ export async function POST(request: NextRequest) {
           clickedAt: new Date().toISOString(),
           responsePayload: triggerPayload,
         });
-        MessagesDB.create({
+        await MessagesDB.create({
           phoneNumber: cleanPhone,
           contactId: contact.id,
           direction: 'inbound',
@@ -106,7 +109,7 @@ export async function POST(request: NextRequest) {
           content: `Button clicked: ${buttonTitle || buttonId}`,
           payload: triggerPayload,
         });
-        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
       // 6. Simulate Carousel Click
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
           buttonClickedId: cardButtonId || 'buy_shoes',
           clickedAt: new Date().toISOString(),
         });
-        MessagesDB.create({
+        await MessagesDB.create({
           phoneNumber: cleanPhone,
           contactId: contact.id,
           direction: 'inbound',
@@ -140,7 +143,7 @@ export async function POST(request: NextRequest) {
           content: `Carousel card #${(cardIndex || 0) + 1} clicked`,
           payload: triggerPayload,
         });
-        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
       // 7. Simulate CTA Button Click
@@ -184,7 +187,7 @@ export async function POST(request: NextRequest) {
           listTitle: buttonTitle || 'VIP Priority Support',
           title: buttonTitle || 'VIP Priority Support',
         };
-        MessagesDB.create({
+        await MessagesDB.create({
           phoneNumber: cleanPhone,
           contactId: contact.id,
           direction: 'inbound',
@@ -193,7 +196,7 @@ export async function POST(request: NextRequest) {
           content: `List selected: ${buttonTitle || buttonId || 'VIP Priority Support'}`,
           payload: triggerPayload,
         });
-        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
       // 8c. Simulate WhatsApp Flow Submission
@@ -206,7 +209,7 @@ export async function POST(request: NextRequest) {
             data: { email: 'customer@example.com', service: 'WhatsApp Automation' },
           },
         };
-        MessagesDB.create({
+        await MessagesDB.create({
           phoneNumber: cleanPhone,
           contactId: contact.id,
           direction: 'inbound',
@@ -215,7 +218,7 @@ export async function POST(request: NextRequest) {
           content: 'WhatsApp Flow submitted: Registration Form',
           payload: triggerPayload,
         });
-        ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
+        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
         break;
 
       // 9. Simulate Webhook Event
@@ -224,6 +227,7 @@ export async function POST(request: NextRequest) {
         triggerPayload = webhookPayload || { event: 'custom_order_paid', orderId: 'ORD_99182' };
         TestCenterStore.recordWebhookLog({
           id: `wh_sim_${Date.now()}`,
+          workspaceId,
           timestamp: new Date().toISOString(),
           direction: 'incoming',
           source: 'Simulated Webhook Sender',
@@ -251,7 +255,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. PRIORITY 1: If there is an active waiting session for this recipient, RESUME it!
-    const activeSession = TestCenterStore.getActiveSession(cleanPhone, workspaceId);
+    const activeSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
     if (activeSession && ['button_click', 'carousel_click', 'cta_click', 'incoming_message'].includes(simulationType)) {
       const resumeAction = simulationType === 'carousel_click'
         ? 'carousel_click'
@@ -290,12 +294,12 @@ export async function POST(request: NextRequest) {
     // 2b. PRIORITY 2: Select target workflow to start fresh execution
     let targetWorkflows = [];
     if (workflowId) {
-      const specificWf = TestCenterStore.getWorkflow(workflowId);
+      const specificWf = await TestCenterStore.getWorkflow(workflowId, workspaceId);
       if (specificWf) targetWorkflows.push(specificWf);
     }
 
     if (targetWorkflows.length === 0) {
-      targetWorkflows = AdvancedWorkflowEngine.matchWorkflows(
+      targetWorkflows = await AdvancedWorkflowEngine.matchWorkflows(
         triggerType,
         triggerPayload,
         workspaceId
@@ -304,7 +308,7 @@ export async function POST(request: NextRequest) {
 
     // If still no matching workflow, use the primary seed workflow
     if (targetWorkflows.length === 0) {
-      const allWfs = TestCenterStore.listWorkflows(workspaceId);
+      const allWfs = await TestCenterStore.listWorkflows(workspaceId);
       if (allWfs.length > 0) targetWorkflows.push(allWfs[0]);
     }
 

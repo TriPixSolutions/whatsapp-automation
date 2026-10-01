@@ -5,25 +5,18 @@ import { SettingsDB } from '@/lib/db';
  * Handles Meta WhatsApp Webhook Handshake Verification (GET)
  * Meta sends: hub.mode=subscribe, hub.verify_token={TOKEN}, hub.challenge={CHALLENGE}
  */
-export function handleWebhookVerification(request: NextRequest): NextResponse {
+export async function handleWebhookVerification(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
 
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
-  const settings = SettingsDB.get();
-  const configuredToken =
-    settings.verifyToken ||
-    process.env.META_WEBHOOK_VERIFY_TOKEN ||
-    'passion_fruit_verify_token_2025';
+  const settings = token ? await SettingsDB.getByVerifyToken(token) : null;
+  const configuredToken = settings?.verifyToken || process.env.META_WEBHOOK_VERIFY_TOKEN;
 
   if (mode === 'subscribe') {
-    if (
-      token === configuredToken ||
-      token === 'passion_fruit_verify_token_2025' ||
-      token === 'apex_luxury_secret_token_2025'
-    ) {
+    if (configuredToken && token === configuredToken && challenge !== null) {
       console.log('[Meta Webhook] Verification handshake successful. Returning challenge.');
       return new NextResponse(challenge, {
         status: 200,
@@ -31,10 +24,7 @@ export function handleWebhookVerification(request: NextRequest): NextResponse {
       });
     }
 
-    console.warn('[Meta Webhook] Verification token mismatch:', {
-      received: token,
-      expected: configuredToken,
-    });
+    console.warn('[Meta Webhook] Verification token mismatch or missing challenge');
     return new NextResponse('Verification token mismatch', { status: 403 });
   }
 

@@ -10,6 +10,7 @@ export interface SendWhatsAppMessageOptions {
   phoneNumberId?: string;
   accessToken?: string;
   requireRealDelivery?: boolean;
+  allowSimulation?: boolean; // Explicit opt-in for local tests only
   isConnectionTest?: boolean;
   templateName?: string;
   languageCode?: string;
@@ -64,32 +65,14 @@ export class WhatsAppMessageService {
    */
   static async send(options: SendWhatsAppMessageOptions): Promise<SendMessageResult> {
     const workspaceId = (options.workspaceId === 'default' || !options.workspaceId) ? DEFAULT_WORKSPACE_ID : options.workspaceId;
-    let settings = SettingsDB.get(workspaceId);
-    if (!settings?.phoneNumberId) {
-      const defaultSettings = SettingsDB.get('default');
-      if (defaultSettings?.phoneNumberId) settings = defaultSettings;
-    }
-
-    const phoneNumberId = (options.phoneNumberId || settings.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '').trim();
-    let rawToken = (options.accessToken || settings.accessToken || process.env.META_ACCESS_TOKEN || '').trim();
-    let accessToken = rawToken;
-
-    if (rawToken.startsWith('enc:gcm:')) {
-      const decrypted = decryptToken(rawToken);
-      if (decrypted && !decrypted.startsWith('enc:gcm:')) {
-        accessToken = decrypted;
-      } else if (process.env.META_ACCESS_TOKEN) {
-        accessToken = process.env.META_ACCESS_TOKEN.trim();
-      }
-    }
-    if ((!accessToken || accessToken.startsWith('enc:gcm:')) && process.env.META_ACCESS_TOKEN) {
-      accessToken = process.env.META_ACCESS_TOKEN.trim();
-    }
+    const settings = await SettingsDB.get(workspaceId);
+    const phoneNumberId = (options.phoneNumberId || settings.phoneNumberId || '').trim();
+    const accessToken = decryptToken((options.accessToken || settings.accessToken || '').trim());
 
     const cleanTo = options.to.startsWith('+') ? options.to : `+${options.to.replace(/[^0-9]/g, '')}`;
 
     // 1. Ensure contact exists in database
-    const contact = ContactsDB.upsert(
+    const contact = await ContactsDB.upsert(
       {
         phoneNumber: cleanTo,
       },
@@ -98,14 +81,14 @@ export class WhatsAppMessageService {
 
     // 2. 24-Hour Policy Window Enforcement (Enforces Meta Cloud API Conversation Window)
     if (options.type !== 'template' && !options.bypassWindowCheck) {
-      const windowOpen = ConversationsDB.isWindowOpen(cleanTo, workspaceId);
+      const windowOpen = await ConversationsDB.isWindowOpen(cleanTo, workspaceId);
 
       if (!windowOpen) {
         const errorMsg =
           '24-Hour Window Closed (#131047): Customer last messaged over 24 hours ago. Meta WhatsApp policy requires sending an approved Template message to initiate or re-engage conversation.';
         console.warn(`[WhatsApp Policy Warning] ${cleanTo}: ${errorMsg}`);
 
-        const savedFailed = MessagesDB.create(
+        const savedFailed = await MessagesDB.create(
           {
             phoneNumber: cleanTo,
             contactId: contact.id,
@@ -163,10 +146,10 @@ export class WhatsAppMessageService {
     }
 
     if (!isLive) {
-      if (options.requireRealDelivery || options.isConnectionTest) {
+      if (!options.allowSimulation || options.requireRealDelivery || options.isConnectionTest) {
         return {
           success: false,
-          error: 'Real WhatsApp delivery failed: Active credentials are not live. Sandbox simulation is disabled for connection tests.',
+          error: 'WhatsApp delivery unavailable: configure a live Phone Number ID and access token, and disable META_SANDBOX. No message was sent.',
           phoneNumberIdUsed: phoneNumberId,
           isSimulated: false,
         };
@@ -176,7 +159,7 @@ export class WhatsAppMessageService {
       const simulatedId = `wamid.local_${Date.now()}`;
       console.log(`[WhatsApp Sandbox] Simulated send (${options.type}) to ${cleanTo}`);
 
-      const savedMessage = MessagesDB.create(
+      const savedMessage = await MessagesDB.create(
         {
           metaMessageId: simulatedId,
           phoneNumber: cleanTo,
@@ -191,7 +174,7 @@ export class WhatsAppMessageService {
       );
 
       // Track outbound conversation timestamp
-      ConversationsDB.recordOutbound(cleanTo, contact.id, workspaceId);
+      await ConversationsDB.recordOutbound(cleanTo, contact.id, workspaceId, savedMessage.metaMessageId || savedMessage.id);
 
       return {
         success: true,
@@ -318,9 +301,9 @@ export class WhatsAppMessageService {
       options.bodyText ||
       (options.templateName ? `Template: ${options.templateName}` : `[${options.type.toUpperCase()}]`);
 
-    const savedMessage = MessagesDB.create(
+    const savedMessage = await MessagesDB.create(
       {
-        metaMessageId: metaMessageId || `wamid.failed_${Date.now()}`,
+        metaMessageId: metaMessageId || undefined,
         phoneNumber: cleanTo,
         contactId: contact.id,
         direction: 'outbound',
@@ -335,7 +318,7 @@ export class WhatsAppMessageService {
     );
 
     if (metaResult.success) {
-      ConversationsDB.recordOutbound(cleanTo, contact.id, workspaceId);
+      await ConversationsDB.recordOutbound(cleanTo, contact.id, workspaceId, savedMessage.metaMessageId || savedMessage.id);
     }
 
     return {

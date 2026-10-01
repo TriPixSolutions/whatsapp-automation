@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'sync_meta') {
       const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
-      const settings = SettingsDB.get(targetWorkspaceId);
+      const settings = await SettingsDB.get(targetWorkspaceId);
       const wabaId = settings.wabaId || process.env.META_WABA_ID;
       const accessToken = settings.accessToken || process.env.META_ACCESS_TOKEN;
 

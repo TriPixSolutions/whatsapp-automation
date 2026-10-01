@@ -10,11 +10,11 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
     const tag = searchParams.get('tag') || undefined;
     const search = searchParams.get('search') || undefined;
 
-    const contacts = ContactsDB.list({ workspaceId: targetWorkspaceId, tag, search });
+    const contacts = await ContactsDB.list({ workspaceId: targetWorkspaceId, tag, search });
 
     // Map to frontend-friendly structure
     const mapped = contacts.map((c) => ({
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       lastName,
       last_name,
       tags = ['vip'],
-      optinStatus = true,
+      optinStatus,
       optin_status,
       workspaceId = DEFAULT_WORKSPACE_ID,
     } = body;
@@ -64,15 +64,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Phone number is required.' }, { status: 400 });
     }
 
-    const targetWorkspaceId = user.workspaceId || workspaceId || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
 
-    const created = ContactsDB.upsert(
+    const created = await ContactsDB.upsert(
       {
         phoneNumber: rawPhone,
         firstName: firstName || first_name || '',
         lastName: lastName || last_name || '',
         tags: Array.isArray(tags) ? tags : [tags],
-        optinStatus: optinStatus !== undefined ? optinStatus : optin_status !== undefined ? optin_status : true,
+        optinStatus: optinStatus !== undefined ? optinStatus : optin_status !== undefined ? optin_status : false,
       },
       targetWorkspaceId
     );
@@ -108,12 +108,12 @@ export async function DELETE(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
     if (!id) {
       return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 });
     }
 
-    const deleted = ContactsDB.delete(id, targetWorkspaceId);
+    const deleted = await ContactsDB.delete(id, targetWorkspaceId);
     return NextResponse.json({ success: deleted });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

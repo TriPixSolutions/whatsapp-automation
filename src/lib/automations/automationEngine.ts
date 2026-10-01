@@ -60,10 +60,10 @@ export class AutomationWorkflowEngine {
 
         case 'tag':
           if (payload.addTag) {
-            const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            const contact = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
             if (contact) {
               const tags = Array.from(new Set([...contact.tags, payload.addTag.toLowerCase()]));
-              ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
+              await ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
             }
           }
           break;

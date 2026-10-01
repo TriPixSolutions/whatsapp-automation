@@ -16,13 +16,13 @@ const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v18.0';
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthorizedUser();
+    const user = await getAuthorizedUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await request.json().catch(() => ({}));
-    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
+    const settings = await SettingsDB.get(user.workspaceId!);
 
     const phoneNumberId = (body.phoneNumberId || settings.phoneNumberId || '').trim();
     const wabaId = (body.wabaId || settings.wabaId || '').trim();

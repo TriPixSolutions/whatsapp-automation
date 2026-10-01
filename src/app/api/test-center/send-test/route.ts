@@ -1,3 +1,4 @@
+import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
@@ -9,6 +10,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const user = await getAuthorizedUser(request);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await request.json();
     const {
@@ -45,16 +48,16 @@ export async function POST(request: NextRequest) {
       contactCard = { formattedName: 'Acme Support', phoneNumber: '+18005550199', org: 'Acme Global Corp' },
     } = body;
 
-    const workspaceId = DEFAULT_WORKSPACE_ID;
+    const workspaceId = user.workspaceId!;
     const cleanPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
 
     // Get active Meta credentials from Settings
-    const settings = SettingsDB.get(workspaceId);
-    const phoneNumberId = settings.phoneNumberId || process.env.META_PHONE_NUMBER_ID || '104928192847192';
-    const accessToken = settings.accessToken || process.env.META_ACCESS_TOKEN || 'EAAGmockTokenTestCenter2026';
+    const settings = await SettingsDB.get(workspaceId);
+    const phoneNumberId = settings.phoneNumberId || '104928192847192';
+    const accessToken = settings.accessToken || 'EAAGmockTokenTestCenter2026';
 
     // Ensure contact exists
-    const contact = ContactsDB.upsert(
+    const contact = await ContactsDB.upsert(
       {
         phoneNumber: cleanPhone,
         firstName: 'Test',
@@ -273,7 +276,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Record in DB
-    const dbMessage = MessagesDB.create({
+    const dbMessage = await MessagesDB.create({
       phoneNumber: cleanPhone,
       contactId: contact.id,
       direction: 'outbound',
@@ -283,7 +286,7 @@ export async function POST(request: NextRequest) {
       metaMessageId: messageId,
     });
 
-    ConversationsDB.recordOutbound(cleanPhone, contact.id, workspaceId);
+    await ConversationsDB.recordOutbound(cleanPhone, contact.id, workspaceId);
 
     // 2. Record Meta Log
     TestCenterStore.recordMetaLog({
@@ -309,6 +312,7 @@ export async function POST(request: NextRequest) {
     // 3. Record Delivery Receipt
     TestCenterStore.recordDeliveryReceipt({
       id: `rcpt_${Date.now()}`,
+      workspaceId,
       metaMessageId: messageId,
       phoneNumber: cleanPhone,
       messageType: platformType,

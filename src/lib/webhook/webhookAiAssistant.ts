@@ -1,3 +1,4 @@
+import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
 
@@ -10,7 +11,8 @@ Keep tone professional, prompt, and helpful. Avoid markdown bolding over-use.`;
 export async function handleAiInboundReply(
   fromPhone: string,
   contactId: string,
-  customerText: string
+  customerText: string,
+  workspaceId: string = DEFAULT_WORKSPACE_ID
 ): Promise<void> {
   let replyText = '';
   const apiKey = process.env.GEMINI_API_KEY;
@@ -40,9 +42,12 @@ export async function handleAiInboundReply(
     }
   }
 
-  await WhatsAppMessageService.send({
+  const result = await WhatsAppMessageService.send({
+    requireRealDelivery: true,
+    workspaceId,
     to: fromPhone,
     type: 'text',
     text: replyText,
   });
+  if (!result.success) throw new Error(result.error || 'AI reply delivery failed');
 }

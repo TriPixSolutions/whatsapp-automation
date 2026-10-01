@@ -1,5 +1,7 @@
 # AI WhatsApp Sales & Support Platform
 
+> **Stabilization in progress:** accounts, settings, messages, conversations, workflows, webhook claims, campaigns and scheduled follow-ups now require a working Supabase database plus random `AUTH_SESSION_SECRET` and `WORKER_SECRET` values. Run `npm run check:setup`, `npm run check:production`, `npm test`, and `npm run build`. See [the phase 5 checkpoint](docs/PHASE_5.md) for implemented fixes and remaining work. Older capability and deployment claims below are not a production-readiness guarantee.
+
 > **The enterprise-grade commercial platform engineered to capture more leads, close more sales, and deliver instant 24/7 customer support directly inside WhatsApp.** Built for high-growth businesses and modern e-commerce brands with official Meta Cloud API v18.0 integration, autonomous AI sales assistants, and Hostinger Cloud Startup PM2 clustering.
 
 ---
@@ -11,7 +13,7 @@ Businesses buy three things: **More Leads**, **More Sales**, and **Faster Suppor
 - **Autonomous AI Sales & Support**: Instant, human-like answers powered by Gemini/OpenAI that qualify leads, recommend catalog items, and resolve customer questions in under 3 seconds.
 - **In-Chat WhatsApp Checkout**: Direct interactive checkout flows (`checkout_*`, `buy_*`) with zero-friction payment links and instant order confirmations.
 - **Shared Multi-Agent Team Inbox**: Real-time live conversation syncing without page reload (2.5s polling), multi-agent assignment, private notes, and official read receipt ticks (`✓`, `✓✓`, blue `✓✓`).
-- **Targeted Broadcast Campaigns**: Paced background queue engine (~60ms spacing) ensuring zero serverless timeouts, zero rate-limit bans, and real-time delivery tracking.
+- **Targeted Broadcast Campaigns**: Paced BullMQ worker with explicit recipient IDs and persisted per-recipient results. Actual throughput and Meta rate limits depend on the connected account.
 - **Omnichannel E-Commerce Sync**: Direct catalog and customer webhooks for Shopify, WooCommerce, Google Sheets, and custom CRM systems.
 - **Live Sales & Conversion Analytics**: Dedicated `/analytics` dashboard with multi-step funnel tracking (Inquiries &rarr; AI Qualified &rarr; Catalog Viewed &rarr; Checkout Initiated), revenue attribution, and 1-click CSV audit exports.
 
@@ -22,13 +24,13 @@ Businesses buy three things: **More Leads**, **More Sales**, and **Faster Suppor
 Engineered specifically for **Hostinger Cloud Startup** and modern Linux VPS servers:
 
 - **Standalone Node.js Server**: Built with `output: 'standalone'` in `next.config.ts`, generating `.next/standalone/server.js` with self-contained dependencies and optimal memory footprint.
-- **PM2 Cluster Mode**: Pre-configured [`ecosystem.config.js`](./ecosystem.config.js) to leverage all CPU cores, automatic recovery on crash, and separated error/access logs (`logs/`).
+- **PM2 Process Management**: [`ecosystem.config.js`](./ecosystem.config.js) runs one web process and one worker with automatic recovery and separate logs. Webhook claims are persisted in Supabase so multiple web processes do not rely on process-local deduplication.
 - **Zero Third-Party Vendor Lock-In**: Fully removed Vercel telemetry and platform dependencies.
 - **Nginx Reverse Proxy & SSL**: Step-by-step setup with Let's Encrypt Certbot provided in [`HOSTINGER_DEPLOYMENT.md`](./HOSTINGER_DEPLOYMENT.md).
 
 ---
 
-## 📁 Project Architecture (< 150 Lines / File)
+## 📁 Project Architecture
 
 All components strictly follow single-responsibility modular architecture:
 
@@ -87,6 +89,7 @@ whatsapp-auto-saas/
 cp .env.example .env.local
 ```
 Add your **Meta Phone Number ID**, **WhatsApp Business Account (WABA) ID**, and **System User Access Token**.
+Also configure `META_APP_SECRET`, a public HTTPS `NEXT_PUBLIC_APP_URL`, and a reachable Redis instance.
 
 ### 2. Install & Build Standalone
 ```bash
@@ -99,6 +102,11 @@ npm run build
 npm run start:standalone
 ```
 
+Start the background worker in a second process:
+```bash
+npm run worker
+```
+
 ### 4. Run with PM2 in Production
 ```bash
 npm run start:pm2
@@ -108,17 +116,15 @@ npm run start:pm2
 
 ## 🛠️ Verification & Testing
 
-Run the automated integration test suite:
+Run the active validation commands:
 ```bash
-node scratch/test_phase3.js
+npm run check:setup
+npm run check:production
+npm test
+npm run lint
 ```
-Verifies:
-1. Meta Webhook `GET` Handshake (`hub.challenge`)
-2. Inbound Message (`POST`) parsing & contact upsert
-3. Interactive WhatsApp Checkout (`checkout_*`, `buy_*`) & payment link generation
-4. Real-time delivery status receipts (`sent`, `delivered`, `read`)
-5. Asynchronous Campaign Queue dispatch & pacing
-6. Meta Commerce Catalog Batch Sync formatting
+
+`check:production` performs read-only live probes for Supabase, Redis, Meta credentials, webhook signing configuration and the public HTTPS callback URL. It does not send a WhatsApp message.
 
 ---
 

@@ -23,6 +23,7 @@ export interface WorkflowExecutionContext {
   debugMode?: boolean;
   isTestSimulation?: boolean;
   variables?: Record<string, any>;
+  resumedSessionId?: string;
 }
 
 export class AdvancedWorkflowEngine {
@@ -30,12 +31,12 @@ export class AdvancedWorkflowEngine {
   /**
    * Matches an incoming trigger event against all active workflows
    */
-  static matchWorkflows(
+  static async matchWorkflows(
     triggerType: AutomationTriggerType,
     triggerPayload: any,
     workspaceId = DEFAULT_WORKSPACE_ID
-  ): WorkflowDefinition[] {
-    const workflows = TestCenterStore.listWorkflows(workspaceId).filter((w) => w.isActive);
+  ): Promise<WorkflowDefinition[]> {
+    const workflows = (await TestCenterStore.listWorkflows(workspaceId)).filter((w) => w.isActive);
     const matches: WorkflowDefinition[] = [];
 
     for (const wf of workflows) {
@@ -438,9 +439,9 @@ export class AdvancedWorkflowEngine {
     };
 
     // 1. Ensure contact exists or fetch
-    let contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+    let contact = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
     if (!contact) {
-      contact = ContactsDB.upsert(
+      contact = await ContactsDB.upsert(
         {
           phoneNumber: context.phoneNumber,
           firstName: context.triggerPayload?.firstName || 'Lead',
@@ -476,13 +477,13 @@ export class AdvancedWorkflowEngine {
       },
     };
 
-    TestCenterStore.recordExecutionLog(execLog);
+    await TestCenterStore.recordExecutionLog(execLog);
 
     const startNode = workflow.nodes[0];
     if (!startNode) {
       execLog.status = 'completed';
       execLog.completedAt = new Date().toISOString();
-      TestCenterStore.recordExecutionLog(execLog);
+      await TestCenterStore.recordExecutionLog(execLog);
       return execLog;
     }
 
@@ -514,14 +515,17 @@ export class AdvancedWorkflowEngine {
     },
     isTestSimulation = false
   ): Promise<WorkflowExecutionLog | null> {
+    if (session.waitingFor === 'delay' &&
+      (event.action !== 'delay_expired' || !(Date.parse(session.expiresAt) <= Date.now()))) return null;
+    if (event.action === 'delay_expired' && session.waitingFor !== 'delay') return null;
     console.log(`[BUTTON PAYLOAD] Button action received for session ${session.id}:\n` +
       `  - buttonId: "${event.buttonId || 'none'}"\n` +
       `  - buttonTitle: "${event.buttonTitle || 'none'}"\n` +
       `  - action: "${event.action}"\n` +
       `  - fromPhone: "${session.phoneNumber}"`);
 
-    const workflow = TestCenterStore.getWorkflow(session.workflowId);
-    if (!workflow) {
+    const workflow = await TestCenterStore.getWorkflow(session.workflowId, session.workspaceId);
+    if (!workflow || !workflow.isActive || workflow.workspaceId !== session.workspaceId) {
       const err = `[WORKFLOW NOT FOUND] Workflow "${session.workflowId}" not found for session "${session.id}"`;
       console.error(err);
       return null;
@@ -548,12 +552,8 @@ export class AdvancedWorkflowEngine {
     console.log(`[NEXT NODE] Next Node ID: "${nextNodeId}"`);
     console.log(`[WORKFLOW RESUMED] Workflow "${workflow.name}" (${workflow.id}) resumed from node "${pausedNode.title}" (${pausedNode.id}) ➔ Advancing to node "${nextNodeId}"`);
 
-    // Clear the waiting session since it has been fulfilled
-    TestCenterStore.clearSession(session.phoneNumber, session.workspaceId);
-    console.log(`[SESSION CLEARED] Cleared session for ${session.phoneNumber}`);
-
     // Fetch existing execution log or fallback
-    let execLog = TestCenterStore.getExecutionLog(session.executionId);
+    let execLog = await TestCenterStore.getExecutionLog(session.executionId, session.workspaceId);
     if (!execLog) {
       execLog = {
         id: session.executionId,
@@ -609,13 +609,14 @@ export class AdvancedWorkflowEngine {
       },
     });
 
-    const contact = ContactsDB.getByPhone(session.phoneNumber, session.workspaceId);
+    const contact = await ContactsDB.getByPhone(session.phoneNumber, session.workspaceId);
     const nextNode = workflow.nodes.find((n) => n.id === nextNodeId);
 
     if (!nextNode) {
       execLog.status = 'completed';
       execLog.completedAt = new Date().toISOString();
-      TestCenterStore.recordExecutionLog(execLog);
+      await TestCenterStore.clearSession(session.phoneNumber, session.workspaceId, session.id);
+      await TestCenterStore.recordExecutionLog(execLog);
       return execLog;
     }
 
@@ -627,6 +628,7 @@ export class AdvancedWorkflowEngine {
       triggerType: 'button_click',
       triggerPayload: event,
       isTestSimulation,
+      resumedSessionId: session.id,
       variables: executionVariables,
     };
 
@@ -738,7 +740,7 @@ export class AdvancedWorkflowEngine {
               execLog.steps = stepsTrace;
               execLog.metaResponses = metaResponses;
               execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
-              TestCenterStore.recordExecutionLog(execLog);
+              await TestCenterStore.recordExecutionLog(execLog);
 
               return execLog;
             }
@@ -834,7 +836,7 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
               };
-              TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession(session);
 
               console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused at "${currentNode.title}" (${currentNode.id})`);
               console.log(`[WorkflowEngine] ⏳ WAITING FOR USER ACTION: Waiting for button click from ${context.phoneNumber} (Options: ${buttons.map((b: any) => b.title).join(', ')})`);
@@ -847,7 +849,7 @@ export class AdvancedWorkflowEngine {
               execLog.steps = stepsTrace;
               execLog.metaResponses = metaResponses;
               execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
-              TestCenterStore.recordExecutionLog(execLog);
+              await TestCenterStore.recordExecutionLog(execLog);
 
               return execLog;
             }
@@ -916,7 +918,7 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
               };
-              TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession(session);
 
               execLog.status = 'waiting';
               execLog.currentNodeId = currentNode.id;
@@ -925,7 +927,7 @@ export class AdvancedWorkflowEngine {
               execLog.steps = stepsTrace;
               execLog.metaResponses = metaResponses;
               execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
-              TestCenterStore.recordExecutionLog(execLog);
+              await TestCenterStore.recordExecutionLog(execLog);
 
               return execLog;
             }
@@ -957,7 +959,7 @@ export class AdvancedWorkflowEngine {
               pausedAt: new Date().toISOString(),
               expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
             };
-            TestCenterStore.saveSession(session);
+            await TestCenterStore.saveSession(session);
 
             console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused at "${currentNode.title}" (${currentNode.id})`);
             console.log(`[WorkflowEngine] ⏳ WAITING FOR USER ACTION: Waiting for customer reply / product selection from ${context.phoneNumber}`);
@@ -969,7 +971,7 @@ export class AdvancedWorkflowEngine {
             execLog.steps = stepsTrace;
             execLog.metaResponses = metaResponses;
             execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
-            TestCenterStore.recordExecutionLog(execLog);
+            await TestCenterStore.recordExecutionLog(execLog);
 
             return execLog;
           }
@@ -1015,15 +1017,16 @@ export class AdvancedWorkflowEngine {
           }
 
           case 'delay': {
-            const amount = currentNode.config.delayAmount || 1;
+            const amount = currentNode.config.delayAmount ?? 1;
+            if (!Number.isFinite(amount) || amount < 0) throw new Error('Delay must be a non-negative number');
             const unit = currentNode.config.delayUnit || 'minutes';
+            if (!['seconds', 'minutes', 'hours', 'days'].includes(unit)) throw new Error('Invalid delay unit');
             const multiplier = unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : unit === 'hours' ? 3600000 : 86400000;
             const scheduledDelayMs = amount * multiplier;
             const scheduledFor = new Date(Date.now() + scheduledDelayMs).toISOString();
 
-            if (context.isTestSimulation && amount <= 5 && unit === 'seconds') {
-              const simDelayMs = amount * 1000;
-              await new Promise((r) => setTimeout(r, simDelayMs));
+            if (context.isTestSimulation) {
+              const simDelayMs = 0; // Preview fast-forwards; it must never create a live scheduled session.
               traceStep.outputResult = {
                 simulatedDelay: `${amount} ${unit}`,
                 scheduledFor,
@@ -1057,7 +1060,7 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: scheduledFor,
               };
-              TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession(session);
 
               console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused for scheduled delay until ${scheduledFor}`);
 
@@ -1068,7 +1071,7 @@ export class AdvancedWorkflowEngine {
               execLog.steps = stepsTrace;
               execLog.metaResponses = metaResponses;
               execLog.totalDurationMs = Date.now() - new Date(execLog.startedAt).getTime();
-              TestCenterStore.recordExecutionLog(execLog);
+              await TestCenterStore.recordExecutionLog(execLog);
 
               return execLog;
             }
@@ -1094,7 +1097,7 @@ export class AdvancedWorkflowEngine {
 
           case 'condition':
           case 'conditional_logic': {
-            const conditionResult = this.evaluateCondition(
+            const conditionResult = await this.evaluateCondition(
               currentNode,
               context,
               executionVariables
@@ -1136,16 +1139,16 @@ export class AdvancedWorkflowEngine {
               `  - Priority: "${conf.priority || 'standard'}"\n` +
               `  - Phone: "${context.phoneNumber}"`);
 
-            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
             if (contactRecord) {
               if (conf.stage) {
-                ContactsDB.upsert({ phoneNumber: contactRecord.phoneNumber, stage: conf.stage as any }, context.workspaceId);
+                await ContactsDB.upsert({ phoneNumber: contactRecord.phoneNumber, stage: conf.stage as any }, context.workspaceId);
               }
               if (conf.notes) {
-                ContactsDB.addNote(contactRecord.id, {
+                await ContactsDB.addNote(contactRecord.id, {
                   authorName: 'Workflow Engine',
                   content: conf.notes,
-                });
+                }, context.workspaceId);
               }
             }
             traceStep.outputResult = {
@@ -1164,7 +1167,7 @@ export class AdvancedWorkflowEngine {
 
           case 'lead_management': {
             const conf = currentNode.config || {};
-            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
             if (contactRecord) {
               const updatedContact = {
                 ...contactRecord,
@@ -1175,7 +1178,7 @@ export class AdvancedWorkflowEngine {
                   priority: conf.priority || 'high',
                 },
               };
-              ContactsDB.upsert(updatedContact, context.workspaceId);
+              await ContactsDB.upsert(updatedContact, context.workspaceId);
             }
             traceStep.outputResult = {
               leadStatus: conf.leadStatus || 'qualified',
@@ -1190,7 +1193,7 @@ export class AdvancedWorkflowEngine {
           case 'tag':
           case 'tag_management': {
             const conf = currentNode.config || {};
-            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
             if (contactRecord && conf.tag) {
               const tagToApply = conf.tag.trim();
               let tags = contactRecord.tags || [];
@@ -1199,7 +1202,7 @@ export class AdvancedWorkflowEngine {
               } else {
                 tags = Array.from(new Set([...tags, tagToApply]));
               }
-              ContactsDB.upsert({ ...contactRecord, tags }, context.workspaceId);
+              await ContactsDB.upsert({ ...contactRecord, tags }, context.workspaceId);
             }
             traceStep.outputResult = {
               action: conf.action || 'add',
@@ -1247,9 +1250,9 @@ export class AdvancedWorkflowEngine {
 
           case 'assign_agent': {
             const conf = currentNode.config || {};
-            const contactRecord = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+            const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
             if (contactRecord) {
-              ContactsDB.upsert(
+              await ContactsDB.upsert(
                 {
                   ...contactRecord,
                   assignedAgent: conf.agentName || conf.agentId || 'Support Specialist',
@@ -1384,12 +1387,15 @@ export class AdvancedWorkflowEngine {
     execLog.steps = stepsTrace;
     execLog.metaResponses = metaResponses;
 
-    // Clear session upon workflow completion
-    TestCenterStore.clearSession(context.phoneNumber, context.workspaceId);
+    // Keep a failed session for a claimed retry. Successful runs consume only the
+    // session they resumed, so a newly-created wait state cannot be deleted.
+    if (!hasFailures) {
+      await TestCenterStore.clearSession(context.phoneNumber, context.workspaceId, context.resumedSessionId);
+    }
 
     console.log(`[WorkflowEngine] ✅ WORKFLOW COMPLETED: Workflow "${workflow.name}" (${workflow.id}) completed for ${context.phoneNumber} (Status: ${execLog.status})`);
 
-    TestCenterStore.recordExecutionLog(execLog);
+    await TestCenterStore.recordExecutionLog(execLog);
 
     // Update workflow stats
     workflow.executionCount = (workflow.executionCount || 0) + 1;
@@ -1400,7 +1406,7 @@ export class AdvancedWorkflowEngine {
       } else {
         workflow.stats.droppedCount = (workflow.stats.droppedCount || 0) + 1;
       }
-      TestCenterStore.saveWorkflow(workflow);
+      await TestCenterStore.saveWorkflow(workflow);
     }
 
     return execLog;
@@ -1461,19 +1467,9 @@ export class AdvancedWorkflowEngine {
         : 'text');
 
     const cleanTo = context.phoneNumber;
-    const settings = SettingsDB.get(context.workspaceId);
-    const sandboxSettings = TestCenterStore.getSandboxSettings();
-
-    // In live mode (isTestSimulation: false), NEVER use sandbox mock if live credentials exist!
-    const isSandboxSimulation = Boolean(
-      context.isTestSimulation && (
-        sandboxSettings.enabled ||
-        !settings.accessToken ||
-        settings.accessToken.includes('SAMPLE_TOKEN') ||
-        settings.accessToken.includes('AI_GENERATED') ||
-        settings.accessToken.startsWith('MOCK_')
-      )
-    );
+    const settings = await SettingsDB.get(context.workspaceId);
+    // A simulation must never contact real recipients, even with live credentials.
+    const isSandboxSimulation = context.isTestSimulation === true;
 
     const rawBody = config.bodyText || config.text;
     const interpolatedBody = this.interpolateVariables(rawBody, variables, contact);
@@ -1499,6 +1495,7 @@ export class AdvancedWorkflowEngine {
       // Record delivery receipt
       TestCenterStore.recordDeliveryReceipt({
         id: `rec_${Date.now()}`,
+        workspaceId: context.workspaceId,
         metaMessageId: simulatedMessageId,
         phoneNumber: cleanTo,
         workflowId: context.workflowId,
@@ -1555,10 +1552,10 @@ export class AdvancedWorkflowEngine {
         workspaceId: context.workspaceId,
         to: cleanTo,
         type: 'carousel',
-        bodyText: config.bodyText || config.text,
+        bodyText: interpolatedBody,
         cards: config.cards || [],
         templateName: config.templateName,
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
       console.log(`[STEP 7: CAROUSEL EXECUTION]\n` +
         `  - carousel message sent: ${serviceResult.success ? 'SUCCESS' : 'FAILED'}\n` +
@@ -1568,26 +1565,26 @@ export class AdvancedWorkflowEngine {
         workspaceId: context.workspaceId,
         to: cleanTo,
         type: 'button',
-        headerText: config.headerText,
-        bodyText: config.bodyText || config.text || 'Choose an option:',
-        footerText: config.footerText,
+        headerText: interpolatedHeader,
+        bodyText: interpolatedBody || 'Choose an option:',
+        footerText: interpolatedFooter,
         buttons: (config.buttons || [{ id: 'opt_1', title: 'Proceed' }]).map((b: any) => ({
           id: b.id,
           title: b.title,
         })),
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
     } else if (messageType === 'list') {
       serviceResult = await WhatsAppMessageService.send({
         workspaceId: context.workspaceId,
         to: cleanTo,
         type: 'list',
-        headerText: config.headerText,
-        bodyText: config.bodyText || config.text || 'Select an item:',
-        footerText: config.footerText,
+        headerText: interpolatedHeader,
+        bodyText: interpolatedBody || 'Select an item:',
+        footerText: interpolatedFooter,
         buttonText: config.buttonText || 'View Options',
         sections: config.sections || [],
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
     } else if (messageType === 'template') {
       serviceResult = await WhatsAppMessageService.send({
@@ -1596,7 +1593,7 @@ export class AdvancedWorkflowEngine {
         type: 'template',
         templateName: config.templateName || 'teaser_alert',
         languageCode: config.languageCode || 'en_US',
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
     } else if (node.type === 'whatsapp_catalog' || (messageType as any) === 'catalog' || messageType === 'product') {
       serviceResult = await WhatsAppMessageService.send({
@@ -1607,7 +1604,7 @@ export class AdvancedWorkflowEngine {
         buttons: [{ id: 'view_catalog', title: 'View Catalog' }],
         catalogId: config.catalogId,
         productRetailerId: config.retailerId,
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
     } else if (node.type === 'whatsapp_flow' || (messageType as any) === 'whatsapp_flow') {
       serviceResult = await WhatsAppMessageService.send({
@@ -1617,7 +1614,7 @@ export class AdvancedWorkflowEngine {
         bodyText: config.bodyText || 'Please complete our interactive form below:',
         buttonText: config.flowCta || 'Start Form',
         buttons: [{ id: config.flowId || 'flow_btn', title: config.flowCta || 'Open Form' }],
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
     } else if (['image', 'video', 'audio', 'document', 'pdf'].includes(messageType)) {
       serviceResult = await WhatsAppMessageService.send({
@@ -1625,9 +1622,9 @@ export class AdvancedWorkflowEngine {
         to: cleanTo,
         type: messageType === 'pdf' ? 'document' : (messageType as any),
         mediaUrl: config.mediaUrl,
-        caption: config.caption || config.text,
+        caption: this.interpolateVariables(config.caption || config.text, variables, contact),
         filename: config.fileName,
-        bypassWindowCheck: true,
+        requireRealDelivery: true,
       });
     } else {
       // Standard text or fallback
@@ -1635,8 +1632,8 @@ export class AdvancedWorkflowEngine {
         workspaceId: context.workspaceId,
         to: cleanTo,
         type: 'text',
-        text: config.text || config.bodyText || 'Automated message',
-        bypassWindowCheck: true,
+        text: interpolatedBody || 'Automated message',
+        requireRealDelivery: true,
       });
       if (node.id === 'node_pricing_info' || node.title?.toLowerCase().includes('pricing')) {
         console.log(`[STEP 8: PRICING EXECUTION]\n` +
@@ -1650,10 +1647,11 @@ export class AdvancedWorkflowEngine {
     const now = new Date().toISOString();
 
     // Strict Meta verification: If no valid wamid, fail explicitly
-    if (!serviceResult.success || !messageId || (!messageId.startsWith('wamid.') && !serviceResult.isSimulated)) {
+    if (!serviceResult.success || serviceResult.isSimulated || !messageId || !messageId.startsWith('wamid.')) {
       const errorMsg = serviceResult.error || 'Meta API rejected message dispatch without valid Message ID.';
       TestCenterStore.recordDeliveryReceipt({
         id: `rec_${Date.now()}`,
+        workspaceId: context.workspaceId,
         metaMessageId: messageId || `failed_${Date.now()}`,
         phoneNumber: cleanTo,
         workflowId: context.workflowId,
@@ -1682,6 +1680,7 @@ export class AdvancedWorkflowEngine {
     // Record success in Delivery Receipts & Meta Logs
     TestCenterStore.recordDeliveryReceipt({
       id: `rec_${Date.now()}`,
+      workspaceId: context.workspaceId,
       metaMessageId: messageId,
       phoneNumber: cleanTo,
       workflowId: context.workflowId,
@@ -1725,35 +1724,35 @@ export class AdvancedWorkflowEngine {
   /**
    * Evaluates Condition, If/Else, Tagging, or A/B Split Nodes
    */
-  private static evaluateCondition(
+  private static async evaluateCondition(
     node: WorkflowNode,
     context: WorkflowExecutionContext,
     variables: Record<string, any>
-  ): {
+  ): Promise<{
     evaluated: boolean;
     conditionResult: boolean;
     branchNextNodeId?: string;
     actionApplied?: string;
-  } {
+  }> {
     const config = node.config || {};
     const actionType: WorkflowActionType = (node.actionType as any) || 'conditional_logic';
 
     // 1. Tag Contact Action
     if (actionType === 'tag_contact' && config.tag) {
-      const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+      const contact = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
       if (contact) {
         const tags = Array.from(new Set([...(contact.tags || []), config.tag.toLowerCase().trim()]));
-        ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
+        await ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
       }
       return { evaluated: true, conditionResult: true, actionApplied: `Tagged contact with ${config.tag}` };
     }
 
     // 2. Remove Tag Action
     if (actionType === 'remove_tag' && config.removeTag) {
-      const contact = ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
+      const contact = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
       if (contact) {
         const tags = (contact.tags || []).filter((t) => t !== config.removeTag?.toLowerCase().trim());
-        ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
+        await ContactsDB.upsert({ ...contact, tags }, context.workspaceId);
       }
       return { evaluated: true, conditionResult: true, actionApplied: `Removed tag ${config.removeTag}` };
     }

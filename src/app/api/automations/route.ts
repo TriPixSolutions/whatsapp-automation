@@ -10,12 +10,13 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { searchParams } = new URL(request.url);
-    const targetWorkspaceId = user?.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
     const format = searchParams.get('format'); // 'nodes' or default
 
     // If requesting modern DAG workflows
-    const workflows = TestCenterStore.listWorkflows(targetWorkspaceId);
+    const workflows = await TestCenterStore.listWorkflows(targetWorkspaceId);
     if (format === 'dag' || workflows.length > 0) {
       return NextResponse.json(workflows);
     }
@@ -30,11 +31,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await request.json();
-    const targetWorkspaceId = user?.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
 
     // Check if this is a Workflow 2.0 DAG definition
     if (Array.isArray(body.nodes)) {
+      const existing = body.id ? await TestCenterStore.getWorkflow(body.id, targetWorkspaceId) : null;
+      if (existing && existing.workspaceId !== targetWorkspaceId) {
+        return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
+      }
       const newWorkflow: WorkflowDefinition = {
         id: body.id || `wf_${Date.now()}`,
         workspaceId: targetWorkspaceId,
@@ -62,21 +68,7 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date().toISOString(),
       };
 
-      const saved = TestCenterStore.saveWorkflow(newWorkflow);
-
-      // Sync to legacy table for backward compatibility
-      AutomationsDB.create(
-        {
-          id: saved.id,
-          name: saved.name,
-          triggerKeyword: saved.triggerKeyword,
-          triggerType: 'keyword',
-          actionType: 'buttons',
-          actionPayload: { body: 'DAG Flow', buttons: [] } as any,
-          isActive: saved.isActive,
-        },
-        targetWorkspaceId
-      );
+      const saved = await TestCenterStore.saveWorkflow(newWorkflow);
 
       return NextResponse.json(saved, { status: 201 });
     }
@@ -111,12 +103,10 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const targetWorkspaceId = user.workspaceId || body.workspaceId || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
     const { id, ...partial } = body;
 
     if (!id) {
@@ -124,11 +114,15 @@ export async function PUT(request: NextRequest) {
     }
 
     // If it's a DAG workflow in TestCenterStore
-    const existingWf = TestCenterStore.getWorkflow(id);
+    const existingWf = await TestCenterStore.getWorkflow(id, targetWorkspaceId);
     if (existingWf) {
-      const updatedWf = TestCenterStore.saveWorkflow({
+      if ((existingWf.workspaceId === 'default' ? DEFAULT_WORKSPACE_ID : existingWf.workspaceId) !== targetWorkspaceId) {
+        return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
+      }
+      const updatedWf = await TestCenterStore.saveWorkflow({
         ...existingWf,
         ...partial,
+        workspaceId: targetWorkspaceId,
         id,
       });
       return NextResponse.json(updatedWf);
@@ -148,20 +142,23 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = await getAuthorizedUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
+    const targetWorkspaceId = user.workspaceId!;
 
     if (!id) {
       return NextResponse.json({ error: 'Flow ID is required.' }, { status: 400 });
     }
 
-    TestCenterStore.deleteWorkflow(id);
-    const success = AutomationsDB.delete(id, targetWorkspaceId);
+    const workflow = await TestCenterStore.getWorkflow(id, targetWorkspaceId);
+    if (workflow && (workflow.workspaceId === 'default' ? DEFAULT_WORKSPACE_ID : workflow.workspaceId) !== targetWorkspaceId) {
+      return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
+    }
+    const dagDeleted = workflow ? await TestCenterStore.deleteWorkflow(id, targetWorkspaceId) : false;
+    const legacyDeleted = AutomationsDB.delete(id, targetWorkspaceId);
+    const success = dagDeleted || legacyDeleted;
     return NextResponse.json({ success });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

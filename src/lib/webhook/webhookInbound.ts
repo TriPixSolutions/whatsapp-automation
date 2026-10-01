@@ -1,5 +1,5 @@
 import { ContactsDB, MessagesDB, AutomationsDB, ConversationsDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
-import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
+import { WhatsAppMessageService, SendWhatsAppMessageOptions } from '@/lib/whatsapp/messageService';
 import { handleAiInboundReply } from './webhookAiAssistant';
 import { FollowUpEngine } from '@/lib/followup/followupEngine';
 import { getAdminClient } from '@/lib/supabase/server';
@@ -68,17 +68,24 @@ function parseMessageContent(msg: MetaMessageObject) {
   return { content, triggerText, interactionPayload };
 }
 
-async function dispatchAutomationReply(fromPhone: string, contactId: string, matchedFlow: any) {
+async function sendReply(options: SendWhatsAppMessageOptions) {
+  const result = await WhatsAppMessageService.send({ ...options, requireRealDelivery: true });
+  if (!result.success) throw new Error(result.error || 'WhatsApp reply failed');
+}
+
+async function dispatchAutomationReply(fromPhone: string, contactId: string, matchedFlow: any, workspaceId: string) {
   const payload = matchedFlow.actionPayload as any;
 
   if (matchedFlow.actionType === 'text') {
-    await WhatsAppMessageService.send({
+    await sendReply({
+      workspaceId,
       to: fromPhone,
       type: 'text',
       text: payload.text || 'Hello!',
     });
   } else if (matchedFlow.actionType === 'buttons') {
-    await WhatsAppMessageService.send({
+    await sendReply({
+      workspaceId,
       to: fromPhone,
       type: 'button',
       headerText: payload.header,
@@ -87,7 +94,8 @@ async function dispatchAutomationReply(fromPhone: string, contactId: string, mat
       buttons: payload.buttons || [{ id: 'btn_1', title: 'Start' }],
     });
   } else if (matchedFlow.actionType === 'list') {
-    await WhatsAppMessageService.send({
+    await sendReply({
+      workspaceId,
       to: fromPhone,
       type: 'list',
       headerText: payload.header,
@@ -106,18 +114,16 @@ export async function handleWebhookInboundMessages(
   contactsList?: any[],
   workspaceId: string = DEFAULT_WORKSPACE_ID
 ) {
-  const profileContact = contactsList?.[0];
-  const senderName = profileContact?.profile?.name || '';
-  const [firstName, ...restName] = senderName.split(' ');
-
   for (const message of messages) {
+    const profileContact = contactsList?.find((contact) => contact.wa_id === message.from);
+    const [firstName, ...restName] = (profileContact?.profile?.name || '').split(' ');
     const fromPhone = message.from.startsWith('+') ? message.from : `+${message.from}`;
     const { content, triggerText, interactionPayload } = parseMessageContent(message);
 
     // 1. Initial contact lookup or creation
-    let contact = ContactsDB.getByPhone(fromPhone, workspaceId);
+    let contact = await ContactsDB.getByPhone(fromPhone, workspaceId);
     if (!contact) {
-      contact = ContactsDB.upsert(
+      contact = await ContactsDB.upsert(
         {
           phoneNumber: fromPhone,
           firstName: firstName || '',
@@ -148,7 +154,7 @@ export async function handleWebhookInboundMessages(
       if (isAvailableInquiry) updatedTags.add('available_inquiry');
     }
 
-    contact = ContactsDB.upsert(
+    contact = await ContactsDB.upsert(
       {
         ...contact,
         phoneNumber: fromPhone,
@@ -175,7 +181,7 @@ export async function handleWebhookInboundMessages(
     }
 
     // 2. Persist inbound message to database
-    MessagesDB.create(
+    await MessagesDB.create(
       {
         metaMessageId: message.id,
         phoneNumber: fromPhone,
@@ -190,10 +196,11 @@ export async function handleWebhookInboundMessages(
     );
 
     // 2b. Open 24-Hour WhatsApp Policy Window & Track Conversation
-    ConversationsDB.recordInbound(fromPhone, contact.id, workspaceId);
+    await ConversationsDB.recordInbound(fromPhone, contact.id, workspaceId, message.id,
+      new Date(Math.min(Number(message.timestamp) * 1000 || Date.now(), Date.now())).toISOString());
 
     // 3. Customer replied: automatically cancel pending scheduled follow-ups!
-    await FollowUpEngine.cancelPendingOnReply(fromPhone);
+    await FollowUpEngine.cancelPendingOnReply(fromPhone, workspaceId);
 
     const isButtonClick =
       (message.type === 'interactive' &&
@@ -228,18 +235,20 @@ export async function handleWebhookInboundMessages(
 
       // 8. Log Before and After Session Lookup
       console.log(`[SESSION LOOKUP: BEFORE] Searching active workflow session for phone: "${fromPhone}", workspaceId: "${workspaceId}", isButtonClick: ${isButtonClick}`);
-      const waitingSession = TestCenterStore.getActiveSession(fromPhone, workspaceId);
+      const waitingSession = await TestCenterStore.getActiveSession(fromPhone, workspaceId);
       console.log(`[SESSION LOOKUP: AFTER] Session lookup result: ${waitingSession ? `FOUND (Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", WaitingFor: "${waitingSession.waitingFor}")` : 'NOT FOUND (No active waiting session)'}`);
 
       // If customer sent a top-level trigger keyword (e.g. "hello", "hi", "start") as text, prioritize fresh workflow trigger over stale button session
       const matchingNewFlows = !isButtonClick && triggerText
-        ? AdvancedWorkflowEngine.matchWorkflows('keyword', { text: triggerText }, workspaceId)
+        ? await AdvancedWorkflowEngine.matchWorkflows('keyword', { text: triggerText }, workspaceId)
         : [];
 
       if (waitingSession) {
         if (matchingNewFlows.length > 0 && !isButtonClick) {
           console.log(`[SESSION RESET] Incoming text "${triggerText}" matches fresh workflow trigger [${matchingNewFlows.map(w => w.name).join(', ')}]. Clearing previous waiting session "${waitingSession.id}".`);
-          TestCenterStore.clearSession(fromPhone, workspaceId);
+          await TestCenterStore.clearSession(fromPhone, workspaceId);
+        } else if (waitingSession.waitingFor === 'delay') {
+          continue; // Only the scheduled runner may advance a delay.
         } else {
           console.log(`[SESSION FOUND] Session ID: "${waitingSession.id}", Workflow: "${waitingSession.workflowId}", Node: "${waitingSession.currentNodeId}", Phone: "${fromPhone}", WaitingFor: "${waitingSession.waitingFor}"`);
 
@@ -275,7 +284,7 @@ export async function handleWebhookInboundMessages(
             continue; // Successfully handled by active workflow session!
           } else {
             console.error(`[RESUME FAILED] Failed to resume workflow "${waitingSession.workflowId}" for phone "${fromPhone}". Clearing stale session.`);
-            TestCenterStore.clearSession(fromPhone, workspaceId);
+            await TestCenterStore.clearSession(fromPhone, workspaceId);
           }
         }
       }
@@ -301,7 +310,8 @@ export async function handleWebhookInboundMessages(
                 (triggerText.toLowerCase().includes('no') && opt.id.includes('no'))
             );
             if (matchedOption && matchedOption.replyText) {
-              await WhatsAppMessageService.send({
+              await sendReply({
+                workspaceId,
                 to: fromPhone,
                 type: 'text',
                 text: matchedOption.replyText,
@@ -316,7 +326,8 @@ export async function handleWebhookInboundMessages(
 
       if (!branchHandled && payload?.branches && payload.branches[triggerText]) {
         const branchAction = payload.branches[triggerText];
-        await WhatsAppMessageService.send({
+        await sendReply({
+          workspaceId,
           to: fromPhone,
           type: branchAction.type || 'text',
           text: branchAction.text || branchAction.body || '',
@@ -334,7 +345,9 @@ export async function handleWebhookInboundMessages(
       const { AdvancedWorkflowEngine } = await import('@/lib/automations/advancedWorkflowEngine');
       if (!advancedWorkflowHandled) {
         let triggerType: any = 'keyword';
-        if (message.type === 'interactive') {
+        if (message.type === 'button') {
+          triggerType = 'button_click';
+        } else if (message.type === 'interactive') {
           if (message.interactive?.list_reply || (interactionPayload && interactionPayload.description)) {
             triggerType = 'list_selection';
           } else {
@@ -343,16 +356,16 @@ export async function handleWebhookInboundMessages(
         }
 
         console.log(`[TRIGGER MATCHING: BEFORE] Matching active workflows for triggerType: "${triggerType}", triggerText: "${triggerText}", workspaceId: "${workspaceId}"`);
-        let advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+        let advancedMatches = await AdvancedWorkflowEngine.matchWorkflows(
           triggerType,
-          { text: triggerText, buttonId: interactionPayload?.id, ...interactionPayload },
+          { text: triggerText, ...interactionPayload, buttonId, buttonTitle },
           workspaceId
         );
 
         // Fallback: If no keyword matched for regular text, check for incoming_message triggers
         if (advancedMatches.length === 0 && triggerType === 'keyword') {
           console.log(`[TRIGGER MATCHING: FALLBACK] Checking fallback incoming_message triggers for text: "${triggerText}"`);
-          advancedMatches = AdvancedWorkflowEngine.matchWorkflows(
+          advancedMatches = await AdvancedWorkflowEngine.matchWorkflows(
             'incoming_message',
             { text: triggerText, from: fromPhone },
             workspaceId
@@ -384,10 +397,10 @@ export async function handleWebhookInboundMessages(
     // 6. Automation Flow Trigger Engine (Keyword / Trigger Match)
     const matchedFlow = AutomationsDB.findMatch(triggerText, workspaceId);
     if (matchedFlow) {
-      await dispatchAutomationReply(fromPhone, contact.id, matchedFlow);
+      await dispatchAutomationReply(fromPhone, contact.id, matchedFlow, workspaceId);
     } else if (message.type === 'text' && triggerText) {
       // 7. AI Sales & Support Autonomous Inbound Assistant
-      await handleAiInboundReply(fromPhone, contact.id, triggerText);
+      await handleAiInboundReply(fromPhone, contact.id, triggerText, workspaceId);
     }
   }
 }

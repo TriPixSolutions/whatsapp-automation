@@ -19,14 +19,16 @@ export async function POST(request: NextRequest) {
       templateName = 'teaser_alert',
       targetTag = 'all',
       variables = {},
-      workspaceId = DEFAULT_WORKSPACE_ID,
     } = body;
 
+    const workspaceId = user.workspaceId!;
+
     // 1. Fetch target contacts from Database
-    const targetContacts = ContactsDB.list({
+    const targetContacts = (await ContactsDB.list({
       workspaceId,
       tag: targetTag === 'all' ? undefined : targetTag,
-    });
+      limit: 10000,
+    })).filter(contact => contact.optinStatus);
 
     if (targetContacts.length === 0) {
       return NextResponse.json(
@@ -38,13 +40,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Create Campaign record with processing state
-    const campaign = CampaignsDB.create(
+    // 2. Create Campaign record before handing it to the queue.
+    const campaign = await CampaignsDB.create(
       {
         name: campaignName,
         templateName,
         targetTag,
-        status: 'processing',
+        status: 'pending',
         totalRecipients: targetContacts.length,
         sentCount: 0,
         deliveredCount: 0,
@@ -66,6 +68,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!queuedJob.success) {
+      await CampaignsDB.update(campaign.id, { status: 'failed' }, workspaceId);
       return NextResponse.json(
         {
           success: false,
@@ -98,8 +101,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const workspaceId = searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
-    const list = CampaignsDB.list(workspaceId);
+    const workspaceId = user.workspaceId!;
+    const list = await CampaignsDB.list(workspaceId);
     return NextResponse.json(list);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -114,7 +117,8 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { campaignId, action, workspaceId = DEFAULT_WORKSPACE_ID } = body;
+    const { campaignId, action } = body;
+    const workspaceId = user.workspaceId!;
 
     if (!campaignId || !['pause', 'resume', 'stop', 'retry'].includes(action)) {
       return NextResponse.json(
@@ -124,6 +128,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const updated = await manageCampaignState(campaignId, action, workspaceId);
+    if (!updated) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
     return NextResponse.json({ success: true, campaign: updated });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

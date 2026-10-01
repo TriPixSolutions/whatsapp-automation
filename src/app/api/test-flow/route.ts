@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
       console.log('[Test Flow 1] Triggering Teaser Alert Outbound Campaign...');
 
       // 1. Ensure test contact exists
-      let targetContacts = ContactsDB.list({ workspaceId, tag: 'teaser_list' });
+      let targetContacts = await ContactsDB.list({ workspaceId, tag: 'teaser_list' });
       if (targetContacts.length === 0) {
-        const seeded = ContactsDB.upsert(
+        const seeded = await ContactsDB.upsert(
           {
             phoneNumber: testPhone,
             firstName: 'VIP',
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
       const campaignName = 'Test Scenario: Teaser Drop Outbound';
       const templateName = 'teaser_alert';
 
-      const campaign = CampaignsDB.create(
+      const campaign = await CampaignsDB.create(
         {
           name: campaignName,
           templateName,
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         dispatchResults.push(result);
       }
 
-      CampaignsDB.update(
+      await CampaignsDB.update(
         campaign.id,
         {
           status: 'completed',
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       console.log('[Test Flow 2] Simulating Inbound "Show me" Message...');
 
       // 1. Upsert contact
-      const contact = ContactsDB.upsert(
+      const contact = await ContactsDB.upsert(
         {
           phoneNumber: testPhone,
           firstName: 'VIP',
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
       );
 
       // 2. Log inbound message
-      const inboundMsg = MessagesDB.create(
+      const inboundMsg = await MessagesDB.create(
         {
           phoneNumber: testPhone,
           contactId: contact.id,
@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
       auditTrail.push(`Step 4: Follow-up sequence scheduled (${leadResult.followUpsScheduled} tiered follow-ups)`);
 
       // 3. Conversation Window Check
-      const isWindowOpenBeforeReply = ConversationsDB.isWindowOpen(testPhone, workspaceId);
+      const isWindowOpenBeforeReply = await ConversationsDB.isWindowOpen(testPhone, workspaceId);
       auditTrail.push(`Step 5: Window state prior to customer reply: ${isWindowOpenBeforeReply ? 'OPEN' : 'CLOSED (Template Only)'}`);
 
       // 4. Customer sends inbound reply
@@ -220,7 +220,7 @@ export async function POST(request: NextRequest) {
       auditTrail.push('Step 8: Pending scheduled follow-ups automatically CANCELLED upon customer reply');
 
       // 5. Message delivery status updates
-      const outboundMessages = MessagesDB.list({ workspaceId, phoneNumber: testPhone, limit: 5 });
+      const outboundMessages = await MessagesDB.list({ workspaceId, phoneNumber: testPhone, limit: 5 });
       const latestMsg = outboundMessages[0];
       if (latestMsg?.metaMessageId) {
         handleWebhookStatuses([
@@ -252,10 +252,10 @@ export async function POST(request: NextRequest) {
 
       const auditTrail: string[] = [];
       const workflow = buildProductionVipWorkflow(workspaceId);
-      TestCenterStore.saveWorkflow(workflow);
+      await TestCenterStore.saveWorkflow(workflow);
 
       // Clean existing session for test isolation
-      TestCenterStore.clearSession(testPhone, workspaceId);
+      await TestCenterStore.clearSession(testPhone, workspaceId);
 
       // --- PHASE 1: User sends "hello" ---
       auditTrail.push('Phase 1: Customer triggers flow via keyword "hello"');
@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
       auditTrail.push(`Phase 1 Result: Status = "${initExec.status}", Paused at Node = "${initExec.currentNodeId}", Waiting For = "${initExec.waitingFor}"`);
       auditTrail.push(`Phase 1 Verification: ${pausedAtButtons ? 'PASS (Correctly paused, did not execute subsequent branches)' : 'FAIL'}`);
 
-      const sessionAfterWelcome = TestCenterStore.getActiveSession(testPhone, workspaceId);
+      const sessionAfterWelcome = await TestCenterStore.getActiveSession(testPhone, workspaceId);
       if (!sessionAfterWelcome) {
         throw new Error('Active session was not persisted when workflow paused at interactive buttons!');
       }
@@ -294,7 +294,7 @@ export async function POST(request: NextRequest) {
       auditTrail.push(`Phase 2 Verification: ${pausedAtCarousel ? 'PASS (Dispatched product carousel and paused at product selection wait)' : 'FAIL'}`);
 
       // --- PHASE 3: Customer selects product ---
-      const sessionAtProduct = TestCenterStore.getActiveSession(testPhone, workspaceId);
+      const sessionAtProduct = await TestCenterStore.getActiveSession(testPhone, workspaceId);
       if (!sessionAtProduct) {
         throw new Error('Active session was not persisted when workflow paused at product selection!');
       }
@@ -310,14 +310,14 @@ export async function POST(request: NextRequest) {
         true
       );
 
-      const contactAfterTag = ContactsDB.getByPhone(testPhone, workspaceId);
+      const contactAfterTag = await ContactsDB.getByPhone(testPhone, workspaceId);
       const hasVipTag = contactAfterTag?.tags?.includes('VIP') || contactAfterTag?.tags?.includes('vip');
       auditTrail.push(`Phase 3 Result: Status = "${finalCatalogExec?.status}", Contact Tags = [${contactAfterTag?.tags?.join(', ')}]`);
       auditTrail.push(`Phase 3 Verification: ${finalCatalogExec?.status === 'completed' && hasVipTag ? 'PASS (VIP tag added and workflow completed)' : 'FAIL'}`);
 
       // --- PHASE 4: Validate Branch 2 (Get Pricing) ---
       auditTrail.push('Phase 4: Testing Branch 2: "Get Pricing"');
-      TestCenterStore.clearSession(testPhone, workspaceId);
+      await TestCenterStore.clearSession(testPhone, workspaceId);
       const pricingInit = await AdvancedWorkflowEngine.executeWorkflow(workflow, {
         workflowId: workflow.id,
         workspaceId,
@@ -327,7 +327,7 @@ export async function POST(request: NextRequest) {
         isTestSimulation: true,
       });
 
-      const pricingSession = TestCenterStore.getActiveSession(testPhone, workspaceId);
+      const pricingSession = await TestCenterStore.getActiveSession(testPhone, workspaceId);
       const pricingResumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(
         pricingSession!,
         {
@@ -341,7 +341,7 @@ export async function POST(request: NextRequest) {
 
       // --- PHASE 5: Validate Branch 3 (Talk To Expert) ---
       auditTrail.push('Phase 5: Testing Branch 3: "Talk To Expert"');
-      TestCenterStore.clearSession(testPhone, workspaceId);
+      await TestCenterStore.clearSession(testPhone, workspaceId);
       await AdvancedWorkflowEngine.executeWorkflow(workflow, {
         workflowId: workflow.id,
         workspaceId,
@@ -351,7 +351,7 @@ export async function POST(request: NextRequest) {
         isTestSimulation: true,
       });
 
-      const expertSession = TestCenterStore.getActiveSession(testPhone, workspaceId);
+      const expertSession = await TestCenterStore.getActiveSession(testPhone, workspaceId);
       const expertResumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(
         expertSession!,
         {
@@ -361,7 +361,7 @@ export async function POST(request: NextRequest) {
         },
         true
       );
-      const contactAfterExpert = ContactsDB.getByPhone(testPhone, workspaceId);
+      const contactAfterExpert = await ContactsDB.getByPhone(testPhone, workspaceId);
       auditTrail.push(`Phase 5 Result: Status = "${expertResumed?.status}", Stage = "${contactAfterExpert?.stage}" (Human Agent CRM Request Created -> Workflow Completed)`);
 
       return NextResponse.json({

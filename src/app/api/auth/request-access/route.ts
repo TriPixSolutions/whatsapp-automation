@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { getAuthorizedUser } from '@/lib/auth-server';
+import { publicUser } from '@/lib/auth/publicUser';
 import { UsersDB } from '@/lib/db';
 
 export const runtime = 'nodejs';
@@ -8,15 +9,14 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const cookieStore = await cookies();
-    const cookieUserId = cookieStore.get('pf_user_id')?.value;
-    const userId = body.userId || cookieUserId;
+    const user = await getAuthorizedUser({ allowPending: true });
+    const userId = user?.id;
 
     if (!userId) {
       return NextResponse.json({ error: 'User session not found. Please log in first.' }, { status: 401 });
     }
 
-    const updated = UsersDB.requestAccess(userId, {
+    const updated = await UsersDB.requestAccess(userId, {
       company: body.company,
       intendedUse: body.intendedUse,
     });
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
     const response = NextResponse.json({
       success: true,
-      user: updated,
+      user: publicUser(updated),
       message: 'Your request has been sent to the admin. Please wait for approval.',
     });
 

@@ -69,10 +69,11 @@ export async function enqueueCampaignJob(options: EnqueueCampaignOptions) {
           workspaceId,
           templateName: options.templateName,
           targetTag: options.targetTag,
-          contacts: options.contacts,
+          contactIds: options.contacts.map(contact => contact.id),
           variables: options.variables,
         },
         {
+          jobId: `campaign:${workspaceId}:${options.campaignId}`,
           attempts: 3,
           backoff: { type: 'exponential', delay: 2000 },
           removeOnComplete: 100,
@@ -113,7 +114,7 @@ export async function manageCampaignState(
   action: 'pause' | 'resume' | 'stop' | 'retry',
   workspaceId: string = DEFAULT_WORKSPACE_ID
 ) {
-  const campaign = CampaignsDB.getById(campaignId, workspaceId);
+  const campaign = await CampaignsDB.getById(campaignId, workspaceId);
   if (!campaign) return null;
 
   if (action === 'pause') {

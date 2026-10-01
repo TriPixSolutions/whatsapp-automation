@@ -16,12 +16,12 @@ export async function GET(request: NextRequest) {
     const targetWorkspaceId = user.workspaceId || searchParams.get('workspaceId') || DEFAULT_WORKSPACE_ID;
 
     // Fetch live statistics
-    const stats = MessagesDB.getStats(targetWorkspaceId);
-    const campaigns = CampaignsDB.list(targetWorkspaceId);
+    const stats = await MessagesDB.getStats(targetWorkspaceId);
+    const campaigns = await CampaignsDB.list(targetWorkspaceId);
     const automations = AutomationsDB.list(targetWorkspaceId);
-    const conversations = ConversationsDB.list(targetWorkspaceId);
-    const contacts = ContactsDB.list({ workspaceId: targetWorkspaceId });
-    const settings = SettingsDB.get(targetWorkspaceId);
+    const conversations = await ConversationsDB.list(targetWorkspaceId);
+    const contacts = await ContactsDB.list({ workspaceId: targetWorkspaceId });
+    const settings = await SettingsDB.get(targetWorkspaceId);
 
     // Compute strictly authentic metrics
     const connectedNumbersCount = settings.phoneNumberId ? 1 : 0;

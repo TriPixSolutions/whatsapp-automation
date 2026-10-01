@@ -33,8 +33,8 @@ export function SidebarProfile({ collapsed }: { collapsed: boolean }) {
     };
   }, []);
 
-  const handleLogout = () => {
-    clearClientAuthCookie();
+  const handleLogout = async () => {
+    await clearClientAuthCookie();
     router.push('/auth/login');
     router.refresh();
   };

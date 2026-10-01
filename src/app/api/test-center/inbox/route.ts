@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const phoneNumber = searchParams.get('phone');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
-    const allMessages = MessagesDB.list({
+    const allMessages = await MessagesDB.list({
       workspaceId: DEFAULT_WORKSPACE_ID,
       phoneNumber: phoneNumber || undefined,
       limit,

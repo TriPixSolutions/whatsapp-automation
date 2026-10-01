@@ -2,9 +2,9 @@ module.exports = {
   apps: [
     {
       name: 'whatsapp-saas-web',
-      script: '.next/standalone/server.js',
-      instances: 2, // Optimized for 2-4 vCPU Hostinger Cloud Startup
-      exec_mode: 'cluster',
+      script: 'scripts/start-standalone.cjs',
+      instances: 1, // Workflow sessions still use a local store; keep one web writer.
+      exec_mode: 'fork',
       autorestart: true,
       watch: false,
       max_memory_restart: '768M', // Prevent memory leaks on low-resource VPS

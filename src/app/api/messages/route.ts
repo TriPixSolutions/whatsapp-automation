@@ -14,9 +14,9 @@ export async function GET(request: NextRequest) {
     const phoneNumber = searchParams.get('phoneNumber') || undefined;
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 100;
 
-    const messages = MessagesDB.list({ workspaceId: targetWorkspaceId, phoneNumber, limit });
-    const conversations = MessagesDB.getRecentConversations(targetWorkspaceId);
-    const stats = MessagesDB.getStats(targetWorkspaceId);
+    const messages = await MessagesDB.list({ workspaceId: targetWorkspaceId, phoneNumber, limit });
+    const conversations = await MessagesDB.getRecentConversations(targetWorkspaceId);
+    const stats = await MessagesDB.getStats(targetWorkspaceId);
 
     return NextResponse.json({
       messages,

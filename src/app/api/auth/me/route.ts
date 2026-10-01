@@ -1,3 +1,4 @@
+import { publicUser } from '@/lib/auth/publicUser';
 import { NextResponse } from 'next/server';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
@@ -16,13 +17,13 @@ export async function GET() {
       });
     }
 
-    const settings = SettingsDB.get(DEFAULT_WORKSPACE_ID);
+    const settings = await SettingsDB.get(user.workspaceId!);
 
     return NextResponse.json({
       authenticated: true,
-      user,
+      user: publicUser(user),
       workspace: {
-        id: DEFAULT_WORKSPACE_ID,
+        id: user.workspaceId,
         name: settings.name,
         role: user.role,
       },

@@ -15,32 +15,27 @@ function getEncryptionKey(): Buffer {
 }
 
 /**
- * PBKDF2 Secure Password Hashing (replaces weak raw SHA-256)
+ * Randomly salted scrypt hashes for new passwords
  */
 export function hashPassword(password: string): string {
-  const salt = process.env.ENCRYPTION_KEY ? process.env.ENCRYPTION_KEY.substring(0, 16) : 'tripix_salt_2026';
-  const iterations = 10000;
-  const keylen = 64;
-  const digest = 'sha512';
-  return crypto.pbkdf2Sync(password, salt, iterations, keylen, digest).toString('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt:${salt}:${hash}`;
 }
 
-/**
- * Verify password against stored PBKDF2 hash (with backward compatibility for previous sha256 hashes)
- */
 export function verifyPassword(password: string, storedHash?: string): boolean {
   if (!storedHash) return false;
-  // 1. Check PBKDF2 hash
-  const pbkdf2Hash = hashPassword(password);
-  if (crypto.timingSafeEqual(Buffer.from(pbkdf2Hash), Buffer.from(storedHash))) {
-    return true;
+  const equal = (candidate: string) => candidate.length === storedHash.length &&
+    crypto.timingSafeEqual(Buffer.from(candidate), Buffer.from(storedHash));
+  if (storedHash.startsWith('scrypt:')) {
+    const parts = storedHash.split(':');
+    if (parts.length !== 3 || !/^[a-f0-9]{32}$/.test(parts[1]) || !/^[a-f0-9]{128}$/.test(parts[2])) return false;
+    return equal(`scrypt:${parts[1]}:${crypto.scryptSync(password, parts[1], 64).toString('hex')}`);
   }
-  // 2. Backward compatibility check for previous sha256 hash
-  const legacyHash = crypto.createHash('sha256').update(password + '_passionfruit_salt_2026').digest('hex');
-  if (legacyHash.length === storedHash.length && crypto.timingSafeEqual(Buffer.from(legacyHash), Buffer.from(storedHash))) {
-    return true;
-  }
-  return false;
+  // Existing hashes remain valid during migration; new accounts always use a random salt.
+  const salt = process.env.ENCRYPTION_KEY ? process.env.ENCRYPTION_KEY.substring(0, 16) : 'tripix_salt_2026';
+  if (equal(crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex'))) return true;
+  return equal(crypto.createHash('sha256').update(password + '_passionfruit_salt_2026').digest('hex'));
 }
 
 /**

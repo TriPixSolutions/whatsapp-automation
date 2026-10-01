@@ -27,26 +27,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentSettings = SettingsDB.get();
+    const currentSettings = await SettingsDB.get(user.workspaceId!);
     const appId = customAppId || currentSettings.appId || process.env.META_APP_ID;
     const appSecret = customAppSecret || currentSettings.appSecret || process.env.META_APP_SECRET;
 
     // In local development/sandbox without live Meta App credentials, provide simulated exchange
     if (!appId || !appSecret || appId === 'your_meta_app_id' || appSecret === 'your_meta_app_secret' || shortLivedToken.startsWith('mock_') || shortLivedToken.startsWith('test_')) {
-      const simulatedExpiresIn = 5184000; // 60 days in seconds
-      const simulatedLongLivedToken = `EAA${Math.random().toString(36).substring(2, 15).toUpperCase()}LONG60D${Date.now()}`;
-
-      SettingsDB.update({
-        accessToken: simulatedLongLivedToken,
-      });
-
-      return NextResponse.json({
-        success: true,
-        expiresIn: simulatedExpiresIn,
-        tokenType: 'bearer',
-        mode: 'simulated',
-        message: 'Successfully generated 60-day long-lived access token (Sandbox Mode)',
-      });
+      return NextResponse.json({ error: 'Live Meta app credentials and token are required.' }, { status: 400 });
     }
 
     // Call live Meta Graph API OAuth Exchange
@@ -79,11 +66,11 @@ export async function POST(request: NextRequest) {
     const expiresIn = data.expires_in || 5184000; // ~60 days
 
     // Update settings DB (SettingsDB.update automatically encrypts with AES-256-GCM)
-    SettingsDB.update({
+    await SettingsDB.update({
       accessToken: longLivedToken,
       appId,
       appSecret,
-    });
+    }, user.workspaceId!);
 
     return NextResponse.json({
       success: true,

@@ -37,7 +37,7 @@ export class LeadCapturePipeline {
 
     try {
       // 1. Create / Upsert Contact in workspace
-      const contact = ContactsDB.upsert(
+      const contact = await ContactsDB.upsert(
         {
           phoneNumber: cleanPhone,
           firstName: input.firstName || '',
@@ -77,7 +77,7 @@ export class LeadCapturePipeline {
       }
 
       // 3. Create Conversation Record for Workspace & Contact
-      const conversation = ConversationsDB.recordOutbound(cleanPhone, contact.id, workspaceId);
+      const conversation = await ConversationsDB.recordOutbound(cleanPhone, contact.id, workspaceId);
 
       let initialMessageSent = false;
       let followUpsScheduled = 0;
