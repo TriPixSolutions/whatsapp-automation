@@ -1,12 +1,19 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const { NextRequest, NextResponse } = require('next/server');
 const load = require('./load-ts.cjs');
 const env = { AUTH_SESSION_SECRET: 'test-only-secret-with-more-than-thirty-two-characters' };
 const token = load('src/lib/auth/token.ts', {}, env);
 const jwt = load('src/lib/auth/jwt.ts', { crypto, './token': token }, env);
 const identity = { userId: 'user-a', email: 'a@example.test', role: 'owner', status: 'approved', workspaceId: 'a' };
+
+test('login page does not ship demo administrator credentials', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src/app/auth/login/page.tsx'), 'utf8');
+  assert.doesNotMatch(source, /Autofill Credentials|Super Admin Demo|Admin@PassionFruit/i);
+});
 
 test('Node and Edge verify signed sessions and reject tampering, expiry, and unsigned payloads', async () => {
   const signed = jwt.signJwt(identity);

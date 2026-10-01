@@ -66,7 +66,24 @@ GEMINI_API_KEY=your_gemini_api_key
 
 # Security
 ENCRYPTION_KEY=your_32_character_hex_encryption_key
-JWT_SECRET=your_random_jwt_secret_key
+AUTH_SESSION_SECRET=your_random_secret_with_at_least_32_characters
+WORKER_SECRET=another_random_secret_with_at_least_32_characters
+
+# Supabase (required for signup and login)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_publishable_or_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_or_secret_key
+
+# BullMQ campaigns and background jobs
+REDIS_URL=redis://default:password@127.0.0.1:6379
+```
+
+Do not expose `SUPABASE_SERVICE_ROLE_KEY`, Meta tokens, or application secrets in browser code or commit them to Git. After changing environment variables, rebuild and restart both PM2 processes:
+
+```bash
+npm run check:setup
+npm run build
+npm run reload:pm2
 ```
 
 ---
@@ -79,7 +96,7 @@ npm run build
 mkdir -p logs
 ```
 
-Start the application in cluster mode with PM2:
+Start the web application and background worker with PM2:
 ```bash
 pm2 start ecosystem.config.js --env production
 pm2 save
@@ -87,7 +104,7 @@ pm2 startup
 ```
 
 Useful PM2 commands:
-- `pm2 status`: View running cluster instances and memory usage.
+- `pm2 status`: View the web and worker processes and their memory usage.
 - `pm2 logs`: Stream real-time access and error logs.
 - `npm run reload:pm2`: Zero-downtime cluster reload after GitHub updates.
 

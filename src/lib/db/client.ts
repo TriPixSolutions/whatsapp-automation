@@ -2,7 +2,11 @@ import { getAdminClient } from '@/lib/supabase/server';
 
 export function database() {
   const client = getAdminClient();
-  if (!client) throw new Error('Database is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.');
+  if (!client) {
+    throw new Error(
+      'Database is not configured. Set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY in the deployment environment, then rebuild and restart the application.',
+    );
+  }
   return client;
 }
 

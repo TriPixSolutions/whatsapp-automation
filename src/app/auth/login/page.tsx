@@ -156,22 +156,6 @@ function LoginForm() {
           </button>
         </form>
 
-        {/* Demo Helper Pill */}
-        <div className="pt-2 border-t border-slate-100 text-center">
-          <p className="text-[11px] text-slate-500">
-            Super Admin Demo?{' '}
-            <button
-              type="button"
-              onClick={() => {
-                setEmailOrUsername('admin@passionfruit.io');
-                setPassword('Admin@PassionFruit2026');
-              }}
-              className="text-indigo-600 font-bold hover:underline cursor-pointer"
-            >
-              Autofill Credentials
-            </button>
-          </p>
-        </div>
       </div>
 
       {/* Footer Switch to Sign Up */}
