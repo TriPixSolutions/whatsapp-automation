@@ -60,7 +60,21 @@ export default function WhatsAppConnectionWizardPage() {
 
   // Loading & error
   const [stepError, setStepError] = useState<string | null>(null);
+  const [structuredError, setStructuredError] = useState<{
+    code?: string;
+    metaErrorCode?: number;
+    metaErrorType?: string;
+    message?: string;
+    fbTraceId?: string;
+  } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Auto-run verification on entering Step 3
+  useEffect(() => {
+    if (currentStep === 3) {
+      handleVerifyPermissions();
+    }
+  }, [currentStep]);
 
   // Load existing credentials & health
   useEffect(() => {
@@ -103,6 +117,7 @@ export default function WhatsAppConnectionWizardPage() {
   // STEP 1: Connect Meta Account Proceed
   const handleStep1Proceed = () => {
     setStepError(null);
+    setStructuredError(null);
     if (!accessToken.trim()) {
       setStepError('Please enter your Meta System User Access Token.');
       return;
@@ -121,6 +136,7 @@ export default function WhatsAppConnectionWizardPage() {
   // STEP 2: Choose WhatsApp Business Proceed
   const handleStep2Proceed = async () => {
     setStepError(null);
+    setStructuredError(null);
     if (!wabaId.trim()) {
       setStepError('Please enter your WhatsApp Business Account (WABA) ID.');
       return;
@@ -162,6 +178,7 @@ export default function WhatsAppConnectionWizardPage() {
   const handleVerifyPermissions = async () => {
     setIsVerifyingPermissions(true);
     setStepError(null);
+    setStructuredError(null);
 
     try {
       const verifyRes = await fetch('/api/test-center/meta-validate');
@@ -175,7 +192,8 @@ export default function WhatsAppConnectionWizardPage() {
       ]);
       setPermissionsVerified(messagingValid && webhookValid);
       if (!messagingValid || !webhookValid) {
-        setStepError(data.error || 'Meta credentials or webhook configuration are incomplete.');
+        setStructuredError(data.structuredError || null);
+        setStepError(data.structuredError?.message || data.error || 'Meta credentials or webhook configuration are incomplete.');
       }
     } catch (err: any) {
       setStepError(err.message || 'Permissions verification failed.');
@@ -283,16 +301,28 @@ export default function WhatsAppConnectionWizardPage() {
 
         {/* Step Error Notice */}
         {stepError && (
-          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center gap-3 text-rose-800 text-xs">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-            <span className="flex-1 font-medium">{stepError}</span>
-            <button
-              type="button"
-              onClick={() => setStepError(null)}
-              className="text-rose-500 hover:text-rose-700 font-bold text-xs"
-            >
-              Dismiss
-            </button>
+          <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span className="flex-1 font-medium">{stepError}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setStepError(null);
+                  setStructuredError(null);
+                }}
+                className="text-rose-500 hover:text-rose-700 font-bold text-xs cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+            {structuredError?.metaErrorCode && (
+              <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-rose-700 bg-rose-100/60 px-3 py-1.5 rounded-lg border border-rose-200">
+                <span>Meta Error Code: #{structuredError.metaErrorCode}</span>
+                {structuredError.metaErrorType && <span>Type: {structuredError.metaErrorType}</span>}
+                {structuredError.fbTraceId && <span>Trace: {structuredError.fbTraceId}</span>}
+              </div>
+            )}
           </div>
         )}
 

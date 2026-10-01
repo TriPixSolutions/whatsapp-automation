@@ -3,11 +3,10 @@ import { getAuthorizedUser } from '@/lib/auth-server';
 import { SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { getAdminClient } from '@/lib/supabase/server';
 import axios from 'axios';
+import { META_GRAPH_VERSION, parseMetaGraphError } from '@/lib/meta/validation';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
 
 /**
  * GET /api/meta/connection
@@ -271,8 +270,8 @@ export async function POST(request: NextRequest) {
         );
         webhookConfigured = true;
       } catch (webhookErr: any) {
-        const metaError = webhookErr.response?.data?.error;
-        webhookConfigurationError = metaError?.message || webhookErr.message || 'Meta webhook callback registration failed.';
+        const parsed = parseMetaGraphError(webhookErr, `POST /${String(appId).trim()}/subscriptions`);
+        webhookConfigurationError = parsed.message;
         console.warn('[Meta Webhook Configuration Warning]:', webhookConfigurationError);
       }
     } else {
