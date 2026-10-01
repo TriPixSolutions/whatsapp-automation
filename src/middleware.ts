@@ -22,6 +22,7 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth/me',
   '/api/auth/google',
   '/api/ai/chat', // Public website assistant
+  '/api/diagnostics/webhook',
 ];
 
 // Workspace page routes that require authenticated status

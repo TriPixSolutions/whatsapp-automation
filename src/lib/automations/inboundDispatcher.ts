@@ -28,6 +28,13 @@ export class InboundAutomationDispatcher {
       ? event.phoneNumber
       : `+${event.phoneNumber.replace(/[^0-9]/g, '')}`;
 
+    const maskedPhone = cleanPhone.length > 7
+      ? `${cleanPhone.slice(0, 3)}••••••${cleanPhone.slice(-4)}`
+      : cleanPhone;
+
+    console.log(`[INBOUND_DISPATCH_START] messageId=${event.messageId} phone=${maskedPhone} workspaceId=${workspaceId} rawType=${event.rawType}`);
+    console.log(`[INBOUND_NORMALIZED] text="${event.text || ''}" interaction=${event.interaction ? event.interaction.id : 'none'} isTest=${event.isTestSimulation}`);
+
     addTrace('Event Received', 'passed', {
       messageId: event.messageId,
       phoneNumber: cleanPhone,
@@ -132,8 +139,9 @@ export class InboundAutomationDispatcher {
     const isInteractiveAction = Boolean(event.interaction);
     const buttonId = event.interaction?.id || contentText;
     const buttonTitle = event.interaction?.title || contentText;
-
+    console.log(`[SESSION_LOOKUP] phone=${maskedPhone} workspaceId=${workspaceId}`);
     const waitingSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
+    console.log(`[SESSION_LOOKUP] result=${waitingSession ? `FOUND (id: ${waitingSession.id}, wf: ${waitingSession.workflowId}, waitingFor: ${waitingSession.waitingFor})` : 'NONE'}`);
 
     if (waitingSession) {
       addTrace('Active Session Found', 'passed', {
@@ -290,6 +298,9 @@ export class InboundAutomationDispatcher {
       from: cleanPhone,
     };
 
+    console.log(`[TRIGGER_EVALUATION] type=${triggerType} text="${contentText}" buttonId="${buttonId}" workspaceId=${workspaceId}`);
+    console.log(`[6] TRIGGER EVALUATED: evaluating active workflows for workspace ${workspaceId}`);
+
     addTrace('Trigger Matching Started', 'passed', {
       triggerType,
       triggerPayload,
@@ -304,12 +315,16 @@ export class InboundAutomationDispatcher {
 
     // Fallback: If no keyword matched for regular text, check for incoming_message triggers
     if (matchedWorkflows.length === 0 && triggerType === 'keyword' && contentText) {
+      console.log(`[TRIGGER_EVALUATION] Checking fallback incoming_message triggers for text: "${contentText}"`);
       matchedWorkflows = await AdvancedWorkflowEngine.matchWorkflows(
         'incoming_message',
         { text: contentText, from: cleanPhone },
         workspaceId
       );
     }
+
+    console.log(`[WORKFLOW_MATCH] matchedCount=${matchedWorkflows.length} workflows=[${matchedWorkflows.map(w => `${w.name} (${w.id})`).join(', ')}]`);
+    console.log(`[7] WORKFLOW MATCHED: ${matchedWorkflows.length > 0 ? matchedWorkflows.map(w => w.name).join(', ') : 'NONE'}`);
 
     addTrace('Trigger Matching Completed', 'passed', {
       matchedCount: matchedWorkflows.length,
@@ -320,6 +335,7 @@ export class InboundAutomationDispatcher {
     const executions: any[] = [];
     if (matchedWorkflows.length > 0) {
       for (const wf of matchedWorkflows) {
+        console.log(`[WORKFLOW_EXECUTION] starting execution for workflow "${wf.name}" (${wf.id})`);
         addTrace(`Executing Workflow: ${wf.name}`, 'passed', {
           workflowId: wf.id,
           isTestSimulation: event.isTestSimulation,
@@ -335,10 +351,28 @@ export class InboundAutomationDispatcher {
           isTestSimulation: event.isTestSimulation,
         });
 
+        console.log(`[8] EXECUTION STARTED: executionId=${execResult.id} status=${execResult.status} steps=${execResult.steps?.length || 0}`);
+
+        // Scan executed steps for message sending status
+        for (const step of execResult.steps || []) {
+          if (step.nodeType.startsWith('whatsapp_') || step.nodeType === 'send_message') {
+            console.log(`[9] SEND MESSAGE: node="${step.nodeTitle}" (${step.nodeType}) status=${step.status}`);
+            if (step.status === 'completed') {
+              console.log(`[10] META SEND SUCCESS: message dispatched successfully via Meta Cloud API`);
+            } else if (step.status === 'failed') {
+              console.error(`FAILED AT STEP 9/10: Outbound WhatsApp message failed: ${step.error}`);
+            }
+          }
+        }
+
         executions.push(execResult);
       }
 
       const hasFailed = executions.some((e) => e.status === 'failed');
+      if (hasFailed) {
+        const firstErr = executions.find((e) => e.status === 'failed')?.error;
+        console.error(`FAILED AT STEP 8: Workflow execution failed: ${firstErr}`);
+      }
       return {
         success: !hasFailed,
         event,
@@ -350,6 +384,8 @@ export class InboundAutomationDispatcher {
         error: hasFailed ? executions.find((e) => e.status === 'failed')?.error : undefined,
         trace,
       };
+    } else {
+      console.log(`[InboundDispatcher] No workflow matched trigger "${contentText}". Checking legacy automations.`);
     }
 
     // 7. Legacy Fallback: AutomationsDB match (for backwards compatibility)

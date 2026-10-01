@@ -206,3 +206,79 @@ export function getWorkflowExpectedKeywords(workflow: WorkflowDefinition, trigge
     ''
   ).toString().trim();
 }
+
+/**
+ * Normalizes raw Meta WhatsApp Cloud API message object into canonical NormalizedInboundEvent.
+ * Handles text, quick reply buttons, interactive lists, reply buttons, carousel buttons, and media captions.
+ */
+export function normalizeMetaWebhookMessage(
+  message: any,
+  contactsList: any[] | undefined,
+  phoneNumberId: string,
+  workspaceId: string
+): NormalizedInboundEvent {
+  const rawFrom = (message.from || '').toString().trim();
+  const cleanPhone = rawFrom.startsWith('+') ? rawFrom : `+${rawFrom.replace(/[^0-9]/g, '')}`;
+  const profileContact = contactsList?.find((c: any) => c.wa_id === message.from);
+  const [firstName, ...restName] = (profileContact?.profile?.name || '').split(' ');
+
+  let extractedText: string | undefined = undefined;
+  let interaction: NormalizedInteraction | undefined = undefined;
+
+  if (message.type === 'text') {
+    extractedText = message.text?.body || '';
+  } else if (message.type === 'interactive') {
+    const inter = message.interactive;
+    if (inter?.type === 'button_reply') {
+      interaction = {
+        kind: 'button_reply',
+        id: inter.button_reply?.id || '',
+        title: inter.button_reply?.title || '',
+      };
+      extractedText = inter.button_reply?.title || inter.button_reply?.id || '';
+    } else if (inter?.type === 'list_reply') {
+      interaction = {
+        kind: 'list_reply',
+        id: inter.list_reply?.id || '',
+        title: inter.list_reply?.title || '',
+        payload: inter.list_reply,
+      };
+      extractedText = inter.list_reply?.title || inter.list_reply?.id || '';
+    }
+  } else if (message.type === 'button') {
+    interaction = {
+      kind: 'template_button',
+      id: message.button?.payload || message.button?.text || '',
+      title: message.button?.text || '',
+    };
+    extractedText = message.button?.text || message.button?.payload || '';
+  } else if (message.type === 'image') {
+    extractedText = message.image?.caption || '[Image]';
+  } else if (message.type === 'video') {
+    extractedText = message.video?.caption || '[Video]';
+  } else if (message.type === 'audio') {
+    extractedText = '[Audio Message]';
+  } else if (message.type === 'document') {
+    extractedText = message.document?.filename || message.document?.caption || '[Document]';
+  } else {
+    extractedText = `[${(message.type || 'message').toUpperCase()}]`;
+  }
+
+  return {
+    workspaceId,
+    phoneNumber: cleanPhone,
+    messageId: message.id || `wamid.${Date.now()}`,
+    timestamp: message.timestamp || String(Math.floor(Date.now() / 1000)),
+    rawType: message.type || 'text',
+    text: extractedText,
+    interaction,
+    isTestSimulation: false,
+    deliveryMode: 'live',
+    metadata: {
+      phoneNumberId,
+      firstName: firstName || 'WhatsApp',
+      lastName: restName.join(' ') || 'User',
+      rawMessage: message,
+    },
+  };
+}

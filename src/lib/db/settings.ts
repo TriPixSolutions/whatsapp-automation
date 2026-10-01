@@ -33,18 +33,23 @@ export const SettingsDB = {
   },
   async getByWabaId(wabaId: string): Promise<WorkspaceSettings | null> {
     if (!wabaId) return null;
-    const row = checked(await database().from('meta_connections').select('workspace_id').eq('waba_id', wabaId).maybeSingle());
-    if (row) return this.get(row.workspace_id);
-    return process.env.META_WABA_ID === wabaId ? this.get(DEFAULT_ID) : null;
+    const cleanWaba = wabaId.trim();
+    const row = checked(await database().from('meta_connections').select('workspace_id').eq('waba_id', cleanWaba).maybeSingle());
+    if (row?.workspace_id) return this.get(row.workspace_id);
+    return null; // Strict tenant isolation: NO DEFAULT WORKSPACE FALLBACK
   },
   async getByPhoneNumberId(phoneNumberId: string): Promise<WorkspaceSettings | null> {
     if (!phoneNumberId) return null;
-    const row = checked(await database().from('phone_numbers').select('workspace_id').eq('phone_number_id', phoneNumberId).maybeSingle());
-    if (row) {
-      const settings = await this.get(row.workspace_id);
-      return { ...settings, phoneNumberId };
+    const cleanPhoneId = phoneNumberId.trim();
+    const row = checked(await database().from('phone_numbers').select('workspace_id').eq('phone_number_id', cleanPhoneId).maybeSingle());
+    if (row?.workspace_id) {
+      const conn = checked(await database().from('meta_connections').select('workspace_id, waba_id').eq('workspace_id', row.workspace_id).maybeSingle());
+      if (conn) {
+        const settings = await this.get(row.workspace_id);
+        return { ...settings, phoneNumberId: cleanPhoneId };
+      }
     }
-    return process.env.META_PHONE_NUMBER_ID === phoneNumberId ? this.get(DEFAULT_ID) : null;
+    return null; // Strict tenant isolation: NO DEFAULT WORKSPACE FALLBACK
   },
   async getByVerifyToken(token: string): Promise<WorkspaceSettings | null> {
     if (!token) return null;
