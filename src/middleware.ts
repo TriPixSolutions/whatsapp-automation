@@ -140,9 +140,16 @@ export async function middleware(request: NextRequest) {
 
   // Cookie-authenticated mutations must originate from this application.
   const origin = request.headers.get('origin');
+  // Reverse proxies may present an internal HTTP origin to Next. Trust the
+  // configured public deployment URL, never an unvalidated forwarded header.
+  let applicationOrigin = request.nextUrl.origin;
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    try { applicationOrigin = new URL(process.env.NEXT_PUBLIC_APP_URL).origin; }
+    catch { return NextResponse.json({ error: 'Application URL is misconfigured' }, { status: 503 }); }
+  }
   if (pathname.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(request.method) &&
       request.cookies.get('pf_session_token') && !request.headers.get('authorization') &&
-      origin && origin !== request.nextUrl.origin) {
+      origin && origin !== applicationOrigin) {
     return NextResponse.json({ error: 'Cross-origin request rejected' }, { status: 403 });
   }
 

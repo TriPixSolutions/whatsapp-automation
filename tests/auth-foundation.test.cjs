@@ -111,3 +111,15 @@ test('logout remains available after a session expires', async () => {
   }));
   assert.equal(response.headers.get('x-middleware-next'), '1');
 });
+
+test('proxied cookie mutations accept only the configured public origin', async () => {
+  const { middleware } = load('src/middleware.ts', { 'next/server': { NextResponse }, '@/lib/auth/token': token },
+    { NEXT_PUBLIC_APP_URL: 'https://saas.example.test/' });
+  const makeRequest = (origin, extra = {}) => new NextRequest('http://internal:3000/api/test-center/simulate-trigger', {
+    method: 'POST', headers: { cookie: `pf_session_token=${jwt.signJwt(identity)}`, origin, ...extra },
+  });
+  assert.equal((await middleware(makeRequest('https://saas.example.test'))).headers.get('x-middleware-next'), '1');
+  for (const origin of ['https://attacker.test', 'http://internal:3000', 'https://saas.example.test.attacker.test', 'null']) {
+    assert.equal((await middleware(makeRequest(origin, { 'x-forwarded-host': 'attacker.test', 'x-forwarded-proto': 'https' }))).status, 403);
+  }
+});
