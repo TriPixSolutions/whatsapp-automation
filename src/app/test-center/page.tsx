@@ -64,7 +64,7 @@ export default function WhatsAppTestCenterPage() {
 
   // Connection & Webhook Status
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
-  const [webhookStatus, setWebhookStatus] = useState<'active' | 'error' | 'checking'>('checking');
+  const [webhookStatus, setWebhookStatus] = useState<'active' | 'challenge_only' | 'error' | 'checking'>('checking');
   const [latencyMs, setLatencyMs] = useState<number>(45);
 
   // Workflows & Sample Test Workflows
@@ -166,7 +166,7 @@ export default function WhatsAppTestCenterPage() {
       setLatencyMs(Date.now() - start);
 
       setConnectionStatus(res.ok && data.valid ? 'connected' : 'disconnected');
-      setWebhookStatus(res.ok && data.webhookActive ? 'active' : 'error');
+      setWebhookStatus(res.ok && data.webhookActive ? 'active' : data.webhookHandshakeVerified ? 'challenge_only' : 'error');
     } catch {
       setConnectionStatus('disconnected');
       setWebhookStatus('error');
@@ -667,7 +667,7 @@ export default function WhatsAppTestCenterPage() {
                       )}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      {webhookStatus === 'active' ? 'Webhook Active' : 'Webhook Error'}
+                      {webhookStatus === 'active' ? 'Signed Event Verified' : webhookStatus === 'challenge_only' ? 'Handshake Only' : webhookStatus === 'checking' ? 'Checking' : 'Webhook Error'}
                     </span>
                   </div>
 

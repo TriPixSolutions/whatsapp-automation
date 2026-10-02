@@ -153,11 +153,11 @@ export default function SettingsPage() {
 
       if (connRes?.ok) {
         const c = await connRes.json();
-        if (c.connectionStatus === 'connected') {
+        if (c.connectionStatus === 'connected' && !c.configurationError) {
           setConnectionStatus('connected');
-        } else if (c.connectionStatus === 'error') {
+        } else if (c.connectionStatus === 'error' || c.configurationError) {
           setConnectionStatus('needs_attention');
-          setSettingsError(c.tokenHealth?.error || 'Meta connection verification failed.');
+          setSettingsError(c.configurationError || c.tokenHealth?.error || 'Meta connection verification failed.');
         } else {
           setConnectionStatus('disconnected');
         }

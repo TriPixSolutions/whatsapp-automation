@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     // Initial Health Payload - Status must come from actual backend verification
     const healthReport: any = {
       connectionStatus: 'disconnected',
+      configurationError: /^[a-f0-9]{32}$/i.test(appSecret || '') ? null : 'Receiving messages needs the matching Meta App Secret from App settings → Basic. The saved secret has an unexpected format.',
       isLive: isConfigured,
       workspaceId: targetWorkspaceId,
       credentials: {
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
         status: verifyToken && appSecret ? 'configured_not_verified' : 'pending_configuration',
         verifyTokenSet: Boolean(verifyToken),
         appSecretSet: Boolean(appSecret),
+        appSecretFormatValid: /^[a-f0-9]{32}$/i.test(appSecret || ''),
         webhookUrl: webhookUrl || '/api/webhook/whatsapp',
       },
       phoneNumberHealth: {

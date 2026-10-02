@@ -66,16 +66,16 @@ export default function DashboardPage() {
       // 1. Connection
       if (connRes?.ok) {
         const connData = await connRes.json();
-        if (connData.connectionStatus === 'connected') {
+        if (connData.connectionStatus === 'connected' && !connData.configurationError) {
           setConnectionStatus('connected');
           setPhoneNumber(connData.phoneNumberHealth?.displayPhoneNumber || connData.credentials?.phoneNumberId || '');
           setBusinessName(connData.phoneNumberHealth?.verifiedName || 'WhatsApp Business');
           if (connData.phoneNumberHealth?.qualityRating) {
             setQualityRating(connData.phoneNumberHealth.qualityRating);
           }
-        } else if (connData.connectionStatus === 'error') {
+        } else if (connData.connectionStatus === 'error' || connData.configurationError) {
           setConnectionStatus('needs_attention');
-          setConnectionError(connData.tokenHealth?.error || 'Meta rejected the saved connection credentials.');
+          setConnectionError(connData.configurationError || connData.tokenHealth?.error || 'Meta rejected the saved connection credentials.');
         } else {
           setConnectionStatus('disconnected');
         }
@@ -162,7 +162,7 @@ export default function DashboardPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold text-slate-900">
-                    {connectionStatus === 'connected' ? (businessName || 'WhatsApp Connected') : 'WhatsApp Not Connected'}
+                    {connectionStatus === 'connected' ? (businessName || 'WhatsApp Connected') : connectionStatus === 'needs_attention' ? 'WhatsApp Needs Attention' : 'WhatsApp Not Connected'}
                   </h3>
                   <span
                     className={cn(

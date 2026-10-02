@@ -202,6 +202,7 @@ test('meta-validate route returns structured diagnostics and clean error message
     'next/server': { NextResponse },
     '@/lib/auth-server': { getAuthorizedUser: async () => ({ id: 'usr-1', workspaceId: 'ws-1' }) },
     '@/lib/db': {
+      WebhookEventsDB: { latestProcessedAt: async () => null },
       SettingsDB: {
         get: async () => ({
           accessToken: 'valid-token',
@@ -223,9 +224,43 @@ test('meta-validate route returns structured diagnostics and clean error message
 
   assert.equal(response.status, 200);
   assert.equal(body.valid, true);
-  assert.equal(body.webhookActive, true);
-  assert.equal(body.error, null);
+  assert.equal(body.webhookActive, false);
+  assert.equal(body.webhookHandshakeVerified, true);
+  assert.equal(body.signedEventVerified, false);
+  assert.ok(body.error);
+  assert.equal(body.details.templateAvailable, undefined);
+  assert.equal(body.details.qualityRating, 'UNKNOWN');
   assert.equal(body.diagnostics.token.status, 'valid');
   assert.equal(body.diagnostics.phoneNumber.status, 'verified');
   assert.equal(body.diagnostics.subscription.status, 'subscribed');
+});
+
+
+test('webhook active requires a fresh processed event and a valid signing secret', async () => {
+  let processedAt = '2026-10-02T09:01:00Z';
+  let appSecret = 'a'.repeat(32);
+  const diagnostics = {
+    app: { status: 'valid' }, business: { status: 'unconfigured' },
+    token: { status: 'valid' }, phoneNumber: { status: 'verified' },
+    waba: { status: 'verified' }, subscription: { status: 'subscribed' },
+    webhook: { status: 'verified' }, permissions: { status: 'verified' },
+    timestamp: '2026-10-02T09:02:00Z',
+  };
+  const route = load('src/app/api/test-center/meta-validate/route.ts', {
+    'next/server': { NextResponse },
+    '@/lib/auth-server': { getAuthorizedUser: async () => ({ workspaceId: 'ws-1' }) },
+    '@/lib/db': {
+      SettingsDB: { get: async () => ({ accessToken: 'valid-token', phoneNumberId: 'phone-1', appSecret, updatedAt: '2026-10-02T09:00:00Z' }) },
+      WebhookEventsDB: { latestProcessedAt: async (workspaceId) => { assert.equal(workspaceId, 'ws-1'); return processedAt; } },
+    },
+    '@/lib/meta/validation': { validateMetaConnection: async () => diagnostics, META_GRAPH_VERSION: 'v25.0' },
+    '@/types/automations': {},
+  });
+  const check = async () => (await route.GET(new NextRequest('https://example.test/api/test-center/meta-validate'))).json();
+  assert.equal((await check()).webhookActive, true);
+  processedAt = '2026-10-02T08:59:00Z';
+  assert.equal((await check()).webhookActive, false);
+  processedAt = '2026-10-02T09:01:00Z';
+  appSecret = 'invalid';
+  assert.equal((await check()).webhookActive, false);
 });

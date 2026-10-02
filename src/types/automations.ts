@@ -462,7 +462,7 @@ export interface MetaValidationResult {
     phoneNumberConnected: boolean;
     wabaConnected: boolean;
     permissionsAvailable: boolean;
-    templateAvailable: boolean;
+    templateAvailable?: boolean;
     apiReachable: boolean;
     qualityRating: string;
     verifiedName: string;

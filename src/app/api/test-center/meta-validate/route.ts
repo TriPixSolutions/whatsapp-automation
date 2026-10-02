@@ -1,6 +1,6 @@
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
-import { SettingsDB } from '@/lib/db';
+import { SettingsDB, WebhookEventsDB } from '@/lib/db';
 import { MetaValidationResult } from '@/types/automations';
 import { validateMetaConnection, META_GRAPH_VERSION } from '@/lib/meta/validation';
 
@@ -43,11 +43,14 @@ export async function GET(request: NextRequest) {
     );
 
     const valid = isTokenValid && isPhoneConnected;
-    const webhookActive = isWebhookReady;
+    const latestProcessedAt = await WebhookEventsDB.latestProcessedAt(workspaceId);
+    const signingSecretConfigured = /^[a-f0-9]{32}$/i.test(settings.appSecret || '');
+    const signedEventVerified = Boolean(latestProcessedAt && settings.updatedAt && Date.parse(latestProcessedAt) >= Date.parse(settings.updatedAt));
+    const webhookActive = isWebhookReady && signingSecretConfigured && signedEventVerified;
 
     const displayPhone = diagnostics.phoneNumber.details?.displayPhoneNumber || settings.phoneNumberId || 'None';
     const verifiedName = diagnostics.phoneNumber.details?.verifiedName || 'WhatsApp Verified Business';
-    const qualityRating = diagnostics.phoneNumber.details?.qualityRating || 'GREEN';
+    const qualityRating = diagnostics.phoneNumber.details?.qualityRating || 'UNKNOWN';
 
     const checklist = [
       {
@@ -56,16 +59,16 @@ export async function GET(request: NextRequest) {
         description: 'Inbound WhatsApp webhook endpoint /api/webhook/whatsapp responds to HTTP events',
         status: webhookActive ? ('pass' as const) : ('fail' as const),
         details: webhookActive
-          ? (isWabaSubscribed ? 'WABA is subscribed to receive webhook events' : 'Listener is ready to verify signed Meta events')
-          : (diagnostics.webhook.error || diagnostics.subscription.error || 'Configure the Meta WhatsApp webhook callback'),
+          ? 'A signed webhook event was processed after the current credentials were saved'
+          : (!signingSecretConfigured ? 'Saved App Secret must match the 32-character secret in Meta App settings → Basic.' : diagnostics.webhook.error || diagnostics.subscription.error || 'Callback handshake/subscription alone do not prove receiving signed events. Send a real test reply.'),
         critical: true,
       },
       {
         id: 'chk_webhook_verified',
         name: 'Webhook Verified',
-        description: 'GET handshake verification token configured and verified by Meta Graph API',
-        status: settings.verifyToken ? ('pass' as const) : ('fail' as const),
-        details: settings.verifyToken ? `Verify Token: ${settings.verifyToken}` : 'Verify token missing in settings',
+        description: 'Configured callback returned the expected GET verification challenge',
+        status: diagnostics.webhook.status === 'verified' ? ('pass' as const) : ('fail' as const),
+        details: diagnostics.webhook.status === 'verified' ? 'GET challenge succeeds; signed event verification is checked separately' : 'Callback challenge not verified',
         critical: true,
       },
       {
@@ -74,7 +77,7 @@ export async function GET(request: NextRequest) {
         description: 'System User Permanent Access Token with required WhatsApp permissions',
         status: isTokenValid ? ('pass' as const) : ('fail' as const),
         details: isTokenValid
-          ? `Token verified (Scopes: ${diagnostics.token.details?.scopes?.join(', ') || 'whatsapp_business_messaging, management'})`
+          ? `Token verified (Scopes: ${diagnostics.token.details?.scopes?.join(', ') || 'not returned by Meta'})`
           : (diagnostics.token.error || 'Live token missing, expired, or using a placeholder'),
         critical: true,
       },
@@ -139,12 +142,12 @@ export async function GET(request: NextRequest) {
       checklist,
       details: {
         webhookActive,
-        webhookVerified: Boolean(settings.verifyToken),
+        webhookVerified: diagnostics.webhook.status === 'verified',
         accessTokenValid: isTokenValid,
         phoneNumberConnected: isPhoneConnected,
         wabaConnected: isWabaConnected,
         permissionsAvailable: isPermissionsValid,
-        templateAvailable: true,
+
         apiReachable: isTokenValid || isPhoneConnected,
         qualityRating,
         verifiedName,
@@ -172,6 +175,9 @@ export async function GET(request: NextRequest) {
       valid,
       hasCredentials,
       webhookActive,
+      webhookHandshakeVerified: diagnostics.webhook.status === 'verified',
+      signedEventVerified,
+      templateStatus: 'not_verified',
       error: errorMessage,
       diagnostics: {
         app: diagnostics.app,
