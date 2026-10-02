@@ -18,6 +18,7 @@ Additional live root cause: the production workflow POST returned HTTP 403, “C
 
 Code commit `bdd19af`: pushed to GitHub; Hostinger shows **Completed / Current**. The deployed browser displays the new loading state and explicit sandbox description.
 
+- Dashboard excludes synthetic test events from its real message count.
 - Dashboard displays the actual connection failure and no longer defaults unverified quality to GREEN.
 - Settings preserves failed connection/save errors, exposes App ID and masked App Secret fields, and rejects malformed replacement App Secrets.
 - Removed unsupported administrator username/password settings that gave the impression login credentials could be changed there.
@@ -30,11 +31,11 @@ Code commit `bdd19af`: pushed to GitHub; Hostinger shows **Completed / Current**
 
 Production data repair: existing VIP workflow had 11 nodes and no trigger, despite being ACTIVE. Its prior definition was saved privately to `/tmp/vip-workflow-before-trigger-repair.json`. Added the missing keyword trigger and its edge to the existing welcome node, preserving the other nodes and edges. Supabase read-back and browser refresh show 12 nodes and 14 edges. This repair did not rebuild or delete the workflow.
 
-Additional carousel repairs: missing/rejected carousel templates now fail explicitly without sending a substitute list. The editor and Test Center expose the approved carousel template name. Provider sends require a real `wamid` instead of generating successful-looking IDs. Carousel templates use template policy rather than the ordinary text care-window restriction. Test Center request latency is measured rather than hard-coded. Provider behavior is regression-tested; real carousel delivery remains blocked by credentials/template approval.
+Additional carousel repairs: missing/rejected carousel templates now fail explicitly without sending a substitute list. The editor and Test Center expose the approved carousel template name. Checkout helpers no longer invent a payment link or simulated successful send; a valid configured HTTPS payment URL and live credentials are required. Catalog and other provider sends require a real `wamid` instead of generating successful-looking IDs. Carousel templates use template policy rather than the ordinary text care-window restriction. Test Center request latency is measured rather than hard-coded. Provider behavior is regression-tested; real carousel delivery remains blocked by credentials/template approval.
 
 ## Verification and infrastructure
 
-99 automated tests pass, including new selected-workflow and wrong-session regression tests. TypeScript and production build pass. These tests include mocked providers and do not prove delivery to a real phone.
+101 automated tests pass, including new selected-workflow and wrong-session regression tests. TypeScript and production build pass. These tests include mocked providers and do not prove delivery to a real phone.
 
 Live webhook GET challenge returned HTTP 200 with the exact challenge. A deliberately invalid signed POST was rejected with HTTP 401. These prove callback routing and signature rejection, not acceptance of a fresh Meta-signed event.
 

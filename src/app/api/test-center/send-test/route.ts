@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     const dispatchStarted = Date.now();
     let metaResult: any = null;
-    let messageId = `wamid.HBgM${Date.now()}`;
+    let messageId = '';
     let sentContent = text;
     let dbType: MessageType = 'text';
     let platformType: PlatformMessageType = 'text';

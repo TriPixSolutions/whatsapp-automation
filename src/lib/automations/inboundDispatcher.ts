@@ -19,7 +19,7 @@ export class InboundAutomationDispatcher {
     }, workspaceId);
     await MessagesDB.create({metaMessageId:event.messageId,phoneNumber:phone,contactId:contact.id,
       direction:'inbound',type:event.interaction?'interactive':event.rawType as any,
-      status:'delivered',content,payload:{ interaction:event.interaction,isSimulation:event.isTestSimulation }},workspaceId);
+      status:'delivered',content,payload:{ interaction:event.interaction,isSimulation:Boolean(event.isTestSimulation || event.metadata?.synthetic) }},workspaceId);
     // Simulations must not open the real customer-care window.
     if (!event.isTestSimulation && !event.metadata?.synthetic) await ConversationsDB.recordInbound(phone,contact.id,workspaceId,event.messageId,
       new Date(Math.min(Number(event.timestamp)*1000||Date.now(),Date.now())).toISOString());

@@ -40,3 +40,18 @@ test('carousel templates use the template messaging policy outside the care wind
   const ordinary=await WhatsAppMessageService.send({workspaceId:'workspace-a',to:'+15550001111',type:'carousel',cards:options.cards});
   assert.equal(ordinary.success,false);assert.equal(ordinary.windowClosed,true);assert.equal(sent,1);
 });
+
+test('catalog product sends reject missing provider IDs',async()=>{
+  const catalog=load('src/lib/meta/catalog.ts',{axios:{post:async()=>({data:{messages:[]}})},'./catalogTypes':{}});
+  assert.equal((await catalog.sendSingleProductMessage({...options,catalogId:'catalog',productRetailerId:'item'})).success,false);
+  assert.equal((await catalog.sendMultiProductMessage({...options,catalogId:'catalog',headerText:'Products',bodyText:'Browse',sections:[]})).success,false);
+});
+test('checkout cannot invent a payment link or simulate a successful send without credentials',async()=>{
+  let sent=0;
+  const checkout=load('src/lib/meta/checkout.ts',{'./api':{MetaWhatsAppClient:{sendInteractiveButtons:async()=>{sent++;return {success:true,messageId:'wamid.real'};}}}});
+  const order={to:'+15550001111',phoneNumberId:'',accessToken:'',productName:'Product',price:'10',orderId:'test-order'};
+  assert.equal((await checkout.sendCheckoutResponse(order)).success,false);
+  assert.equal((await checkout.sendCheckoutResponse({...order,paymentUrl:'https://merchant.example.test/pay/test-order'})).success,false);
+  assert.equal((await checkout.sendCheckoutResponse({...order,phoneNumberId:'phone',accessToken:'test-token',paymentUrl:'javascript:alert(1)'})).success,false);
+  assert.equal(sent,0);
+});

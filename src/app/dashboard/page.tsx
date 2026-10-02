@@ -104,7 +104,7 @@ export default function DashboardPage() {
         if (Array.isArray(msgData?.messages)) {
           const todayStr = new Date().toDateString();
           const todayMsgs = msgData.messages.filter((m: any) => {
-            if (!m.createdAt) return false;
+            if (!m.createdAt || m.payload?.isSimulation || String(m.metaMessageId || '').startsWith('test_')) return false;
             return new Date(m.createdAt).toDateString() === todayStr;
           });
           setTodayMessagesCount(todayMsgs.length);

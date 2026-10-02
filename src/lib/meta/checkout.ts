@@ -26,7 +26,13 @@ export async function sendCheckoutResponse(options: CheckoutOptions): Promise<Me
     currency = 'USD',
   } = options;
 
-  const checkoutLink = paymentUrl || `https://checkout.passionfruit.io/pay/${orderId}`;
+  if (!paymentUrl) return { success: false, error: 'A configured payment URL is required. No payment link has been created.' };
+  let checkoutLink: string;
+  try {
+    const parsed = new URL(paymentUrl);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error('Invalid payment URL');
+    checkoutLink = parsed.toString();
+  } catch { return { success: false, error: 'A valid HTTPS payment URL is required.' }; }
 
   const bodyText = [
     `🧾 *Order Confirmation: #${orderId}*`,
@@ -54,13 +60,7 @@ export async function sendCheckoutResponse(options: CheckoutOptions): Promise<Me
     });
   }
 
-  // Simulated mode
-  return {
-    success: true,
-    messageId: `wamid.checkout_${Date.now()}`,
-    simulated: true,
-    details: { orderId, productName, price, checkoutLink },
-  };
+  return { success: false, error: 'Live Meta credentials are required to send a checkout response.' };
 }
 
 /**

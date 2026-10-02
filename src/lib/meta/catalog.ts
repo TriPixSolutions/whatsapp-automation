@@ -38,7 +38,8 @@ export async function sendSingleProductMessage(options: SingleProductOptions): P
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       timeout: 12000,
     });
-    const messageId = res.data?.messages?.[0]?.id || `wamid.prod_${Date.now()}`;
+    const messageId = res.data?.messages?.[0]?.id;
+    if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
     return { success: true, messageId, metaMessageId: messageId, details: res.data };
   } catch (err: any) {
     const errorMsg = err.response?.data?.error?.message || err.message;
@@ -76,7 +77,8 @@ export async function sendMultiProductMessage(options: MultiProductOptions): Pro
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       timeout: 12000,
     });
-    const messageId = res.data?.messages?.[0]?.id || `wamid.prodlist_${Date.now()}`;
+    const messageId = res.data?.messages?.[0]?.id;
+    if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
     return { success: true, messageId, metaMessageId: messageId, details: res.data };
   } catch (err: any) {
     const errorMsg = err.response?.data?.error?.message || err.message;
