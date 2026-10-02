@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
     const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
     if (!['owner', 'admin', 'super_admin'].includes(user.role)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
     const body = await request.json();
+    if (typeof body.appSecret === 'string' && body.appSecret.trim() && !/[•*]/.test(body.appSecret) && !/^[a-f0-9]{32}$/i.test(body.appSecret.trim())) {
+      return NextResponse.json({ error: 'Meta App Secret must be the 32-character hexadecimal secret from App settings → Basic.' }, { status: 400 });
+    }
     const replacementCredentials = Object.fromEntries(['accessToken','appSecret'].filter(key => typeof body[key] === 'string' && body[key].trim() && !/[•*]/.test(body[key])).map(key => [key, body[key].trim()]));
     const current = await SettingsDB.get(targetWorkspaceId, replacementCredentials);
 

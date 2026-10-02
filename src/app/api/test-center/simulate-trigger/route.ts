@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
             id: cardButtonId || buttonId || '', title: buttonTitle || buttonId || '', cardIndex, cardButtonId } : undefined;
       const result = await InboundAutomationDispatcher.dispatch({workspaceId,phoneNumber:cleanPhone,
         messageId:`test_${randomUUID()}`,timestamp:String(Math.floor(Date.now()/1000)),rawType:interaction?'interactive':'text',
-        text:text || (interaction ? undefined : 'Hello'),interaction,isTestSimulation,metadata:{synthetic:true},deliveryMode:isLiveDelivery?'live':'sandbox'});
+        text:text || (interaction ? undefined : 'Hello'),interaction,isTestSimulation,metadata:{synthetic:true},deliveryMode:isLiveDelivery?'live':'sandbox'}, { workflowId });
       return NextResponse.json({...result,simulationType,deliveryMode:isLiveDelivery?'production':'sandbox',
         resumed:result.sessionAction==='resumed',activeExecution:result.executions[0]}, {status:result.success?200:409});
     }

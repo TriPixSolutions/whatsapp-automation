@@ -241,3 +241,25 @@ test('standalone carousel click requires active session and follows carousel bra
   assert.equal(hActive.resumes.length, 1);
   assert.equal(hActive.resumes[0].event.action, 'carousel_click');
 });
+
+test('a selected workflow test cannot run another matching workflow', async () => {
+  const workflow = { id: 'other-workflow', workspaceId: user.workspaceId, name: 'Other', isActive: true,
+    triggerType: 'keyword', triggerKeyword: 'hello', nodes: [{ id: 'trigger', type: 'trigger_keyword', config: { text: 'hello' } }], edges: [] };
+  const h = triggerRouteHarness(workflow);
+  const response = await h.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
+    method: 'POST', body: JSON.stringify({ simulationType: 'keyword_trigger', workflowId: 'selected-workflow', phoneNumber: '+15550001111', text: 'hello' }),
+  }));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).matchedWorkflowsCount, 0);
+  assert.equal(h.executions.length, 0);
+});
+
+test('a selected workflow interaction cannot resume a different workflow session', async () => {
+  const workflow = { id: 'other-workflow', workspaceId: user.workspaceId, nodes: [], edges: [] };
+  const h = triggerRouteHarness(workflow, { id: 'session-a', workflowId: 'other-workflow', waitingFor: 'button_click' });
+  const response = await h.route.POST(new Request('https://example.test/api/test-center/simulate-trigger', {
+    method: 'POST', body: JSON.stringify({ simulationType: 'button_click', workflowId: 'selected-workflow', phoneNumber: '+15550001111', buttonId: 'pricing' }),
+  }));
+  assert.equal(response.status, 409);
+  assert.equal(h.resumes.length, 0);
+});

@@ -25,9 +25,10 @@ export default function DashboardPage() {
 
   // 1. Connection Health State
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'needs_attention'>('disconnected');
+  const [connectionError, setConnectionError] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [businessName, setBusinessName] = useState('');
-  const [qualityRating, setQualityRating] = useState('GREEN');
+  const [qualityRating, setQualityRating] = useState('UNKNOWN');
 
   // 2. Meaningful Metrics State (Strictly real data, zero dummy data)
   const [todayMessagesCount, setTodayMessagesCount] = useState(0);
@@ -56,6 +57,12 @@ export default function DashboardPage() {
         fetch('/api/messages').catch(() => null),
       ]);
 
+      setConnectionError('');
+      setConnectionStatus('disconnected');
+      if (!connRes?.ok) {
+        setConnectionStatus('needs_attention');
+        setConnectionError('Connection health could not be checked. Refresh or open Settings.');
+      }
       // 1. Connection
       if (connRes?.ok) {
         const connData = await connRes.json();
@@ -68,6 +75,7 @@ export default function DashboardPage() {
           }
         } else if (connData.connectionStatus === 'error') {
           setConnectionStatus('needs_attention');
+          setConnectionError(connData.tokenHealth?.error || 'Meta rejected the saved connection credentials.');
         } else {
           setConnectionStatus('disconnected');
         }
@@ -168,7 +176,7 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-mono mt-0.5">
-                  {phoneNumber ? phoneNumber : 'Connect your official number to start messaging customers'}
+                  {connectionError || (phoneNumber ? phoneNumber : 'Connect your official number to start messaging customers')}
                 </p>
               </div>
             </div>

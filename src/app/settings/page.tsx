@@ -91,8 +91,10 @@ export default function SettingsPage() {
   // 1. Workspace State
   const [companyName, setCompanyName] = useState('TriPix Solutions Workspace');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
-  const [adminUsername, setAdminUsername] = useState('Admin');
-  const [adminPassword, setAdminPassword] = useState('');
+  const [settingsError, setSettingsError] = useState('');
+  const [appId, setAppId] = useState('');
+  const [appSecret, setAppSecret] = useState('');
+
 
   // 2. WhatsApp Connection State
   const [wabaId, setWabaId] = useState('');
@@ -145,8 +147,8 @@ export default function SettingsPage() {
         if (s.phoneNumberId) setPhoneNumberId(s.phoneNumberId);
         if (s.accessToken) setAccessToken(s.accessToken);
         if (s.verifyToken) setVerifyToken(s.verifyToken);
-        if (s.adminUsername) setAdminUsername(s.adminUsername);
-        if (s.adminPassword) setAdminPassword(s.adminPassword);
+        setAppId(s.appId || "");
+        setAppSecret(s.appSecret || "");
       }
 
       if (connRes?.ok) {
@@ -155,6 +157,7 @@ export default function SettingsPage() {
           setConnectionStatus('connected');
         } else if (c.connectionStatus === 'error') {
           setConnectionStatus('needs_attention');
+          setSettingsError(c.tokenHealth?.error || 'Meta connection verification failed.');
         } else {
           setConnectionStatus('disconnected');
         }
@@ -177,8 +180,8 @@ export default function SettingsPage() {
         phoneNumberId,
         accessToken,
         verifyToken,
-        adminUsername,
-        adminPassword,
+        appId,
+        appSecret,
         ...extra,
       };
 
@@ -188,18 +191,22 @@ export default function SettingsPage() {
         body: JSON.stringify(payload),
       });
 
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Settings could not be saved.');
       if (res.ok) {
+        setSettingsError('');
         showToast('Settings saved successfully!');
         loadSettings();
       }
     } catch (err: any) {
-      alert('Error saving settings: ' + err.message);
+      setSettingsError('Error saving settings: ' + err.message);
     }
   };
 
   // Live Test Connection
   const handleTestConnection = async () => {
     setIsTestingConn(true);
+    setSettingsError('');
     try {
       const res = await fetch('/api/meta/connection/test', {
         method: 'POST',
@@ -212,10 +219,11 @@ export default function SettingsPage() {
         showToast('Meta WhatsApp connection verified live!');
       } else {
         setConnectionStatus('needs_attention');
-        alert(data.error || 'Connection verification failed with Meta API.');
+        setSettingsError([data.error || 'Connection verification failed with Meta API.', data.hint].filter(Boolean).join(' '));
       }
     } catch (err: any) {
-      alert(err.message || 'Network error verifying connection.');
+      setConnectionStatus('needs_attention');
+      setSettingsError(err.message || 'Network error verifying connection.');
     } finally {
       setIsTestingConn(false);
     }
@@ -289,6 +297,7 @@ export default function SettingsPage() {
         )}
 
         <main className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
+          {settingsError && <p role="alert" className="p-4 rounded-xl bg-red-50 text-red-800 text-sm border border-red-200">{settingsError}</p>}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             {/* Sidebar Navigation (4 Cols) */}
             <aside className="md:col-span-4 bg-white rounded-3xl p-3 border border-slate-200/90 shadow-xs space-y-1.5">
@@ -377,31 +386,6 @@ export default function SettingsPage() {
                       </select>
                     </div>
 
-                    {/* Admin Access Credentials */}
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                      <h3 className="text-xs font-bold text-slate-900">Administrator Credentials</h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Admin Username</label>
-                          <input
-                            type="text"
-                            value={adminUsername}
-                            onChange={(e) => setAdminUsername(e.target.value)}
-                            className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-slate-600 block mb-1">Admin Password</label>
-                          <input
-                            type="password"
-                            value={adminPassword}
-                            onChange={(e) => setAdminPassword(e.target.value)}
-                            className="w-full text-xs px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
                     <div className="flex justify-end pt-2">
                       <button
                         type="submit"
@@ -465,6 +449,15 @@ export default function SettingsPage() {
                     }}
                     className="space-y-4"
                   >
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Meta App ID</label>
+                      <input aria-label="Meta App ID" value={appId} onChange={(e) => setAppId(e.target.value)} className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">Meta App Secret</label>
+                      <input aria-label="Meta App Secret" type="password" autoComplete="off" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl" />
+                      <p className="text-xs text-slate-500 mt-1">Use the App Secret from this app’s Basic settings. Incoming webhook signatures require it.</p>
+                    </div>
                     <div>
                       <label className="text-xs font-bold text-slate-700 block mb-1">
                         WhatsApp Business Account (WABA) ID

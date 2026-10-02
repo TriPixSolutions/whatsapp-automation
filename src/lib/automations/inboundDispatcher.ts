@@ -7,7 +7,7 @@ import type { NormalizedInboundEvent, InboundPipelineResult } from './normalized
 /** Canonical application pipeline. Transport authentication and atomic event claims
  * are owned by the webhook boundary; test events are explicitly simulated. */
 export class InboundAutomationDispatcher {
-  static async dispatch(event: NormalizedInboundEvent): Promise<InboundPipelineResult> {
+  static async dispatch(event: NormalizedInboundEvent, options: { workflowId?: string } = {}): Promise<InboundPipelineResult> {
     if (!event.workspaceId || event.workspaceId === 'default') throw new Error('An explicit resolved workspace is required');
     const workspaceId = event.workspaceId;
     const phone = `+${event.phoneNumber.replace(/[^0-9]/g, '')}`;
@@ -30,8 +30,9 @@ export class InboundAutomationDispatcher {
     const payload = {text:content,from:phone,buttonId:event.interaction?.id,buttonTitle:event.interaction?.title,
       cardIndex:event.interaction?.cardIndex,cardButtonId:event.interaction?.cardButtonId};
     let matches = await AdvancedWorkflowEngine.matchWorkflows(triggerType,payload,workspaceId);
+    if (options.workflowId) matches = matches.filter(w => w.id === options.workflowId);
     const session = await TestCenterStore.getActiveSession(phone,workspaceId,event.isTestSimulation);
-    if (session) {
+    if (session && (!options.workflowId || session.workflowId === options.workflowId)) {
       if (!event.interaction && matches.length) {
         await TestCenterStore.clearSession(phone,workspaceId,session.id,event.isTestSimulation);
         base.sessionAction=session.waitingFor==='delay'?'interrupted_delay':'cleared';
@@ -47,6 +48,7 @@ export class InboundAutomationDispatcher {
     }
     if (!matches.length && triggerType==='keyword') {
       matches=await AdvancedWorkflowEngine.matchWorkflows('incoming_message',payload,workspaceId);
+      if (options.workflowId) matches = matches.filter(w => w.id === options.workflowId);
       triggerType='incoming_message';
     }
     if (event.interaction && !matches.length) return {...base, success:!event.isTestSimulation, code:'NO_ACTIVE_SESSION', error:'Start the workflow before testing its reply button.'};

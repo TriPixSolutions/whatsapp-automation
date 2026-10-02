@@ -322,7 +322,8 @@ export default function AutomationsPage() {
     DEFAULT_SUPPORT_ROUTER_FUNNEL,
   ]);
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowDefinition>(DEFAULT_VIP_SALES_FUNNEL);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [workflowError, setWorkflowError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
@@ -339,17 +340,21 @@ export default function AutomationsPage() {
   // 1. Fetch real workflows on mount
   const fetchWorkflows = useCallback(async () => {
     setLoading(true);
+    setWorkflowError('');
     try {
       const res = await fetch('/api/automations?format=dag');
+      if (!res.ok) throw new Error('Saved workflows could not be loaded.');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (!Array.isArray(data)) throw new Error('Unexpected workflow response.');
+        setWorkflows(data);
+        if (data.length > 0) {
           setWorkflows(data);
           setActiveWorkflow(data[0]);
         }
       }
     } catch (err) {
-      console.error('Failed to load workflows', err);
+      setWorkflowError(err instanceof Error ? err.message : 'Could not load saved workflows.');
     } finally {
       setLoading(false);
     }
@@ -369,11 +374,14 @@ export default function AutomationsPage() {
         body: JSON.stringify(wf),
       });
 
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Workflow was not saved.');
+      setWorkflowError('');
       if (res.ok) {
         setLastSavedAt(new Date().toLocaleTimeString());
       }
     } catch (err) {
-      console.error('Failed to save workflow', err);
+      setWorkflowError(err instanceof Error ? err.message : 'Workflow was not saved.');
     } finally {
       setIsSaving(false);
     }
@@ -458,11 +466,14 @@ export default function AutomationsPage() {
           phoneNumber: payload.phoneNumber,
           text: payload.text,
           simulationType: payload.simulationType,
+          buttonId: ['button_click', 'list_selection'].includes(payload.simulationType) ? payload.text : undefined,
+          cardButtonId: payload.simulationType === 'carousel_click' ? payload.text : undefined,
         }),
       });
 
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Workflow test failed (${res.status}).`);
       if (res.ok) {
-        const data = await res.json();
         const execLog: WorkflowExecutionLog = data.activeExecution || data.executions?.[0];
 
         if (execLog) {
@@ -478,10 +489,9 @@ export default function AutomationsPage() {
           return execLog;
         }
       }
-      return null;
+      throw new Error(data.message || 'No active workflow matched this trigger. Check the selected workflow’s trigger node and keyword.');
     } catch (err) {
-      console.error('Test execution failed', err);
-      return null;
+      throw err;
     } finally {
       setIsExecutingTest(false);
     }
@@ -519,7 +529,8 @@ export default function AutomationsPage() {
 
       {/* Main Studio Area (16px gap from Navigation Sidebar) */}
       <main className="flex-1 flex flex-col h-full min-w-0 overflow-hidden p-3 lg:p-4">
-        <VisualAutomationCanvas
+        {workflowError && <p role="alert" className="bg-red-950 text-red-200 p-3 text-sm">{workflowError}</p>}
+        {loading ? <p className="p-6">Loading saved workflows…</p> : workflows.length === 0 ? <button onClick={handleCreateNewWorkflow} className="p-6">Create your first workflow</button> : <VisualAutomationCanvas
           workflow={activeWorkflow}
           onChangeWorkflow={handleWorkflowChange}
           workflows={workflows}
@@ -538,7 +549,7 @@ export default function AutomationsPage() {
           onOpenLogs={() => setIsLogsModalOpen(true)}
           isSaving={isSaving}
           lastSavedAt={lastSavedAt}
-        />
+        />}
       </main>
 
       {/* Test Workflow Modal */}

@@ -41,6 +41,7 @@ export function TestWorkflowModal({
   isRunning,
   lastExecution,
 }: TestWorkflowModalProps) {
+  const [testError, setTestError] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('+919876543210');
   const [simulationType, setSimulationType] = useState('keyword_trigger');
   const [triggerText, setTriggerText] = useState(workflow.triggerKeyword || 'Hello');
@@ -49,11 +50,12 @@ export function TestWorkflowModal({
   if (!isOpen) return null;
 
   const handleExecute = async () => {
-    await onRunTest({
-      phoneNumber,
-      text: triggerText,
-      simulationType,
-    });
+    setTestError('');
+    try {
+      await onRunTest({ phoneNumber, text: triggerText, simulationType });
+    } catch (error: any) {
+      setTestError(error.message || 'Workflow test failed.');
+    }
   };
 
   return (
@@ -82,6 +84,7 @@ export function TestWorkflowModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {testError && <p role="alert" className="text-red-300 text-sm p-3 border border-red-800 rounded-xl">{testError}</p>}
           {/* Test Setup Inputs */}
           <div className="grid grid-cols-2 gap-3 p-3.5 bg-gray-900/70 border border-gray-800 rounded-xl">
             <div>
@@ -205,7 +208,7 @@ export function TestWorkflowModal({
         <div className="p-4 border-t border-gray-800 flex items-center justify-between bg-gray-900/40">
           <div className="text-[11px] text-gray-400 flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Simulates live webhook and WhatsApp API dispatch</span>
+            <span>Sandbox simulation — no WhatsApp message is sent</span>
           </div>
 
           <div className="flex items-center gap-2">

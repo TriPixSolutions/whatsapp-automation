@@ -77,8 +77,8 @@ export async function GET(request: NextRequest) {
         const phoneRes = await axios.get(phoneProbeUrl, {
           params: {
             fields: 'id,display_phone_number,verified_name,quality_rating,code_verification_status',
-            access_token: accessToken,
           },
+          headers: { Authorization: `Bearer ${accessToken}` },
           timeout: 6000,
         });
 
@@ -159,6 +159,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (typeof body.appSecret === 'string' && body.appSecret.trim() && !/[•*]/.test(body.appSecret) && !/^[a-f0-9]{32}$/i.test(body.appSecret.trim())) {
+      return NextResponse.json({ error: 'Meta App Secret must be the 32-character hexadecimal secret from App settings → Basic.' }, { status: 400 });
+    }
     const replacementCredentials = Object.fromEntries(['accessToken','appSecret'].filter(key => typeof body[key] === 'string' && body[key].trim() && !/[•*]/.test(body[key])).map(key => [key, body[key].trim()]));
     const current = await SettingsDB.get(targetWorkspaceId, replacementCredentials);
     const isMasked = (value: unknown) =>
@@ -191,8 +194,8 @@ export async function POST(request: NextRequest) {
           {
             params: {
               fields: 'id,display_phone_number,verified_name,quality_rating,code_verification_status',
-              access_token: cleanToken,
             },
+            headers: { Authorization: `Bearer ${cleanToken}` },
             timeout: 10000,
           }
         );

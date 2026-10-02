@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
       const res = await axios.get(url, {
         params: {
           fields: 'id,display_phone_number,verified_name,quality_rating,code_verification_status',
-          access_token: accessToken,
         },
+        headers: { Authorization: `Bearer ${accessToken}` },
         timeout: 10000,
       });
 
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         : 'Successfully connected and verified WhatsApp Cloud API phone number.',
     });
   } catch (error: any) {
-    console.error('[Meta Connection Test Error]:', error);
+    console.error('[Meta Connection Test Error]: verification failed');
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
