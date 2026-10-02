@@ -8,7 +8,7 @@ Overall: **BLOCKED**. Local build/tests do not establish live production accepta
 | Authentication | NOT VERIFIED | Existing auth regressions pass; live deployed signup/login were not exercised with an authenticated account. |
 | Authorization | READY | Reviewed routes resolve session workspace; credential mutations require administrator role. This is the tested code scope, not certification of every endpoint. |
 | Multi-tenancy | READY | Repository/session/media/ownership regressions pass for tested boundaries. Live two-workspace acceptance remains required. |
-| Database | BLOCKED | New additive company/media migration not applied. Core database is reachable. |
+| Database | NOT VERIFIED | Additive company/media migration applied and verified; backup/RLS/live data behavior still require acceptance. |
 | Meta API | BLOCKED | Local token probe returns 401/code190; production workspace token and app permissions need live validation. |
 | Webhooks | BLOCKED | Shared dispatcher and signature/claim tests pass; original key/App Secret, deployed callbacks and real inbound event must be verified. |
 | Automation | NOT VERIFIED | Branch/condition/failure/graph regressions pass; all real custom workflow combinations and external node integrations not verified. Unconfigured Sheets node fails honestly. |
@@ -16,12 +16,12 @@ Overall: **BLOCKED**. Local build/tests do not establish live production accepta
 | Broadcast | BLOCKED | Enqueue fails visibly without Redis. Live delivery, retry and consent controls need acceptance. |
 | Queue | BLOCKED | Redis connectivity probe failed. |
 | Worker | NOT VERIFIED | Authenticated delay runner/overlap tests pass; hosting process availability, uptime and restart recovery unverified. |
-| Media | BLOCKED | Persistent bytes/UUID/tenant/rollback tests pass; private bucket migration and live upload/download/Meta use not verified. |
+| Media | NOT VERIFIED | Persistent bytes/UUID/tenant/rollback tests pass; private bucket verified; live upload/download/Meta use not verified. |
 | Leads | NOT VERIFIED | UUID checked insert and canonical lead-trigger execution implemented; live lead ingestion and upstream Meta lead-form retrieval/qualification need acceptance. |
 | Test Center | READY | Synthetic inbound uses canonical engine; sandbox sessions separate, no synthetic care-window opening, delivery is labeled. It intentionally does not prove Meta transport success. |
 | Performance | NEEDS FIX | Index migration and linear lead association added; high-volume pagination, queries and load tests remain. |
 | Monitoring | NEEDS FIX | Persistent workflow/webhook events exist; auxiliary lab logs remain local/volatile and centralized monitoring/alert delivery is not configured. |
-| Deployment | BLOCKED | Migration/configuration/live acceptance pending; no push or deploy. |
+| Deployment | BLOCKED | Migration applied; eb12a25 deployed successfully. Live smoke checks pass; credential/worker configuration and full acceptance pending. |
 
 ## Real end-to-end acceptance
 
@@ -44,7 +44,7 @@ These statuses describe **real application/Meta operations**, not mocked regress
 | 13. Delay | NOT VERIFIED | Due-delay/simulation tests pass; host runner verification needed. |
 | 14. Resume | NOT VERIFIED | Resume regressions pass; real timer/reply acceptance needed. |
 | 15. Lead creation | NOT VERIFIED | Checked UUID insertion implemented; actual ingestion needed. |
-| 16. Media upload | BLOCKED | Missing bucket/company migration; storage tests use fake backend. |
+| 16. Media upload | NOT VERIFIED | Private bucket/company fields now verified; real upload roundtrip still pending. |
 | 17. Broadcast | BLOCKED | Redis unavailable; worker and small consented acceptance batch needed. |
 | 18. Delivery status | NOT VERIFIED | Receipt regressions pass; live delivered/read webhook needed. |
 | 19. Worker restart | NOT VERIFIED | Runner tests pass; live restart/retry recovery needed. |

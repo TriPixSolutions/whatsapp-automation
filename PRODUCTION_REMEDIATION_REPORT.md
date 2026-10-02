@@ -46,7 +46,7 @@ Core changes: `src/lib/automations/inboundDispatcher.ts`, `advancedWorkflowEngin
 
 New guide: `/meta-setup-guide`, linked from the application header. Covers app/assets/token distinctions, callback and WABA subscriptions, real inbound proof, custom workflows, reply sessions, carousel requirements, workers and troubleshooting.
 
-New additive migration: `supabase/migrations/20261002_business_media.sql`. Adds company fields and query indexes, creates a **private** workspace-media bucket. It is **not applied** to production. It does not delete existing customer data. Verify the bucket remains private if one already exists; ON CONFLICT does not silently change an existing bucket.
+New additive migration: `supabase/migrations/20261002_business_media.sql`. Adds company fields and query indexes, creates a **private** workspace-media bucket. Applied to production on 2 October 2026; company columns and private bucket were independently verified through Supabase API. It does not delete existing customer data. Verify the bucket remains private if one already exists; ON CONFLICT does not silently change an existing bucket.
 
 Credential rotation: `scripts/rotate-credentials.cjs`. Explicit old/new keys, dry-run default, validates every record before writes, --apply creates a restricted encrypted snapshot and uses concurrency checks. Use a maintenance window; it is not one transaction across all connections. On interruption, reconcile from the recovery snapshot before switching service keys. It was not run against production.
 
@@ -77,7 +77,7 @@ Guide smoke test: served the built standalone application, viewed the page in th
 | Redis connectivity | FAIL, connection failed |
 | Local Meta environment token | FAIL, HTTP 401 / code 190 |
 
-The local Meta probe does not establish the validity of a different token stored in a workspace connection. No secret values/customer messages were printed. Browser inventory had no active tabs, so no authenticated Hostinger or Supabase deployment session was available for applying changes.
+The local Meta probe does not establish the validity of a different token stored in a workspace connection. No secret values/customer messages were printed. That probe was from the previous local validation. In this continuation, authenticated dashboards became available. Production ENCRYPTION_KEY was copied securely to ignored .env.local without rotation; stored connection credentials decrypt successfully. Saved App Secret has an unexpected format and the saved workspace token returns HTTP 401 / Meta code 190. Hostinger logs independently show incoming signed requests failing HMAC verification.
 
 ## Release sequence
 
@@ -89,4 +89,15 @@ The local Meta probe does not establish the validity of a different token stored
 6. Configure provider-supported GEMINI_MODEL and key for AI. Set approved public WORKFLOW_HTTP_ALLOWED_HOSTS only for integrations you use.
 7. Rebuild/restart web and worker, execute the 20 live acceptance checks in the readiness report, then approve release.
 
-Production validation failed, so these changes have **not been pushed or deployed**. This follows the attached requirement to push only after final validation succeeds.
+After successful local build, 91 tests and release checks, commit eb12a25 was pushed to main during this continuation to deploy the critical security fixes and enable live acceptance. Hostinger completed deployment of eb12a25; current deployment confirmed in the dashboard. Overall production acceptance remains blocked by credentials and worker infrastructure; build completion alone does not establish readiness.
+
+## Continuation evidence
+
+- Supabase SQL execution reported success; company field and private media bucket API checks both passed.
+- Hostinger already contains Supabase, session, worker and encryption settings. Missing local settings were not assumed missing in production.
+- Live health endpoint returned 200 with database/session services up before deployment.
+- Old deployed diagnostics returned 200 anonymously and guide returned 404: verified reason to deploy the tested fix. After deployment: health 200, anonymous diagnostics 401, media 401, unauthenticated worker 401, guide 200 and CSS 200.
+- Correct App Secret and replacement Meta token must be entered privately by the owner; browser credential-change policy requires user handoff for entry/submission.
+- Redis and persistent worker are not configured among the observed production environment variables. The scheduler template in scripts/supabase-workflow-scheduler.template.sql is prepared but not installed; it does not replace the campaign worker.
+
+Live release smoke checks completed: deployed guide content and browser assets passed; database/session health passed; diagnostics and worker authorization passed. Live SaaS account sign-in and Meta send/receive acceptance await owner credential handoff. No real customer message was sent during these checks.
