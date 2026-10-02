@@ -6,7 +6,7 @@ const DEFAULT_ID = process.env.DEFAULT_WORKSPACE_ID || '00000000-0000-0000-0000-
 export const normalizeWorkspaceId = (id: string) => id === 'default' ? DEFAULT_ID : id;
 
 export const SettingsDB = {
-  async get(workspaceId: string = DEFAULT_ID): Promise<WorkspaceSettings> {
+  async get(workspaceId: string = DEFAULT_ID, replacements: Partial<WorkspaceSettings> = {}): Promise<WorkspaceSettings> {
     const id = normalizeWorkspaceId(workspaceId);
     const db = database();
     const results = await Promise.all([
@@ -20,8 +20,8 @@ export const SettingsDB = {
       id, name: workspace?.name || 'Workspace',
       wabaId: connection?.waba_id ?? env.META_WABA_ID ?? '',
       phoneNumberId: phone?.phone_number_id ?? env.META_PHONE_NUMBER_ID ?? '',
-      accessToken: decryptToken(connection?.access_token_encrypted ?? env.META_ACCESS_TOKEN ?? ''),
-      appSecret: decryptToken(connection?.app_secret_encrypted ?? env.META_APP_SECRET ?? ''),
+      accessToken: replacements.accessToken !== undefined ? replacements.accessToken : decryptToken(connection?.access_token_encrypted ?? env.META_ACCESS_TOKEN ?? ''),
+      appSecret: replacements.appSecret !== undefined ? replacements.appSecret : decryptToken(connection?.app_secret_encrypted ?? env.META_APP_SECRET ?? ''),
       verifyToken: connection?.webhook_verify_token ?? env.META_WEBHOOK_VERIFY_TOKEN ?? '',
       appId: connection?.app_id ?? env.META_APP_ID ?? '',
       catalogId: connection?.catalog_id ?? '', adAccountId: connection?.ad_account_id ?? '',
@@ -59,10 +59,18 @@ export const SettingsDB = {
   },
   async update(partial: Partial<WorkspaceSettings>, workspaceId: string = DEFAULT_ID): Promise<WorkspaceSettings> {
     const id = normalizeWorkspaceId(workspaceId);
-    const current = await this.get(id);
+    const current = await this.get(id, partial);
     const changes = Object.fromEntries(Object.entries(partial).filter(([, value]) => value !== undefined));
     const updated = { ...current, ...changes, id, updatedAt: new Date().toISOString() };
     const db = database();
+    if (updated.phoneNumberId) {
+      const owner = checked(await db.from('phone_numbers').select('workspace_id').eq('phone_number_id', updated.phoneNumberId).maybeSingle());
+      if (owner && owner.workspace_id !== id) throw new Error('Phone number belongs to another workspace');
+    }
+    if (updated.wabaId) {
+      const owner = checked(await db.from('meta_connections').select('workspace_id').eq('waba_id', updated.wabaId).maybeSingle());
+      if (owner && owner.workspace_id !== id) throw new Error('Business account belongs to another workspace');
+    }
     checked(await db.from('workspaces').upsert({ id, name: updated.name, custom_subdomain: updated.customSubdomain || null,
       updated_at: updated.updatedAt }, { onConflict: 'id' }));
     checked(await db.from('meta_connections').upsert({

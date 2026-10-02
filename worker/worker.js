@@ -14,10 +14,12 @@ const { Worker } = require('bullmq');
 const Redis = require('ioredis');
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
+const { graphVersion } = require('../shared/meta-config.cjs');
+const META_GRAPH_VERSION = graphVersion(process.env);
 
 // Initialize Redis Client
-const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required for the background worker');
+const redisUrl = process.env.REDIS_URL;
 const redisConnection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
@@ -50,6 +52,7 @@ const crypto = require('crypto');
 // AES-256-GCM Decryption Helper
 const ALGORITHM = 'aes-256-gcm';
 function getEncryptionKey() {
+  if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) throw new Error('ENCRYPTION_KEY required');
   const envKey =
     process.env.ENCRYPTION_KEY ||
     process.env.JWT_SECRET ||
@@ -65,7 +68,7 @@ function decryptToken(cipherString) {
   }
   try {
     const parts = cipherString.split(':');
-    if (parts.length !== 5) return cipherString;
+    if (parts.length !== 5) throw new Error('Malformed encrypted credential');
     const [, , ivHex, tagHex, encryptedHex] = parts;
     const key = getEncryptionKey();
     const iv = Buffer.from(ivHex, 'hex');
@@ -76,8 +79,7 @@ function decryptToken(cipherString) {
     decrypted += decipher.final('utf8');
     return decrypted;
   } catch (error) {
-    console.error('[Worker Crypto] Decryption failed:', error.message);
-    return cipherString;
+    throw new Error('Stored credential cannot be decrypted; restore ENCRYPTION_KEY or reconnect Meta');
   }
 }
 

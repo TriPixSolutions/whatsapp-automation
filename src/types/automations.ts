@@ -308,6 +308,7 @@ export interface ExecutionTraceStep {
 }
 
 export interface WorkflowSessionState {
+  isTestSimulation?: boolean;
   id: string;
   workspaceId: string;
   phoneNumber: string;

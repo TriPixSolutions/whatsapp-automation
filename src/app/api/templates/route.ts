@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const templates = TemplatesDB.list();
+    const templates = await TemplatesDB.list(user.workspaceId!);
     return NextResponse.json(templates);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
     if (action === 'sync_meta') {
       const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
       const settings = await SettingsDB.get(targetWorkspaceId);
-      const wabaId = settings.wabaId || process.env.META_WABA_ID;
-      const accessToken = settings.accessToken || process.env.META_ACCESS_TOKEN;
+      const wabaId = settings.wabaId;
+      const accessToken = settings.accessToken;
 
       if (!wabaId || !accessToken) {
         return NextResponse.json(
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
           const footerComponent = t.components?.find((c: any) => c.type === 'FOOTER');
           const buttonsComponent = t.components?.find((c: any) => c.type === 'BUTTONS');
 
-          TemplatesDB.upsert({
+          await TemplatesDB.upsert({
             id: t.id || `tmpl_${t.name}`,
             name: t.name,
             category: t.category || 'MARKETING',
@@ -68,20 +68,21 @@ export async function POST(request: NextRequest) {
               phone_number: b.phone_number,
             })),
             updatedAt: new Date().toISOString(),
-          });
+          }, targetWorkspaceId);
         }
-        return NextResponse.json({ success: true, count: metaRes.templates.length, templates: TemplatesDB.list() });
+        return NextResponse.json({ success: true, count: metaRes.templates.length, templates: await TemplatesDB.list(user.workspaceId!) });
       }
 
       return NextResponse.json({ success: false, error: metaRes.error || 'Failed to fetch templates from Meta' }, { status: 400 });
     }
 
     if (template && template.name) {
-      const saved = TemplatesDB.upsert({
+      const saved = await TemplatesDB.upsert({
         ...template,
+        status: 'PENDING',
         id: template.id || `tmpl_${template.name}`,
         updatedAt: new Date().toISOString(),
-      });
+      }, user.workspaceId!);
       return NextResponse.json({ success: true, template: saved });
     }
 

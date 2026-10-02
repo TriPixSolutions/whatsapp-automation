@@ -4,6 +4,7 @@ import type { WorkflowDefinition, WorkflowExecutionLog, WorkflowSessionState } f
 
 const DEFAULT_ID = process.env.DEFAULT_WORKSPACE_ID || '00000000-0000-0000-0000-000000000001';
 const workspace = (id?: string) => !id || id === 'default' ? DEFAULT_ID : id;
+const sessionPhone = (value: string, simulation = false) => `${simulation ? 'sandbox:' : ''}${phone(value)}`;
 const phone = (value: string) => `+${value.replace(/[^0-9]/g, '')}`;
 
 function mapWorkflow(row: any): WorkflowDefinition {
@@ -14,7 +15,7 @@ function mapWorkflow(row: any): WorkflowDefinition {
 
 function mapSession(row: any): WorkflowSessionState {
   return { ...row.session_data, id: row.id, workspaceId: row.workspace_id,
-    phoneNumber: row.phone_number, workflowId: row.workflow_id, executionId: row.execution_id,
+    phoneNumber: row.session_data?.phoneNumber || row.phone_number, workflowId: row.workflow_id, executionId: row.execution_id,
     currentNodeId: row.current_node_id, waitingFor: row.waiting_for,
     pausedAt: row.paused_at, expiresAt: row.expires_at };
 }
@@ -75,7 +76,7 @@ export const WorkflowSessionsDB = {
     const workspaceId = workspace(session.workspaceId);
     const cleanPhone = phone(session.phoneNumber);
     const row = checked(await database().from('workflow_sessions').upsert({
-      id: session.id, workspace_id: workspaceId, phone_number: cleanPhone,
+      id: session.id, workspace_id: workspaceId, phone_number: sessionPhone(cleanPhone, session.isTestSimulation),
       workflow_id: session.workflowId, execution_id: session.executionId,
       current_node_id: session.currentNodeId, waiting_for: session.waitingFor,
       paused_at: session.pausedAt, expires_at: session.expiresAt,
@@ -84,13 +85,13 @@ export const WorkflowSessionsDB = {
     }, { onConflict: 'workspace_id,phone_number' }).select('*').single());
     return mapSession(row);
   },
-  async get(phoneNumber: string, workspaceId = DEFAULT_ID): Promise<WorkflowSessionState | null> {
+  async get(phoneNumber: string, workspaceId = DEFAULT_ID, simulation = false): Promise<WorkflowSessionState | null> {
     const id = workspace(workspaceId);
     const row = checked(await database().from('workflow_sessions').select('*')
-      .eq('workspace_id', id).eq('phone_number', phone(phoneNumber)).maybeSingle());
+      .eq('workspace_id', id).eq('phone_number', sessionPhone(phoneNumber, simulation)).maybeSingle());
     if (!row) return null;
     if (row.waiting_for !== 'delay' && Date.parse(row.expires_at) < Date.now()) {
-      await this.delete(phoneNumber, id, row.id);
+      await this.delete(phoneNumber, id, row.id, simulation);
       return null;
     }
     // Safe lookup: Never delete the active customer session if workflow lookup fails!
@@ -100,9 +101,9 @@ export const WorkflowSessionsDB = {
     }
     return mapSession(row);
   },
-  async delete(phoneNumber: string, workspaceId = DEFAULT_ID, expectedId?: string): Promise<boolean> {
+  async delete(phoneNumber: string, workspaceId = DEFAULT_ID, expectedId?: string, simulation = false): Promise<boolean> {
     let query = database().from('workflow_sessions').delete().eq('workspace_id', workspace(workspaceId))
-      .eq('phone_number', phone(phoneNumber));
+      .eq('phone_number', sessionPhone(phoneNumber, simulation));
     if (expectedId) query = query.eq('id', expectedId);
     const rows = checked(await query.select('id')) || [];
     return rows.length > 0;

@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 
-const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v25.0';
+import { META_GRAPH_VERSION } from '@/lib/meta/config';
 
 export interface MetaApiResult {
   success: boolean;
@@ -132,12 +132,12 @@ export class MetaWhatsAppClient {
       },
     };
 
-    console.log(`[Meta Client] Outbound Request to Meta WhatsApp Cloud API:`);
-    console.log(`   - Endpoint: POST ${url}`);
-    console.log(`   - Phone Number ID: ${phoneNumberId}`);
-    console.log(`   - Access Token configured: ${Boolean(accessToken)} (Length: ${accessToken ? accessToken.length : 0})`);
-    console.log(`   - Recipient (Sanitized): ${recipient}`);
-    console.log('   - Request Payload:', JSON.stringify(payload, null, 2));
+
+
+
+
+
+
 
     try {
       const res = await axios.post(url, payload, {
@@ -148,11 +148,11 @@ export class MetaWhatsAppClient {
         timeout: 12000,
       });
 
-      console.log(`[Meta Client] Meta API HTTP ${res.status} Full Response:`, JSON.stringify(res.data, null, 2));
+
 
       const messageId = res.data?.messages?.[0]?.id;
       if (!messageId || typeof messageId !== 'string' || !messageId.startsWith('wamid.')) {
-        console.error('[Meta Client] Meta responded with success status but message ID is missing or invalid:', res.data);
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
         return {
           success: false,
           error: 'Meta Cloud API responded without a valid wamid message ID.',
@@ -163,8 +163,8 @@ export class MetaWhatsAppClient {
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
-      console.error(`[Meta Client] Meta API HTTP ${err.response?.status || 'ERR'} Full Error Response:`, JSON.stringify(err.response?.data || err.message, null, 2));
-      console.error('[Meta Client] sendText error:', parsed);
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       return {
         success: false,
         error: parsed.message,
@@ -228,7 +228,7 @@ export class MetaWhatsAppClient {
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
-      console.error('[Meta Client] sendInteractiveButtons error:', parsed);
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       return {
         success: false,
         error: parsed.message,
@@ -294,7 +294,7 @@ export class MetaWhatsAppClient {
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
-      console.error('[Meta Client] sendInteractiveList error:', parsed);
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       return {
         success: false,
         error: parsed.message,
@@ -374,7 +374,7 @@ export class MetaWhatsAppClient {
         return { success: true, messageId, metaMessageId: messageId, details: res.data };
       } catch (err: any) {
         // Fallback to interactive list if template is unapproved
-        console.warn('[Meta Client] Carousel template API returned error, falling back to Interactive format');
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       }
     }
 
@@ -424,13 +424,9 @@ export class MetaWhatsAppClient {
       payload.template.components = components;
     }
 
-    console.log(`[Meta Client] POST ${url}`);
-    console.log('[Meta Client] Template Debug Details:', {
-      templateName,
-      languageCode,
-      recipient,
-    });
-    console.log('[Meta Client] Outbound API Payload:', JSON.stringify(payload, null, 2));
+
+
+
 
     try {
       const res = await axios.post(url, payload, {
@@ -441,11 +437,11 @@ export class MetaWhatsAppClient {
         timeout: 12000,
       });
 
-      console.log(`[Meta Client] Meta API HTTP ${res.status} Full Response:`, JSON.stringify(res.data, null, 2));
+
 
       const messageId = res.data?.messages?.[0]?.id;
       if (!messageId || typeof messageId !== 'string' || !messageId.startsWith('wamid.')) {
-        console.error('[Meta Client] Meta response missing valid wamid message ID:', res.data);
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
         return {
           success: false,
           error: 'Meta Cloud API did not return a valid wamid message ID.',
@@ -456,8 +452,8 @@ export class MetaWhatsAppClient {
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
-      console.error(`[Meta Client] Meta API HTTP ${err.response?.status || 'ERR'} Full Error Response:`, JSON.stringify(err.response?.data || err.message, null, 2));
-      console.error('[Meta Client] sendTemplate error:', parsed);
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       return {
         success: false,
         error: parsed.message,
@@ -522,7 +518,7 @@ export class MetaWhatsAppClient {
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
-      console.error(`[Meta Client] sendMedia (${type}) error:`, parsed);
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       return {
         success: false,
         error: parsed.message,
@@ -565,7 +561,7 @@ export class MetaWhatsAppClient {
       return { success: true, mediaId };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
-      console.error('[Meta Client] uploadMedia error:', parsed);
+      console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
       return { success: false, error: parsed.message };
     }
   }

@@ -1,3 +1,4 @@
+import { META_GRAPH_VERSION } from '@/lib/meta/config';
 import {
   WorkflowDefinition,
   WorkflowNode,
@@ -10,7 +11,7 @@ import {
 } from '@/types/automations';
 import { TestCenterStore } from './testCenterStore';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import { ContactsDB, MessagesDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { ConversationsDB, ContactsDB, MessagesDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
 export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -617,7 +618,7 @@ export class AdvancedWorkflowEngine {
     }
     context.contactId = contact.id;
 
-    console.log(`[WorkflowEngine] 🚀 WORKFLOW STARTED: "${workflow.name}" (${workflow.id}) for recipient ${context.phoneNumber} via trigger ${context.triggerType}`);
+
 
     // 2. Initialize execution log
     const execLog: WorkflowExecutionLog = {
@@ -682,39 +683,35 @@ export class AdvancedWorkflowEngine {
     if (session.waitingFor === 'delay' &&
       (event.action !== 'delay_expired' || !(Date.parse(session.expiresAt) <= Date.now()))) return null;
     if (event.action === 'delay_expired' && session.waitingFor !== 'delay') return null;
-    console.log(`[BUTTON PAYLOAD] Button action received for session ${session.id}:\n` +
-      `  - buttonId: "${event.buttonId || 'none'}"\n` +
-      `  - buttonTitle: "${event.buttonTitle || 'none'}"\n` +
-      `  - action: "${event.action}"\n` +
-      `  - fromPhone: "${session.phoneNumber}"`);
+
 
     const workflow = await TestCenterStore.getWorkflow(session.workflowId, session.workspaceId);
     if (!workflow || !workflow.isActive || workflow.workspaceId !== session.workspaceId) {
       const err = `[WORKFLOW NOT FOUND] Workflow "${session.workflowId}" not found for session "${session.id}"`;
-      console.error(err);
+      console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
       return null;
     }
-    console.log(`[WORKFLOW FOUND] Workflow ID: "${workflow.id}", Name: "${workflow.name}"`);
+
 
     const pausedNode = workflow.nodes.find((n) => n.id === session.currentNodeId);
     if (!pausedNode) {
       const err = `[NODE NOT FOUND] Paused node "${session.currentNodeId}" not found in workflow "${workflow.id}"`;
-      console.error(err);
+      console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
       return null;
     }
-    console.log(`[NODE FOUND] Current Paused Node: "${pausedNode.title}" (${pausedNode.id}), Type: "${pausedNode.type}"`);
+
 
     const resolution = this.resolveNextBranchDetailed(workflow, pausedNode, event);
     const nextNodeId = resolution.nextNodeId;
 
     if (!nextNodeId) {
-      console.error(`[BRANCH NOT FOUND] No matching branch found from node "${pausedNode.title}" (${pausedNode.id}) for action: ${event.action} (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
+      console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
       return null;
     }
 
-    console.log(`[BRANCH FOUND] Matched branch from node "${pausedNode.title}" (${pausedNode.id}) ➔ Next Node ID: "${nextNodeId}" (Button ID: "${event.buttonId}", Title: "${event.buttonTitle}")`);
-    console.log(`[NEXT NODE] Next Node ID: "${nextNodeId}"`);
-    console.log(`[WORKFLOW RESUMED] Workflow "${workflow.name}" (${workflow.id}) resumed from node "${pausedNode.title}" (${pausedNode.id}) ➔ Advancing to node "${nextNodeId}"`);
+
+
+
 
     // Fetch existing execution log or fallback
     let execLog = await TestCenterStore.getExecutionLog(session.executionId, session.workspaceId);
@@ -779,7 +776,7 @@ export class AdvancedWorkflowEngine {
     if (!nextNode) {
       execLog.status = 'completed';
       execLog.completedAt = new Date().toISOString();
-      await TestCenterStore.clearSession(session.phoneNumber, session.workspaceId, session.id);
+      await TestCenterStore.clearSession(session.phoneNumber, session.workspaceId, session.id, isTestSimulation);
       await TestCenterStore.recordExecutionLog(execLog);
       return execLog;
     }
@@ -833,14 +830,8 @@ export class AdvancedWorkflowEngine {
     while (currentNode && stepCount < maxSteps) {
       stepCount++;
       const stepStart = Date.now();
-      console.log(`[NEXT NODE] Next node executed:\n` +
-        `  - nodeId: "${currentNode.id}"\n` +
-        `  - title: "${currentNode.title}"\n` +
-        `  - type: "${currentNode.type}"`);
-      console.log(`[STEP 6: NEXT NODE EXECUTED] Starting execution of next node:\n` +
-        `  - node type: "${currentNode.type}"\n` +
-        `  - node id: "${currentNode.id}"\n` +
-        `  - node title: "${currentNode.title}"`);
+
+
       const traceStep: ExecutionTraceStep = {
         nodeId: currentNode.id,
         nodeType: currentNode.type,
@@ -866,26 +857,17 @@ export class AdvancedWorkflowEngine {
           case 'trigger_list':
           case 'trigger_flow': {
             // Trigger Evaluation Logging & Processing
-            console.log(`[TRIGGER EVALUATION STARTED]\n` +
-              `  - workflowId: "${workflow.id}"\n` +
-              `  - workflowName: "${workflow.name}"\n` +
-              `  - nodeId: "${currentNode.id}"\n` +
-              `  - nodeTitle: "${currentNode.title}"\n` +
-              `  - nodeType: "${currentNode.type}"\n` +
-              `  - triggerType: "${context.triggerType}"\n` +
-              `  - phoneNumber: "${context.phoneNumber}"\n` +
-              `  - incomingText: "${context.triggerPayload?.text || context.triggerPayload?.body || ''}"\n` +
-              `  - storedKeyword: "${currentNode.config?.text || currentNode.triggerKeyword || workflow.triggerKeyword || ''}"`);
+
 
             const evalResult = AdvancedWorkflowEngine.evaluateTriggerNode(currentNode, workflow, context);
             const incomingText = evalResult.incomingText || (context.triggerPayload?.text || '').toString().trim();
             const expectedKeywords = evalResult.expectedKeywords || (currentNode.config?.text || workflow.triggerKeyword || '');
 
-            console.log(`[TRIGGER EVALUATION: AFTER] Result: matched=${evalResult.matched}, incomingText="${incomingText}", expectedKeywords="${expectedKeywords}"${evalResult.reason ? `, reason="${evalResult.reason}"` : ''}`);
+
 
             if (!evalResult.matched) {
-              console.log(`[TRIGGER FAILED] Trigger condition failed: incoming text "${incomingText}" does not match stored keyword(s) "${expectedKeywords}" for workflow "${workflow.id}"`);
-              console.log(`[WORKFLOW WAITING FOR TRIGGER] Workflow "${workflow.name}" (${workflow.id}) remains idle waiting for trigger condition.`);
+
+
 
               traceStep.status = 'waiting_for_trigger';
               traceStep.outputResult = {
@@ -910,8 +892,8 @@ export class AdvancedWorkflowEngine {
               return execLog;
             }
 
-            console.log(`[TRIGGER MATCHED] Trigger matched successfully: incoming text "${incomingText}" matches stored keyword(s) "${expectedKeywords}" for workflow "${workflow.id}"`);
-            console.log(`[WORKFLOW STARTED] Workflow "${workflow.name}" (${workflow.id}) started for recipient ${context.phoneNumber}`);
+
+
 
             traceStep.status = 'trigger_fired';
             traceStep.outputResult = {
@@ -920,7 +902,7 @@ export class AdvancedWorkflowEngine {
               payload: context.triggerPayload,
               matchedKeyword: expectedKeywords,
             };
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id})`);
+
             break;
           }
 
@@ -939,11 +921,7 @@ export class AdvancedWorkflowEngine {
 
             if (sendResult.success) {
               traceStep.status = 'message_sent';
-              console.log(`[MESSAGE SENT] Message dispatched successfully:\n` +
-                `  - node: "${currentNode.title}" (${currentNode.id})\n` +
-                `  - type: "${currentNode.type}"\n` +
-                `  - to: "${context.phoneNumber}"\n` +
-                `  - messageId: "${sendResult.messageId || 'simulated'}"`);
+
               if (sendResult.messageId) {
                 metaResponses.push({
                   messageId: sendResult.messageId,
@@ -955,13 +933,13 @@ export class AdvancedWorkflowEngine {
             } else {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
-              console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
+              console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
             }
 
             traceStep.completedAt = new Date().toISOString();
             traceStep.durationMs = Date.now() - stepStart;
 
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Interactive buttons dispatched to ${context.phoneNumber}`);
+
 
             if (!sendResult.success) {
               stopTraversal = true;
@@ -1006,10 +984,10 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
               };
-              await TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession({ ...session, isTestSimulation: Boolean(context.isTestSimulation) });
 
-              console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused at "${currentNode.title}" (${currentNode.id})`);
-              console.log(`[WorkflowEngine] ⏳ WAITING FOR USER ACTION: Waiting for button click from ${context.phoneNumber} (Options: ${buttons.map((b: any) => b.title).join(', ')})`);
+
+
 
               execLog.status = 'waiting';
               execLog.currentNodeId = currentNode.id;
@@ -1093,7 +1071,7 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
               };
-              await TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession({ ...session, isTestSimulation: Boolean(context.isTestSimulation) });
 
               execLog.status = 'waiting';
               execLog.currentNodeId = currentNode.id;
@@ -1134,10 +1112,10 @@ export class AdvancedWorkflowEngine {
               pausedAt: new Date().toISOString(),
               expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
             };
-            await TestCenterStore.saveSession(session);
+            await TestCenterStore.saveSession({ ...session, isTestSimulation: Boolean(context.isTestSimulation) });
 
-            console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused at "${currentNode.title}" (${currentNode.id})`);
-            console.log(`[WorkflowEngine] ⏳ WAITING FOR USER ACTION: Waiting for customer reply / product selection from ${context.phoneNumber}`);
+
+
 
             execLog.status = 'waiting';
             execLog.currentNodeId = currentNode.id;
@@ -1165,11 +1143,7 @@ export class AdvancedWorkflowEngine {
 
             if (sendResult.success) {
               traceStep.status = 'message_sent';
-              console.log(`[MESSAGE SENT] Carousel dispatched successfully:\n` +
-                `  - node: "${currentNode.title}" (${currentNode.id})\n` +
-                `  - type: "${currentNode.type}"\n` +
-                `  - to: "${context.phoneNumber}"\n` +
-                `  - messageId: "${sendResult.messageId || 'simulated'}"`);
+
               if (sendResult.messageId) {
                 metaResponses.push({
                   messageId: sendResult.messageId,
@@ -1182,7 +1156,7 @@ export class AdvancedWorkflowEngine {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
               stopTraversal = true;
-              console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
+              console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
             }
 
             traceStep.completedAt = new Date().toISOString();
@@ -1226,7 +1200,7 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
               };
-              await TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession({ ...session, isTestSimulation: Boolean(context.isTestSimulation) });
 
               execLog.status = 'waiting';
               execLog.currentNodeId = currentNode.id;
@@ -1240,7 +1214,7 @@ export class AdvancedWorkflowEngine {
               return execLog;
             }
 
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Dispatched to ${context.phoneNumber}`);
+
             break;
           }
 
@@ -1260,11 +1234,7 @@ export class AdvancedWorkflowEngine {
 
             if (sendResult.success) {
               traceStep.status = 'message_sent';
-              console.log(`[MESSAGE SENT] Message dispatched successfully:\n` +
-                `  - node: "${currentNode.title}" (${currentNode.id})\n` +
-                `  - type: "${currentNode.type}"\n` +
-                `  - to: "${context.phoneNumber}"\n` +
-                `  - messageId: "${sendResult.messageId || 'simulated'}"`);
+
               if (sendResult.messageId) {
                 metaResponses.push({
                   messageId: sendResult.messageId,
@@ -1277,9 +1247,9 @@ export class AdvancedWorkflowEngine {
               traceStep.status = 'failed';
               traceStep.error = sendResult.error || 'Meta API returned message dispatch failure';
               stopTraversal = true;
-              console.error(`[MESSAGE SENT FAILED] Message dispatch failed for node "${currentNode.title}" (${currentNode.id}): ${sendResult.error}`);
+              console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
             }
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [${currentNode.type}] "${currentNode.title}" (${currentNode.id}) ➔ Dispatched to ${context.phoneNumber}`);
+
             break;
           }
 
@@ -1301,7 +1271,7 @@ export class AdvancedWorkflowEngine {
                 waitedMs: simDelayMs,
               };
               traceStep.status = 'node_executed';
-              console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [delay] "${currentNode.title}" (${currentNode.id}) ➔ Waited ${amount}s simulation`);
+
             } else {
               // Pause execution and schedule follow-up job
               traceStep.status = 'waiting_user_action';
@@ -1327,9 +1297,9 @@ export class AdvancedWorkflowEngine {
                 pausedAt: new Date().toISOString(),
                 expiresAt: scheduledFor,
               };
-              await TestCenterStore.saveSession(session);
+              await TestCenterStore.saveSession({ ...session, isTestSimulation: Boolean(context.isTestSimulation) });
 
-              console.log(`[WorkflowEngine] ⏸ NODE PAUSED: Workflow "${workflow.name}" paused for scheduled delay until ${scheduledFor}`);
+
 
               execLog.status = 'waiting';
               execLog.currentNodeId = currentNode.id;
@@ -1358,7 +1328,7 @@ export class AdvancedWorkflowEngine {
               currentContextVariables: { ...executionVariables },
             };
             traceStep.status = 'node_executed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [variable] Set ${key}="${val}"`);
+
             break;
           }
 
@@ -1376,7 +1346,7 @@ export class AdvancedWorkflowEngine {
             if (conditionResult.branchNextNodeId) {
               nextNodeIdToFollow = conditionResult.branchNextNodeId;
             }
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [condition] "${currentNode.title}" ➔ Evaluated to ${conditionResult.conditionResult}`);
+
             break;
           }
 
@@ -1393,18 +1363,13 @@ export class AdvancedWorkflowEngine {
               branchId: matchedBranch?.id,
             };
             traceStep.status = 'node_executed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [multi_branch] "${currentNode.title}" ➔ Selected "${matchedBranch?.label}"`);
+
             break;
           }
 
           case 'crm_action': {
             const conf = currentNode.config || {};
-            console.log(`[STEP 9: CRM ACTION STARTED]\n` +
-              `  - CRM action started for node: "${currentNode.title}" (${currentNode.id})\n` +
-              `  - Stage: "${conf.stage}"\n` +
-              `  - Notes: "${conf.notes}"\n` +
-              `  - Priority: "${conf.priority || 'standard'}"\n` +
-              `  - Phone: "${context.phoneNumber}"`);
+
 
             const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
             if (contactRecord) {
@@ -1424,11 +1389,8 @@ export class AdvancedWorkflowEngine {
               notesAdded: conf.notes || 'None',
             };
             traceStep.status = 'node_executed';
-            console.log(`[STEP 9: CRM ACTION COMPLETED]\n` +
-              `  - CRM action completed for node: "${currentNode.title}" (${currentNode.id})\n` +
-              `  - Stage updated to: "${conf.stage}"\n` +
-              `  - Contact: "${contactRecord ? contactRecord.id : 'synced'}"`);
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [crm_action] "${currentNode.title}" ➔ Stage: ${conf.stage || 'updated'}`);
+
+
             break;
           }
 
@@ -1453,7 +1415,7 @@ export class AdvancedWorkflowEngine {
               priority: conf.priority || 'high',
             };
             traceStep.status = 'node_executed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [lead_management] Status: ${conf.leadStatus || 'qualified'}`);
+
             break;
           }
 
@@ -1476,25 +1438,12 @@ export class AdvancedWorkflowEngine {
               tag: conf.tag,
             };
             traceStep.status = 'node_executed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [tag] "${currentNode.title}" ➔ Tag "${conf.tag}" applied`);
+
             break;
           }
 
           case 'google_sheets': {
-            const conf = currentNode.config || {};
-            traceStep.outputResult = {
-              sheetName: conf.sheetName || 'WhatsApp Leads',
-              operation: conf.operation || 'append_row',
-              dataAppended: {
-                phoneNumber: context.phoneNumber,
-                timestamp: new Date().toISOString(),
-                workflowId: workflow.id,
-              },
-              status: 'success',
-            };
-            traceStep.status = 'node_executed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [google_sheets] Sheet: ${conf.sheetName}`);
-            break;
+            throw new Error('Google Sheets integration is not configured. Use a configured API node with an approved integration endpoint.');
           }
 
           case 'webhook':
@@ -1511,7 +1460,7 @@ export class AdvancedWorkflowEngine {
             traceStep.outputResult = integrationResult;
             traceStep.status = integrationResult.success ? 'node_executed' : 'failed';
             if (integrationResult.error) traceStep.error = integrationResult.error;
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [api/webhook] Result: ${integrationResult.success ? 'OK' : 'Error'}`);
+
             break;
           }
 
@@ -1533,7 +1482,7 @@ export class AdvancedWorkflowEngine {
               status: 'assigned',
             };
             traceStep.status = 'node_executed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [assign_agent] Assigned: ${conf.agentName || 'Specialist'}`);
+
             break;
           }
 
@@ -1544,35 +1493,27 @@ export class AdvancedWorkflowEngine {
             const systemPrompt = conf.systemPrompt || 'You are a helpful WhatsApp customer support assistant.';
             const customerMessage = (executionVariables.text || context.triggerPayload?.text || 'Hello').toString();
 
-            let replyText = 'Thank you for reaching out! Our team is reviewing your inquiry.';
-            const apiKey = process.env.GEMINI_API_KEY;
-            if (apiKey) {
-              try {
-                const { GoogleGenerativeAI } = await import('@google/generative-ai');
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({
-                  model: 'gemini-1.5-flash',
-                  systemInstruction: systemPrompt,
-                });
-                const result = await model.generateContent(`Customer message: "${customerMessage}". Respond briefly and professionally for WhatsApp.`);
-                const text = result.response.text().trim();
-                if (text) replyText = text;
-              } catch (err: any) {
-                console.warn('[WorkflowEngine] AI generation failed, using fallback:', err.message);
-              }
+            if (context.isTestSimulation) {
+              traceStep.outputResult = { simulated: true, providerCalled: false, systemPromptConfigured: Boolean(conf.systemPrompt) };
+              traceStep.status = 'node_executed';
+              break;
             }
-
+            const apiKey = process.env.GEMINI_API_KEY;
+            const modelName = process.env.GEMINI_MODEL;
+            if (!apiKey || !modelName) throw new Error('AI provider key and GEMINI_MODEL must be configured');
+            const { GoogleGenerativeAI } = await import('@google/generative-ai');
+            const model = new GoogleGenerativeAI(apiKey).getGenerativeModel({ model: modelName, systemInstruction: systemPrompt });
+            const generated = await model.generateContent(customerMessage);
+            const replyText = generated.response.text().trim();
+            if (!replyText) throw new Error('AI provider returned an empty response');
             const sendResult = await WhatsAppMessageService.send({
-              workspaceId: context.workspaceId,
-              to: context.phoneNumber,
-              type: 'text',
-              text: replyText,
-              bypassWindowCheck: true,
+              requireRealDelivery: true, workspaceId: context.workspaceId,
+              to: context.phoneNumber, type: 'text', text: replyText,
             });
 
             traceStep.outputResult = { aiReply: replyText, success: sendResult.success };
             traceStep.status = sendResult.success ? 'message_sent' : 'failed';
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [ai] Generated AI reply and dispatched`);
+
             break;
           }
 
@@ -1580,7 +1521,7 @@ export class AdvancedWorkflowEngine {
             traceStep.status = 'completed';
             traceStep.outputResult = { workflowCompleted: true };
             nextNodeIdToFollow = undefined;
-            console.log(`[WorkflowEngine] ⚙️ NODE EXECUTED: [end] "${currentNode.title}" (${currentNode.id})`);
+
             break;
           }
 
@@ -1612,16 +1553,16 @@ export class AdvancedWorkflowEngine {
         traceStep.durationMs = Date.now() - stepStart;
         stepsTrace.push(traceStep);
 
-        console.log(`[NEXT NODE EXECUTED] Node "${currentNode.title}" (${currentNode.id}) [${currentNode.type}] executed successfully for ${context.phoneNumber} (Status: ${traceStep.status})`);
+
 
         // Terminate on explicit stop or failed non-recoverable error
-        if (stopTraversal || currentNode.type === 'end' || !nextNodeIdToFollow) {
+        if (traceStep.status === 'failed' || stopTraversal || currentNode.type === 'end' || !nextNodeIdToFollow) {
           break;
         }
 
         currentNode = nodeMap.get(nextNodeIdToFollow);
       } catch (err: any) {
-        console.error(`[WorkflowEngine] ❌ ERROR at node "${currentNode?.title || 'Unknown'}":`, err.message);
+        console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
         traceStep.status = 'failed';
         traceStep.error = err.message;
         traceStep.completedAt = new Date().toISOString();
@@ -1632,7 +1573,7 @@ export class AdvancedWorkflowEngine {
     }
 
     if (stepCount >= maxSteps && currentNode) {
-      console.warn(`[WorkflowEngine] ⚠️ Loop Guard triggered (${maxSteps} steps threshold)`);
+      console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
       stepsTrace.push({
         nodeId: 'loop_guard_protection',
         nodeType: 'end',
@@ -1657,10 +1598,10 @@ export class AdvancedWorkflowEngine {
     // Keep a failed session for a claimed retry. Successful runs consume only the
     // session they resumed, so a newly-created wait state cannot be deleted.
     if (!hasFailures) {
-      await TestCenterStore.clearSession(context.phoneNumber, context.workspaceId, context.resumedSessionId);
+      await TestCenterStore.clearSession(context.phoneNumber, context.workspaceId, context.resumedSessionId, context.isTestSimulation);
     }
 
-    console.log(`[WorkflowEngine] ✅ WORKFLOW COMPLETED: Workflow "${workflow.name}" (${workflow.id}) completed for ${context.phoneNumber} (Status: ${execLog.status})`);
+
 
     await TestCenterStore.recordExecutionLog(execLog);
 
@@ -1780,7 +1721,7 @@ export class AdvancedWorkflowEngine {
         workspaceId: context.workspaceId,
         timestamp: now,
         direction: 'outbound_request',
-        endpoint: `https://graph.facebook.com/v25.0/${settings.phoneNumberId || 'sandbox_phone_id'}/messages`,
+        endpoint: `https://graph.facebook.com/${META_GRAPH_VERSION}/${settings.phoneNumberId || 'sandbox_phone_id'}/messages`,
         method: 'POST',
         phoneNumberId: settings.phoneNumberId || 'sandbox_phone_id',
         wabaId: settings.wabaId || 'sandbox_waba_id',
@@ -1813,8 +1754,7 @@ export class AdvancedWorkflowEngine {
     // Live Meta Dispatch via WhatsAppMessageService
     let serviceResult: any;
     if (messageType === 'carousel') {
-      console.log(`[STEP 7: CAROUSEL EXECUTION]\n` +
-        `  - carousel payload generated: ${JSON.stringify(callPayload, null, 2)}`);
+
       serviceResult = await WhatsAppMessageService.send({
         workspaceId: context.workspaceId,
         to: cleanTo,
@@ -1824,9 +1764,7 @@ export class AdvancedWorkflowEngine {
         templateName: config.templateName,
         requireRealDelivery: true,
       });
-      console.log(`[STEP 7: CAROUSEL EXECUTION]\n` +
-        `  - carousel message sent: ${serviceResult.success ? 'SUCCESS' : 'FAILED'}\n` +
-        `  - Meta API response: ${JSON.stringify(serviceResult, null, 2)}`);
+
     } else if (messageType === 'interactive_button' || messageType === 'quick_reply') {
       serviceResult = await WhatsAppMessageService.send({
         workspaceId: context.workspaceId,
@@ -1903,10 +1841,7 @@ export class AdvancedWorkflowEngine {
         requireRealDelivery: true,
       });
       if (node.id === 'node_pricing_info' || node.title?.toLowerCase().includes('pricing')) {
-        console.log(`[STEP 8: PRICING EXECUTION]\n` +
-          `  - pricing message generated: "${config.text || config.bodyText}"\n` +
-          `  - pricing message sent: ${serviceResult.success ? 'SUCCESS' : 'FAILED'}\n` +
-          `  - Meta API response: ${JSON.stringify(serviceResult, null, 2)}`);
+
       }
     }
 
@@ -1962,7 +1897,7 @@ export class AdvancedWorkflowEngine {
       workspaceId: context.workspaceId,
       timestamp: now,
       direction: 'outbound_request',
-      endpoint: `https://graph.facebook.com/v25.0/${settings.phoneNumberId}/messages`,
+      endpoint: `https://graph.facebook.com/${META_GRAPH_VERSION}/${settings.phoneNumberId}/messages`,
       method: 'POST',
       phoneNumberId: settings.phoneNumberId,
       wabaId: settings.wabaId,
@@ -2050,7 +1985,9 @@ export class AdvancedWorkflowEngine {
     else if (operator === 'exists') matches = Boolean(actualVal);
     else if (operator === 'greater_than') matches = parseFloat(actualVal) > parseFloat(targetVal);
     else if (operator === 'less_than') matches = parseFloat(actualVal) < parseFloat(targetVal);
-    else if (operator === 'replied_within_24h') matches = true;
+    else if (operator === 'replied_within_24h') {
+      matches = await ConversationsDB.isWindowOpen(context.phoneNumber, context.workspaceId);
+    }
 
     const branchNextNodeId = matches ? config.trueNextNodeId : config.falseNextNodeId;
     return {
@@ -2073,10 +2010,14 @@ export class AdvancedWorkflowEngine {
     const url = config.webhookUrl || config.apiUrl;
 
     if (!url) {
-      return { success: true, data: { status: 'mock_executed', node: node.title } };
+      return { success: false, error: 'An integration endpoint is required' };
     }
 
     try {
+      const destination = new URL(url);
+      const allowedHosts = (process.env.WORKFLOW_HTTP_ALLOWED_HOSTS || '').split(',').map(h => h.trim().toLowerCase()).filter(Boolean);
+      if (destination.protocol !== 'https:' || destination.username || destination.password || !allowedHosts.includes(destination.hostname.toLowerCase())) return { success: false, error: 'Integration host is not approved. Ask an administrator to configure WORKFLOW_HTTP_ALLOWED_HOSTS.' };
+      if (context.isTestSimulation) return { success: true, data: { simulated: true, host: destination.hostname } };
       const method = config.apiMethod || config.webhookMethod || 'POST';
       const body = config.webhookBody ? JSON.parse(config.webhookBody) : {
         event: 'workflow_node_executed',
@@ -2086,6 +2027,7 @@ export class AdvancedWorkflowEngine {
       };
 
       const res = await fetch(url, {
+        redirect: 'error', signal: AbortSignal.timeout(10000),
         method,
         headers: {
           'Content-Type': 'application/json',

@@ -73,7 +73,7 @@ export async function enqueueCampaignJob(options: EnqueueCampaignOptions) {
           variables: options.variables,
         },
         {
-          jobId: `campaign:${workspaceId}:${options.campaignId}`,
+          jobId: `campaign-${workspaceId}-${options.campaignId}`,
           attempts: 3,
           backoff: { type: 'exponential', delay: 2000 },
           removeOnComplete: 100,

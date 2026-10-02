@@ -36,3 +36,6 @@ data/*.json
 logs/
 scratch/
 __agent__/
+
+# Encrypted credential recovery snapshots still contain sensitive material
+credential-recovery-*.json

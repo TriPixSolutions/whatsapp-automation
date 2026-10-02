@@ -8,6 +8,7 @@ const PUBLIC_PAGE_PREFIXES = [
   '/privacy-policy',
   '/terms-of-service',
   '/data-deletion',
+  '/meta-setup-guide',
   '/auth/login',
   '/auth/signup',
 ];
@@ -23,7 +24,6 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth/me',
   '/api/auth/google',
   '/api/ai/chat', // Public website assistant
-  '/api/diagnostics/webhook',
 ];
 
 // Workspace page routes that require authenticated status
@@ -136,6 +136,14 @@ export async function middleware(request: NextRequest) {
   // 2. Allow public APIs unconditionally
   if (PUBLIC_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
+  }
+
+  // Cookie-authenticated mutations must originate from this application.
+  const origin = request.headers.get('origin');
+  if (pathname.startsWith('/api/') && !['GET','HEAD','OPTIONS'].includes(request.method) &&
+      request.cookies.get('pf_session_token') && !request.headers.get('authorization') &&
+      origin && origin !== request.nextUrl.origin) {
+    return NextResponse.json({ error: 'Cross-origin request rejected' }, { status: 403 });
   }
 
   // 3. Allow public pages if matched exactly

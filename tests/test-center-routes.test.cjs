@@ -120,7 +120,7 @@ function triggerRouteHarness(workflow, initialSession = null) {
   let session = initialSession;
   const executions = [], resumes = [];
   const engine = {
-    matchWorkflows: async () => [workflow],
+    matchWorkflows: async type => type === "keyword" ? [workflow] : [],
     executeWorkflow: async (_workflow, context) => {
       executions.push(context);
       session = {
@@ -140,9 +140,16 @@ function triggerRouteHarness(workflow, initialSession = null) {
       return { id: 'execution-a', status: 'completed', steps: [] };
     },
   };
+  const store = { getActiveSession: async () => session, clearSession: async () => { session = null; return true; } };
+  const db = { ContactsDB: { upsert: async () => ({ id: 'contact-a' }) }, MessagesDB: { create: async () => ({ id: 'message-a' }) }, ConversationsDB: { recordInbound: async () => {} } };
+  const dispatcher = load('src/lib/automations/inboundDispatcher.ts', {
+    '@/lib/db': db, '@/lib/followup/followupEngine': { FollowUpEngine: { cancelPendingOnReply: async () => {} } },
+    './advancedWorkflowEngine': { AdvancedWorkflowEngine: engine }, './testCenterStore': { TestCenterStore: store },
+  });
   const route = load('src/app/api/test-center/simulate-trigger/route.ts', {
     'next/server': { NextResponse },
     '@/lib/auth-server': { getAuthorizedUser: async () => user },
+    '@/lib/automations/inboundDispatcher': dispatcher,
     '@/lib/automations/advancedWorkflowEngine': { AdvancedWorkflowEngine: engine },
     '@/lib/automations/testCenterStore': { TestCenterStore: {
       getActiveSession: async () => session,

@@ -80,13 +80,13 @@ export class WhatsAppMessageService {
     );
 
     // 2. 24-Hour Policy Window Enforcement (Enforces Meta Cloud API Conversation Window)
-    if (options.type !== 'template' && !options.bypassWindowCheck) {
+    if (options.type !== 'template') {
       const windowOpen = await ConversationsDB.isWindowOpen(cleanTo, workspaceId);
 
       if (!windowOpen) {
         const errorMsg =
           '24-Hour Window Closed (#131047): Customer last messaged over 24 hours ago. Meta WhatsApp policy requires sending an approved Template message to initiate or re-engage conversation.';
-        console.warn(`[WhatsApp Policy Warning] ${cleanTo}: ${errorMsg}`);
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
 
         const savedFailed = await MessagesDB.create(
           {
@@ -97,7 +97,7 @@ export class WhatsAppMessageService {
             status: 'failed',
             content: options.text || options.bodyText || `[${options.type.toUpperCase()}]`,
             errorMessage: errorMsg,
-            payload: options,
+            payload: { type: options.type, templateName: options.templateName, mediaId: options.mediaId },
           },
           workspaceId
         );
@@ -134,12 +134,12 @@ export class WhatsAppMessageService {
     if (options.requireRealDelivery || options.isConnectionTest) {
       if (!phoneNumberId || !accessToken) {
         const err = 'Real WhatsApp delivery failed: Phone Number ID or Access Token is missing. Enter live credentials in Setup Wizard Step 2 & 3.';
-        console.error('[WhatsApp Message Service]', err);
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
         return { success: false, error: err, phoneNumberIdUsed: phoneNumberId, isSimulated: false };
       }
       if (isPlaceholder) {
         const err = 'Real WhatsApp delivery failed: Placeholder, masked, or test token detected. Enter a live System User Access Token from Meta Business Manager.';
-        console.error('[WhatsApp Message Service]', err);
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
         return { success: false, error: err, phoneNumberIdUsed: phoneNumberId, isSimulated: false };
       }
     }
@@ -156,7 +156,7 @@ export class WhatsAppMessageService {
 
       // Unconfigured or sandbox credentials
       const simulatedId = `wamid.local_${Date.now()}`;
-      console.log(`[WhatsApp Sandbox] Simulated send (${options.type}) to ${cleanTo}`);
+
 
       const savedMessage = await MessagesDB.create(
         {
@@ -167,7 +167,7 @@ export class WhatsAppMessageService {
           type: options.type,
           status: 'sent',
           content: options.text || options.bodyText || options.templateName || `[${options.type.toUpperCase()}]`,
-          payload: options,
+          payload: { type: options.type, templateName: options.templateName, mediaId: options.mediaId },
         },
         workspaceId
       );
@@ -284,7 +284,7 @@ export class WhatsAppMessageService {
           await delay(Math.pow(2, attempt) * 500); // 1s, 2s
         }
       } catch (err: any) {
-        console.error(`[WhatsApp Message Service] Attempt ${attempt} failed:`, err.message);
+        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
         if (attempt === maxRetries) {
           metaResult = { success: false, error: err.message };
         } else {
@@ -310,7 +310,7 @@ export class WhatsAppMessageService {
         status: metaResult.success ? 'sent' : 'failed',
         content: outboundContent,
         mediaUrl: options.mediaUrl,
-        payload: options,
+        payload: { type: options.type, templateName: options.templateName, mediaId: options.mediaId },
         errorMessage: metaResult.error,
       },
       workspaceId

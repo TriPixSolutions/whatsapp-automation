@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+import { InboundAutomationDispatcher } from '@/lib/automations/inboundDispatcher';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { AdvancedWorkflowEngine } from '@/lib/automations/advancedWorkflowEngine';
@@ -44,271 +46,20 @@ export async function POST(request: NextRequest) {
     );
     const isTestSimulation = !isLiveDelivery;
 
-    // 1. Ensure contact exists and record simulation event
-    const contact = await ContactsDB.upsert(
-      {
-        phoneNumber: cleanPhone,
-        firstName: leadData?.firstName || 'Test',
-        lastName: leadData?.lastName || 'User',
-        tags: ['simulated_test', 'test_number'],
-      },
-      workspaceId
-    );
-
-    let triggerType: AutomationTriggerType = 'manual_trigger';
-    let triggerPayload: any = {};
-
-    switch (simulationType) {
-      // 1. Simulate Incoming Message
-      case 'incoming_message':
-        triggerType = 'incoming_message';
-        triggerPayload = { text: text || 'Hello', from: cleanPhone };
-        await MessagesDB.create({
-          phoneNumber: cleanPhone,
-          contactId: contact.id,
-          direction: 'inbound',
-          type: 'text',
-          status: 'delivered',
-          content: text || 'Hello',
-        }, workspaceId);
-        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
-        break;
-
-      // 2. Simulate Keyword Trigger
-      case 'keyword_trigger':
-        triggerType = 'keyword';
-        triggerPayload = { text: text || 'Pricing', keyword: text || 'Pricing', from: cleanPhone };
-        await MessagesDB.create({
-          phoneNumber: cleanPhone,
-          contactId: contact.id,
-          direction: 'inbound',
-          type: 'text',
-          status: 'delivered',
-          content: text || 'Pricing',
-        }, workspaceId);
-        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
-        break;
-
-      // 3. Simulate Button Click
-      case 'button_click':
-        triggerType = 'button_click';
-        triggerPayload = {
-          buttonId: buttonId || 'btn_catalog',
-          buttonTitle: buttonTitle || 'Browse Catalog',
-          title: buttonTitle || 'Browse Catalog',
-          from: cleanPhone,
-        };
-        TestCenterStore.recordButtonEvent({
-          workspaceId,
-          id: `btn_evt_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          phoneNumber: cleanPhone,
-          buttonType: 'quick_reply',
-          buttonId: buttonId || 'btn_catalog',
-          buttonTitle: buttonTitle || 'Browse Catalog',
-          viewed: true,
-          clicked: true,
-          clickedAt: new Date().toISOString(),
-          responsePayload: triggerPayload,
-        });
-        await MessagesDB.create({
-          phoneNumber: cleanPhone,
-          contactId: contact.id,
-          direction: 'inbound',
-          type: 'interactive',
-          status: 'delivered',
-          content: `Button clicked: ${buttonTitle || buttonId}`,
-          payload: triggerPayload,
-        }, workspaceId);
-        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
-        break;
-
-      // 4. Simulate Carousel Click
-      case 'carousel_click':
-        triggerType = 'carousel_click';
-        triggerPayload = {
-          cardIndex: cardIndex !== undefined ? cardIndex : 0,
-          cardButtonId: cardButtonId || 'buy_shoes',
-          cardTitle: leadData?.cardTitle || 'Featured Card',
-          from: cleanPhone,
-        };
-        TestCenterStore.recordCarouselEvent({
-          workspaceId,
-          id: `car_evt_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          phoneNumber: cleanPhone,
-          carouselTitle: 'Product Showcase Carousel',
-          totalCards: 3,
-          cardIndex: cardIndex !== undefined ? cardIndex : 0,
-          cardTitle: leadData?.cardTitle || 'Featured Card',
-          cardViewed: true,
-          cardClicked: true,
-          buttonClickedId: cardButtonId || 'buy_shoes',
-          clickedAt: new Date().toISOString(),
-        });
-        await MessagesDB.create({
-          phoneNumber: cleanPhone,
-          contactId: contact.id,
-          direction: 'inbound',
-          type: 'interactive',
-          status: 'delivered',
-          content: `Carousel card #${(cardIndex || 0) + 1} clicked`,
-          payload: triggerPayload,
-        }, workspaceId);
-        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
-        break;
-
-      // 5. Simulate CTA Button Click
-      case 'cta_click':
-        triggerType = 'button_click';
-        triggerPayload = {
-          buttonId: buttonId || 'cta_website',
-          buttonTitle: buttonTitle || 'Visit Website',
-          type: 'url',
-          url: 'https://example.com/shop',
-          from: cleanPhone,
-        };
-        TestCenterStore.recordButtonEvent({
-          workspaceId,
-          id: `cta_evt_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          phoneNumber: cleanPhone,
-          buttonType: 'url',
-          buttonId: buttonId || 'cta_website',
-          buttonTitle: buttonTitle || 'Visit Website',
-          viewed: true,
-          clicked: true,
-          clickedAt: new Date().toISOString(),
-          responsePayload: triggerPayload,
-        });
-        break;
-
-      // 6. Simulate Lead Form Submission
-      case 'lead_form':
-        triggerType = leadFormSource === 'instagram' ? 'instagram_lead' : 'facebook_lead';
-        triggerPayload = {
-          source: leadFormSource || 'facebook',
-          formId: 'fb_lead_form_839219',
-          leadData: leadData || { name: 'Sarah Connor', interest: 'Premium Package' },
-          from: cleanPhone,
-        };
-        break;
-
-      // 7. Simulate List Selection
-      case 'list_selection':
-        triggerType = 'button_click';
-        triggerPayload = {
-          listId: buttonId || 'opt_vip_support',
-          listTitle: buttonTitle || 'VIP Priority Support',
-          title: buttonTitle || 'VIP Priority Support',
-          from: cleanPhone,
-        };
-        await MessagesDB.create({
-          phoneNumber: cleanPhone,
-          contactId: contact.id,
-          direction: 'inbound',
-          type: 'interactive',
-          status: 'delivered',
-          content: `List selected: ${buttonTitle || buttonId || 'VIP Priority Support'}`,
-          payload: triggerPayload,
-        }, workspaceId);
-        await ConversationsDB.recordInbound(cleanPhone, contact.id, workspaceId);
-        break;
-
-      // 8. Simulate Webhook Event
-      case 'webhook_event':
-        triggerType = 'webhook_trigger';
-        triggerPayload = webhookPayload || { event: 'custom_order_paid', orderId: 'ORD_99182' };
-        TestCenterStore.recordWebhookLog({
-          id: `wh_sim_${Date.now()}`,
-          workspaceId,
-          timestamp: new Date().toISOString(),
-          direction: 'incoming',
-          source: 'Simulated Webhook Sender',
-          eventType: 'custom_trigger',
-          payload: triggerPayload,
-          responseStatus: 200,
-          responseBody: { status: 'triggered' },
-          executionTimeMs: 8,
-          signatureVerified: true,
-          status: 'success',
-        });
-        break;
-
-      // 9. Simulate API Trigger
-      case 'api_trigger':
-        triggerType = 'api_trigger';
-        triggerPayload = apiPayload || { apiAction: 'start_onboarding', clientTier: 'vip' };
-        break;
-
-      // 10. Manual Workflow Run
-      case 'manual_run':
-      case 'manual_trigger':
-      default:
-        triggerType = 'manual_trigger';
-        triggerPayload = { manual: true, allowDirectRun: true, triggeredBy: 'test_center' };
-        break;
+    if (['incoming_message','keyword_trigger','button_click','cta_click','carousel_click','list_selection'].includes(simulationType)) {
+      const interaction = ['button_click','cta_click','carousel_click','list_selection'].includes(simulationType)
+        ? { kind: simulationType === 'carousel_click' ? 'carousel_button' as const : simulationType === 'list_selection' ? 'list_reply' as const : 'button_reply' as const,
+            id: cardButtonId || buttonId || '', title: buttonTitle || buttonId || '', cardIndex, cardButtonId } : undefined;
+      const result = await InboundAutomationDispatcher.dispatch({workspaceId,phoneNumber:cleanPhone,
+        messageId:`test_${randomUUID()}`,timestamp:String(Math.floor(Date.now()/1000)),rawType:interaction?'interactive':'text',
+        text:text || (interaction ? undefined : 'Hello'),interaction,isTestSimulation,metadata:{synthetic:true},deliveryMode:isLiveDelivery?'live':'sandbox'});
+      return NextResponse.json({...result,simulationType,deliveryMode:isLiveDelivery?'production':'sandbox',
+        resumed:result.sessionAction==='resumed',activeExecution:result.executions[0]}, {status:result.success?200:409});
     }
 
-    // =========================================================================
-    // STEP 2: SESSION MANAGEMENT & RESUME EVALUATION
-    // =========================================================================
-    const activeSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
-    const isInteractiveSimulation = simulationType === 'button_click' || simulationType === 'cta_click' || simulationType === 'carousel_click';
-
-    if (activeSession) {
-      const sessionMatchesAction = Boolean(
-        ((simulationType === 'button_click' || simulationType === 'cta_click') && activeSession.waitingFor === 'button_click') ||
-        (simulationType === 'carousel_click' && ['reply', 'carousel_click', 'carousel_selection', 'button_click'].includes(activeSession.waitingFor)) ||
-        (simulationType === 'incoming_message' && activeSession.waitingFor === 'reply')
-      );
-
-      if (sessionMatchesAction) {
-        const resumeAction = simulationType === 'carousel_click'
-          ? 'carousel_click'
-          : simulationType === 'incoming_message'
-          ? 'reply'
-          : 'button_click';
-
-        const resumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(
-          activeSession,
-          {
-            action: resumeAction,
-            buttonId: buttonId || triggerPayload?.buttonId,
-            buttonTitle: buttonTitle || triggerPayload?.buttonTitle,
-            cardIndex,
-            cardButtonId,
-            text: text || triggerPayload?.text,
-          },
-          isTestSimulation
-        );
-
-        if (resumed && resumed.status !== 'failed') {
-          return NextResponse.json({
-            success: true,
-            simulationType,
-            phoneNumber: cleanPhone,
-            deliveryMode: isLiveDelivery ? 'production' : 'sandbox',
-            resumed: true,
-            matchedWorkflowsCount: 1,
-            executions: [resumed],
-            activeExecution: resumed,
-            status: resumed.status,
-            message: `Workflow resumed along branch for "${buttonTitle || buttonId || text || simulationType}".`,
-          });
-        }
-      }
-    } else if (isInteractiveSimulation) {
-      // MODE 3 & 4: Button / Carousel simulation REQUIRES an active session!
-      // Do NOT auto-prime or execute Node 0 unexpectedly.
-      return NextResponse.json({
-        success: false,
-        error: `No active workflow session exists for ${cleanPhone}. Please run a workflow first so it reaches the interaction node.`,
-        code: 'NO_ACTIVE_SESSION',
-        phoneNumber: cleanPhone,
-        simulationType,
-      }, { status: 409 });
-    }
+    if (!['lead_form','webhook_event','api_trigger','manual_run','manual_trigger'].includes(simulationType)) return NextResponse.json({ error: 'Unknown simulation type' }, { status: 400 });
+    let triggerType: AutomationTriggerType = simulationType === 'lead_form' ? 'meta_lead_form' : simulationType === 'webhook_event' ? 'webhook_trigger' : simulationType === 'api_trigger' ? 'api_trigger' : 'manual_trigger';
+    let triggerPayload: any = triggerType === 'manual_trigger' ? { manual: true, allowDirectRun: true, triggeredBy: 'test_center' } : simulationType === 'lead_form' ? { source: leadFormSource || 'facebook', leadData, from: cleanPhone } : simulationType === 'webhook_event' ? webhookPayload || {} : apiPayload || {};
 
     // =========================================================================
     // STEP 3: WORKFLOW MATCHING & TRIGGER EVALUATION
@@ -321,10 +72,7 @@ export async function POST(request: NextRequest) {
         const specificWf = await TestCenterStore.getWorkflow(workflowId, workspaceId);
         if (specificWf) targetWorkflows.push(specificWf);
       }
-      if (targetWorkflows.length === 0) {
-        const allWfs = (await TestCenterStore.listWorkflows(workspaceId)).filter((w) => w.isActive);
-        if (allWfs.length > 0) targetWorkflows.push(allWfs[0]);
-      }
+
     } else {
       // Inbound event trigger (keyword, incoming_message, lead, etc.)
       targetWorkflows = await AdvancedWorkflowEngine.matchWorkflows(
@@ -338,15 +86,7 @@ export async function POST(request: NextRequest) {
         targetWorkflows = targetWorkflows.filter((w) => w.id === workflowId);
       }
 
-      // Fallback: If no keyword matched, check fallback incoming_message triggers
-      if (targetWorkflows.length === 0 && triggerType === 'keyword' && (text || triggerPayload?.text)) {
-        const fallbackMatches = await AdvancedWorkflowEngine.matchWorkflows(
-          'incoming_message',
-          { text: text || triggerPayload?.text, from: cleanPhone },
-          workspaceId
-        );
-        targetWorkflows = workflowId ? fallbackMatches.filter((w) => w.id === workflowId) : fallbackMatches;
-      }
+
     }
 
     // If NO workflow matched the inbound trigger, report NO_MATCH gracefully.

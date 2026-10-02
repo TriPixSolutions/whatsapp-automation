@@ -1,439 +1,62 @@
-import { ContactsDB, MessagesDB, ConversationsDB, AutomationsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { ContactsDB, MessagesDB, ConversationsDB } from '@/lib/db';
 import { FollowUpEngine } from '@/lib/followup/followupEngine';
-import { getAdminClient } from '@/lib/supabase/server';
 import { AdvancedWorkflowEngine } from './advancedWorkflowEngine';
 import { TestCenterStore } from './testCenterStore';
-import { handleAiInboundReply } from '@/lib/webhook/webhookAiAssistant';
-import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import {
-  NormalizedInboundEvent,
-  InboundPipelineResult,
-  PipelineTraceStep,
-} from './normalizedEvent';
+import type { NormalizedInboundEvent, InboundPipelineResult } from './normalizedEvent';
 
+/** Canonical application pipeline. Transport authentication and atomic event claims
+ * are owned by the webhook boundary; test events are explicitly simulated. */
 export class InboundAutomationDispatcher {
-  /**
-   * Canonical Inbound Automation Pipeline
-   * Processes both Real WhatsApp Webhook messages and Test Center simulated events
-   * through the exact same normalization, persistence, session, and trigger architecture.
-   */
   static async dispatch(event: NormalizedInboundEvent): Promise<InboundPipelineResult> {
-    const trace: PipelineTraceStep[] = [];
-    const addTrace = (step: string, status: 'passed' | 'skipped' | 'failed', details?: any) => {
-      trace.push({ step, status, details, timestamp: new Date().toISOString() });
-    };
-
-    const workspaceId = event.workspaceId || DEFAULT_WORKSPACE_ID;
-    const cleanPhone = event.phoneNumber.startsWith('+')
-      ? event.phoneNumber
-      : `+${event.phoneNumber.replace(/[^0-9]/g, '')}`;
-
-    const maskedPhone = cleanPhone.length > 7
-      ? `${cleanPhone.slice(0, 3)}••••••${cleanPhone.slice(-4)}`
-      : cleanPhone;
-
-    console.log(`[INBOUND_DISPATCH_START] messageId=${event.messageId} phone=${maskedPhone} workspaceId=${workspaceId} rawType=${event.rawType}`);
-    console.log(`[INBOUND_NORMALIZED] text="${event.text || ''}" interaction=${event.interaction ? event.interaction.id : 'none'} isTest=${event.isTestSimulation}`);
-
-    addTrace('Event Received', 'passed', {
-      messageId: event.messageId,
-      phoneNumber: cleanPhone,
-      workspaceId,
-      rawType: event.rawType,
-      text: event.text,
-      interaction: event.interaction,
-      deliveryMode: event.deliveryMode,
-    });
-
-    // 1. Ensure Contact exists & identify buying intent
-    let contact = await ContactsDB.getByPhone(cleanPhone, workspaceId);
-    if (!contact) {
-      contact = await ContactsDB.upsert(
-        {
-          phoneNumber: cleanPhone,
-          firstName: event.metadata?.firstName || 'WhatsApp',
-          lastName: event.metadata?.lastName || 'User',
-          optinStatus: true,
-          tags: event.isTestSimulation ? ['simulated_test'] : ['replied', 'engaged'],
-        },
-        workspaceId
-      );
-    }
-
-    const contentText = event.text || event.interaction?.title || event.interaction?.id || '';
-    const lowerContent = contentText.toLowerCase().trim();
-    const isPriceInquiry = /\b(price|pricing|cost|how much|rate|quote|price\?)\b/i.test(lowerContent);
-    const isDeliveryInquiry = /\b(delivery|shipping|dispatch|courier|ship|delivery\?)\b/i.test(lowerContent);
-    const isAvailableInquiry = /\b(available|in stock|stock|inventory|available\?)\b/i.test(lowerContent);
-    const isOrderInquiry = /\b(order|how to order|buy|purchase|book|how to order\?)\b/i.test(lowerContent);
-    const isHighIntent = isPriceInquiry || isDeliveryInquiry || isAvailableInquiry || isOrderInquiry;
-
-    if (isHighIntent) {
-      const updatedTags = new Set(contact.tags || []);
-      updatedTags.add('replied');
-      updatedTags.add('engaged');
-      updatedTags.add('priority');
-      if (isPriceInquiry) updatedTags.add('price_inquiry');
-      if (isDeliveryInquiry) updatedTags.add('delivery_inquiry');
-      if (isOrderInquiry) updatedTags.add('order_inquiry');
-      if (isAvailableInquiry) updatedTags.add('available_inquiry');
-
-      contact = await ContactsDB.upsert(
-        { ...contact, phoneNumber: cleanPhone, tags: Array.from(updatedTags) },
-        workspaceId
-      );
-
-      const supabase = getAdminClient();
-      if (supabase) {
-        try {
-          await supabase
-            .from('leads')
-            .update({ status: 'priority', updated_at: new Date().toISOString() })
-            .eq('phone_number', cleanPhone)
-            .eq('workspace_id', workspaceId);
-        } catch {
-          // non-blocking
-        }
-      }
-    }
-    addTrace('Contact & CRM Intent', 'passed', { contactId: contact.id, isHighIntent });
-
-    // 2. Persist Inbound Message to database
-    await MessagesDB.create(
-      {
-        metaMessageId: event.messageId,
-        phoneNumber: cleanPhone,
-        contactId: contact.id,
-        direction: 'inbound',
-        type: event.interaction ? 'interactive' : (event.rawType as any) || 'text',
-        status: 'delivered',
-        content: contentText,
-        payload: {
-          rawType: event.rawType,
-          interaction: event.interaction,
-          timestamp: event.timestamp,
-          isSimulation: event.isTestSimulation,
-        },
-      },
-      workspaceId
-    );
-
-    // 2b. Open 24-Hour Policy Window
-    const inboundTimestampMs = Number(event.timestamp) * 1000 || Date.now();
-    await ConversationsDB.recordInbound(
-      cleanPhone,
-      contact.id,
-      workspaceId,
-      event.messageId,
-      new Date(Math.min(inboundTimestampMs, Date.now())).toISOString()
-    );
-    addTrace('Message Persistence & 24h Window', 'passed', { messageId: event.messageId });
-
-    // 3. Customer replied: cancel pending follow-up jobs
-    await FollowUpEngine.cancelPendingOnReply(cleanPhone, workspaceId);
-    addTrace('Follow-Up Cancellation', 'passed');
-
-    // 4. Session Evaluation: Check for active waiting or paused workflow session
-    let sessionAction: InboundPipelineResult['sessionAction'] = 'none';
-    let resumedSessionId: string | undefined;
-    const isInteractiveAction = Boolean(event.interaction);
-    const buttonId = event.interaction?.id || contentText;
-    const buttonTitle = event.interaction?.title || contentText;
-    console.log(`[SESSION_LOOKUP] phone=${maskedPhone} workspaceId=${workspaceId}`);
-    const waitingSession = await TestCenterStore.getActiveSession(cleanPhone, workspaceId);
-    console.log(`[SESSION_LOOKUP] result=${waitingSession ? `FOUND (id: ${waitingSession.id}, wf: ${waitingSession.workflowId}, waitingFor: ${waitingSession.waitingFor})` : 'NONE'}`);
-
-    if (waitingSession) {
-      addTrace('Active Session Found', 'passed', {
-        sessionId: waitingSession.id,
-        workflowId: waitingSession.workflowId,
-        currentNodeId: waitingSession.currentNodeId,
-        waitingFor: waitingSession.waitingFor,
-      });
-
-      // Handle Scheduled Delay state
-      if (waitingSession.waitingFor === 'delay') {
-        // Customer messaged during a delay. Evaluate if message matches an interrupt/reset trigger keyword
-        const topLevelMatches = contentText
-          ? await AdvancedWorkflowEngine.matchWorkflows('keyword', { text: contentText }, workspaceId)
-          : [];
-
-        if (topLevelMatches.length > 0 && !isInteractiveAction) {
-          // Interrupt the delay and allow the new workflow to start!
-          sessionAction = 'interrupted_delay';
-          await TestCenterStore.clearSession(cleanPhone, workspaceId, waitingSession.id);
-          addTrace('Delay Interrupted by Top-Level Keyword', 'passed', {
-            newWorkflows: topLevelMatches.map((w) => w.name),
-          });
-        } else {
-          // Preserve delay session for scheduled runner to advance when due. Message was persisted!
-          sessionAction = 'preserved_delay';
-          addTrace('Delay Session Preserved', 'passed', {
-            message: 'Inbound message recorded in inbox; delay session preserved.',
-          });
-          return {
-            success: true,
-            event,
-            matchedWorkflowsCount: 0,
-            matchedWorkflowNames: [],
-            sessionAction: 'preserved_delay',
-            executions: [],
-            trace,
-          };
-        }
-      } else {
-        // Check if top-level keyword should supersede an old waiting session
-        const matchingNewFlows = !isInteractiveAction && contentText
-          ? await AdvancedWorkflowEngine.matchWorkflows('keyword', { text: contentText }, workspaceId)
-          : [];
-
-        if (matchingNewFlows.length > 0 && !isInteractiveAction) {
-          sessionAction = 'cleared';
-          await TestCenterStore.clearSession(cleanPhone, workspaceId, waitingSession.id);
-          addTrace('Session Reset for Fresh Keyword', 'passed', {
-            clearedSessionId: waitingSession.id,
-            newFlows: matchingNewFlows.map((w) => w.name),
-          });
-        } else {
-          // Resume the active waiting workflow
-          let resumeAction: 'button_click' | 'carousel_click' | 'reply' | 'delay_expired' = 'reply';
-          if (isInteractiveAction || waitingSession.waitingFor === 'button_click') {
-            resumeAction = event.interaction?.kind === 'carousel_button' ? 'carousel_click' : 'button_click';
-          } else if (waitingSession.waitingFor === 'carousel_selection') {
-            resumeAction = 'carousel_click';
-          } else if (waitingSession.waitingFor === 'reply') {
-            resumeAction = isInteractiveAction ? 'button_click' : 'reply';
-          }
-
-          addTrace('Resuming Workflow Session', 'passed', {
-            action: resumeAction,
-            buttonId,
-            buttonTitle,
-            isTestSimulation: event.isTestSimulation,
-          });
-
-          const resumedLog = await AdvancedWorkflowEngine.resumeWorkflowExecution(
-            waitingSession,
-            {
-              action: resumeAction,
-              buttonId,
-              buttonTitle,
-              cardIndex: event.interaction?.cardIndex,
-              cardButtonId: event.interaction?.cardButtonId || buttonId,
-              text: contentText,
-            },
-            event.isTestSimulation
-          );
-
-          if (resumedLog && resumedLog.status !== 'failed') {
-            sessionAction = 'resumed';
-            resumedSessionId = waitingSession.id;
-            addTrace('Workflow Resumed Successfully', 'passed', {
-              executionId: resumedLog.id,
-              status: resumedLog.status,
-              stepsCount: resumedLog.steps?.length || 0,
-            });
-
-            return {
-              success: true,
-              event,
-              matchedWorkflowsCount: 1,
-              matchedWorkflowNames: [waitingSession.workflowId],
-              sessionAction: 'resumed',
-              resumedSessionId: waitingSession.id,
-              executions: [resumedLog],
-              trace,
-            };
-          } else {
-            addTrace('Resume Branch Resolution Failed', 'failed', {
-              resumedStatus: resumedLog?.status,
-            });
-            await TestCenterStore.clearSession(cleanPhone, workspaceId, waitingSession.id);
-          }
-        }
-      }
-    } else {
-      addTrace('No Active Session', 'passed');
-      // If a button or carousel interaction was sent but NO active session exists:
-      if (isInteractiveAction) {
-        if (event.isTestSimulation) {
-          // Test Center must NOT auto-prime or fabricate execution
-          const err = `No active workflow session exists for ${cleanPhone}. Please trigger the workflow first so it reaches the interaction node.`;
-          addTrace('Interactive Simulation Without Session', 'failed', { error: err });
-          return {
-            success: false,
-            event,
-            matchedWorkflowsCount: 0,
-            matchedWorkflowNames: [],
-            sessionAction: 'none',
-            executions: [],
-            error: err,
-            code: 'NO_ACTIVE_SESSION',
-            trace,
-          };
-        } else {
-          // Production inbound button click with no active session
-          console.warn(`[InboundDispatcher] Unmatched button click "${buttonId}" from ${cleanPhone} (no active session).`);
-        }
-      }
-    }
-
-    // 5. Trigger Engine: Match incoming event to active workflows
-    let triggerType: any = 'keyword';
-    if (event.interaction?.kind === 'carousel_button') {
-      triggerType = 'carousel_click';
-    } else if (event.interaction) {
-      triggerType = 'button_click';
-    } else if (event.rawType === 'text') {
-      triggerType = 'keyword';
-    } else {
-      triggerType = 'incoming_message';
-    }
-
-    const triggerPayload = {
-      text: contentText,
-      buttonId,
-      buttonTitle,
-      ...event.interaction,
-      from: cleanPhone,
-    };
-
-    console.log(`[TRIGGER_EVALUATION] type=${triggerType} text="${contentText}" buttonId="${buttonId}" workspaceId=${workspaceId}`);
-    console.log(`[6] TRIGGER EVALUATED: evaluating active workflows for workspace ${workspaceId}`);
-
-    addTrace('Trigger Matching Started', 'passed', {
-      triggerType,
-      triggerPayload,
-      workspaceId,
-    });
-
-    let matchedWorkflows = await AdvancedWorkflowEngine.matchWorkflows(
-      triggerType,
-      triggerPayload,
-      workspaceId
-    );
-
-    // Fallback: If no keyword matched for regular text, check for incoming_message triggers
-    if (matchedWorkflows.length === 0 && triggerType === 'keyword' && contentText) {
-      console.log(`[TRIGGER_EVALUATION] Checking fallback incoming_message triggers for text: "${contentText}"`);
-      matchedWorkflows = await AdvancedWorkflowEngine.matchWorkflows(
-        'incoming_message',
-        { text: contentText, from: cleanPhone },
-        workspaceId
-      );
-    }
-
-    console.log(`[WORKFLOW_MATCH] matchedCount=${matchedWorkflows.length} workflows=[${matchedWorkflows.map(w => `${w.name} (${w.id})`).join(', ')}]`);
-    console.log(`[7] WORKFLOW MATCHED: ${matchedWorkflows.length > 0 ? matchedWorkflows.map(w => w.name).join(', ') : 'NONE'}`);
-
-    addTrace('Trigger Matching Completed', 'passed', {
-      matchedCount: matchedWorkflows.length,
-      matchedNames: matchedWorkflows.map((w) => w.name),
-    });
-
-    // 6. Execute Matched Workflows
+    if (!event.workspaceId || event.workspaceId === 'default') throw new Error('An explicit resolved workspace is required');
+    const workspaceId = event.workspaceId;
+    const phone = `+${event.phoneNumber.replace(/[^0-9]/g, '')}`;
+    if (!/^\+[1-9]\d{6,14}$/.test(phone)) throw new Error('Invalid recipient number');
+    const content = event.text || event.interaction?.title || event.interaction?.id || '';
+    const contact = await ContactsDB.upsert({ phoneNumber: phone,
+      ...(event.metadata?.firstName ? { firstName: event.metadata.firstName } : {}),
+      ...(event.metadata?.lastName ? { lastName: event.metadata.lastName } : {}),
+    }, workspaceId);
+    await MessagesDB.create({metaMessageId:event.messageId,phoneNumber:phone,contactId:contact.id,
+      direction:'inbound',type:event.interaction?'interactive':event.rawType as any,
+      status:'delivered',content,payload:{ interaction:event.interaction,isSimulation:event.isTestSimulation }},workspaceId);
+    // Simulations must not open the real customer-care window.
+    if (!event.isTestSimulation && !event.metadata?.synthetic) await ConversationsDB.recordInbound(phone,contact.id,workspaceId,event.messageId,
+      new Date(Math.min(Number(event.timestamp)*1000||Date.now(),Date.now())).toISOString());
+    if (!event.isTestSimulation && !event.metadata?.synthetic) await FollowUpEngine.cancelPendingOnReply(phone,workspaceId);
     const executions: any[] = [];
-    if (matchedWorkflows.length > 0) {
-      for (const wf of matchedWorkflows) {
-        console.log(`[WORKFLOW_EXECUTION] starting execution for workflow "${wf.name}" (${wf.id})`);
-        addTrace(`Executing Workflow: ${wf.name}`, 'passed', {
-          workflowId: wf.id,
-          isTestSimulation: event.isTestSimulation,
-        });
-
-        const execResult = await AdvancedWorkflowEngine.executeWorkflow(wf, {
-          workflowId: wf.id,
-          workspaceId,
-          phoneNumber: cleanPhone,
-          contactId: contact.id,
-          triggerType,
-          triggerPayload,
-          isTestSimulation: event.isTestSimulation,
-        });
-
-        console.log(`[8] EXECUTION STARTED: executionId=${execResult.id} status=${execResult.status} steps=${execResult.steps?.length || 0}`);
-
-        // Scan executed steps for message sending status
-        for (const step of execResult.steps || []) {
-          if (step.nodeType.startsWith('whatsapp_') || step.nodeType === 'send_message') {
-            console.log(`[9] SEND MESSAGE: node="${step.nodeTitle}" (${step.nodeType}) status=${step.status}`);
-            if (step.status === 'completed') {
-              console.log(`[10] META SEND SUCCESS: message dispatched successfully via Meta Cloud API`);
-            } else if (step.status === 'failed') {
-              console.error(`FAILED AT STEP 9/10: Outbound WhatsApp message failed: ${step.error}`);
-            }
-          }
-        }
-
-        executions.push(execResult);
+    const base: InboundPipelineResult = {success:true,event,matchedWorkflowsCount:0,matchedWorkflowNames:[],sessionAction:'none',executions,trace:[{step:'Inbound persisted',status:'passed',timestamp:new Date().toISOString(),details:{synthetic:Boolean(event.metadata?.synthetic || event.isTestSimulation),deliveryMode:event.deliveryMode}}]};
+    let triggerType: any = event.interaction?.kind === 'carousel_button' ? 'carousel_click' : event.interaction ? 'button_click' : 'keyword';
+    const payload = {text:content,from:phone,buttonId:event.interaction?.id,buttonTitle:event.interaction?.title,
+      cardIndex:event.interaction?.cardIndex,cardButtonId:event.interaction?.cardButtonId};
+    let matches = await AdvancedWorkflowEngine.matchWorkflows(triggerType,payload,workspaceId);
+    const session = await TestCenterStore.getActiveSession(phone,workspaceId,event.isTestSimulation);
+    if (session) {
+      if (!event.interaction && matches.length) {
+        await TestCenterStore.clearSession(phone,workspaceId,session.id,event.isTestSimulation);
+        base.sessionAction=session.waitingFor==='delay'?'interrupted_delay':'cleared';
+      } else if (session.waitingFor==='delay') {
+        base.sessionAction='preserved_delay'; return base;
+      } else {
+        const action = session.waitingFor==='carousel_selection' || event.interaction?.kind==='carousel_button' ? 'carousel_click' : event.interaction?'button_click':'reply';
+        const resumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(session,{action,...payload},event.isTestSimulation);
+        if (!resumed) return {...base,success:!event.isTestSimulation,error:'No branch matched the interaction',code:'NO_MATCHING_BRANCH'};
+        executions.push(resumed); base.sessionAction='resumed';base.resumedSessionId=session.id;
+        base.matchedWorkflowsCount=1;base.success=resumed.status!=='failed';return base;
       }
-
-      const hasFailed = executions.some((e) => e.status === 'failed');
-      if (hasFailed) {
-        const firstErr = executions.find((e) => e.status === 'failed')?.error;
-        console.error(`FAILED AT STEP 8: Workflow execution failed: ${firstErr}`);
-      }
-      return {
-        success: !hasFailed,
-        event,
-        matchedWorkflowsCount: matchedWorkflows.length,
-        matchedWorkflowNames: matchedWorkflows.map((w) => w.name),
-        sessionAction,
-        resumedSessionId,
-        executions,
-        error: hasFailed ? executions.find((e) => e.status === 'failed')?.error : undefined,
-        trace,
-      };
-    } else {
-      console.log(`[InboundDispatcher] No workflow matched trigger "${contentText}". Checking legacy automations.`);
     }
-
-    // 7. Legacy Fallback: AutomationsDB match (for backwards compatibility)
-    const matchedLegacy = AutomationsDB.findMatch(contentText, workspaceId);
-    if (matchedLegacy) {
-      addTrace('Legacy AutomationsDB Matched', 'passed', { flowId: matchedLegacy.id });
-      if (!event.isTestSimulation) {
-        const payload = matchedLegacy.actionPayload as any;
-        if (matchedLegacy.actionType === 'text') {
-          await WhatsAppMessageService.send({
-            workspaceId,
-            to: cleanPhone,
-            type: 'text',
-            text: payload.text || 'Hello!',
-            requireRealDelivery: true,
-          });
-        }
-        AutomationsDB.incrementExecution(matchedLegacy.id);
-      }
-      return {
-        success: true,
-        event,
-        matchedWorkflowsCount: 1,
-        matchedWorkflowNames: [matchedLegacy.name || 'Legacy Flow'],
-        sessionAction,
-        executions: [],
-        trace,
-      };
+    if (!matches.length && triggerType==='keyword') {
+      matches=await AdvancedWorkflowEngine.matchWorkflows('incoming_message',payload,workspaceId);
+      triggerType='incoming_message';
     }
-
-    // 8. Autonomous AI Assistant Inbound Reply (if real message in production)
-    if (!event.isTestSimulation && event.rawType === 'text' && contentText) {
-      addTrace('AI Assistant Invoked', 'passed');
-      await handleAiInboundReply(cleanPhone, contact.id, contentText, workspaceId);
+    if (event.interaction && !matches.length) return {...base, success:!event.isTestSimulation, code:'NO_ACTIVE_SESSION', error:'Start the workflow before testing its reply button.'};
+    for (const workflow of matches) {
+      executions.push(await AdvancedWorkflowEngine.executeWorkflow(workflow,{workflowId:workflow.id,workspaceId,
+        phoneNumber:phone,contactId:contact.id,triggerType,triggerPayload:payload,isTestSimulation:event.isTestSimulation}));
     }
-
-    addTrace('Pipeline Finished Without Workflow Trigger', 'passed', {
-      reason: 'No workflow or automation matched incoming message content.',
-    });
-
-    return {
-      success: true,
-      event,
-      matchedWorkflowsCount: 0,
-      matchedWorkflowNames: [],
-      sessionAction,
-      executions: [],
-      trace,
-    };
+    base.matchedWorkflowsCount=matches.length;base.matchedWorkflowNames=matches.map(w=>w.name);
+    base.success=executions.every(e=>e.status!=='failed');
+    if(!base.success)base.error='Workflow action failed. Inspect the execution trace.';
+    return base;
   }
 }

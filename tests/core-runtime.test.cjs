@@ -17,6 +17,8 @@ function load(file, imports, env = {}) {
     module, exports: module.exports,
     require(id) {
       if (Object.hasOwn(imports, id)) return imports[id];
+      if (id === "crypto") return require("node:crypto");
+      if (id === "@/lib/meta/config" || (id === "./config" && file.includes("/meta/"))) return { META_GRAPH_VERSION: require("../shared/meta-config.cjs").graphVersion(env) };
       throw new Error(`Unexpected dependency ${id} in ${file}`);
     },
     process: { env, cwd: () => '/isolated-test' },
@@ -196,29 +198,18 @@ test('a workspace with no workflows cannot run another workspace workflows', asy
   assert.equal(TestCenterStore.getDeliveryReceipts('a').map(item => item.id).join(','), 'delivery-a');
 });
 
-test('inbound legacy reply and follow-up cancellation retain workspace and sender profile', async () => {
-  const sends = [], cancellations = [], contacts = new Map();
+test('webhook adapter retains resolved workspace, live delivery and matching sender profile', async () => {
+  const events = [];
   const { handleWebhookInboundMessages } = load('src/lib/webhook/webhookInbound.ts', {
-    '@/lib/db': {
-      DEFAULT_WORKSPACE_ID: 'default',
-      ContactsDB: { getByPhone: phone => contacts.get(phone), upsert(data) {
-        const contact = { id: data.phoneNumber, tags: [], ...data }; contacts.set(data.phoneNumber, contact); return contact;
-      } },
-      MessagesDB: { create() {} }, ConversationsDB: { recordInbound() {} },
-      AutomationsDB: { list: () => [], findMatch: () => ({ id: 'legacy', actionType: 'text', actionPayload: { text: 'hello' } }), incrementExecution() {} },
-    },
-    '@/lib/whatsapp/messageService': { WhatsAppMessageService: { async send(options) { sends.push(options); return { success: true }; } } },
-    './webhookAiAssistant': {}, '@/lib/supabase/server': { getAdminClient: () => null },
-    '@/lib/followup/followupEngine': { FollowUpEngine: { async cancelPendingOnReply(...args) { cancellations.push(args); } } },
-    '@/lib/automations/advancedWorkflowEngine': { AdvancedWorkflowEngine: { matchWorkflows: () => [] } },
-    '@/lib/automations/testCenterStore': { TestCenterStore: { getActiveSession: () => null } },
+    '@/lib/automations/normalizedEvent': load('src/lib/automations/normalizedEvent.ts', {}),
+    '@/lib/db': { DEFAULT_WORKSPACE_ID: 'default' },
+    '@/lib/automations/inboundDispatcher': { InboundAutomationDispatcher: { async dispatch(event) { events.push(event); return { success: true }; } } },
   });
   await handleWebhookInboundMessages([message('one')], [
     { wa_id: 'other', profile: { name: 'Wrong Person' } },
     { wa_id: '15550001111', profile: { name: 'Asha Kumar' } },
   ], 'workspace-a');
-  assert.equal(sends[0].workspaceId, 'workspace-a');
-  assert.equal(sends[0].requireRealDelivery, true);
-  assert.equal(cancellations[0][1], 'workspace-a');
-  assert.equal(contacts.get('+15550001111').firstName, 'Asha');
+  assert.equal(events[0].workspaceId, 'workspace-a');
+  assert.equal(events[0].isTestSimulation, false);
+  assert.equal(events[0].metadata.firstName, 'Asha');
 });

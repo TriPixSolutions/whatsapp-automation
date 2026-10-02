@@ -34,8 +34,10 @@ export async function POST(request: NextRequest) {
     }
 
     const targetWorkspaceId = user.workspaceId || DEFAULT_WORKSPACE_ID;
+    if (!['owner', 'admin', 'super_admin'].includes(user.role)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
     const body = await request.json();
-    const current = await SettingsDB.get(targetWorkspaceId);
+    const replacementCredentials = Object.fromEntries(['accessToken','appSecret'].filter(key => typeof body[key] === 'string' && body[key].trim() && !/[•*]/.test(body[key])).map(key => [key, body[key].trim()]));
+    const current = await SettingsDB.get(targetWorkspaceId, replacementCredentials);
 
     // Guard against saving masked token bullets back into database
     let tokenToSave = body.accessToken;

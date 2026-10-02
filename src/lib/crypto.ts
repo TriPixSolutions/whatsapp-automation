@@ -5,7 +5,13 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit recommended IV for GCM
 const TAG_LENGTH = 16; // 128-bit authentication tag
 
+export class CredentialError extends Error {
+  readonly code = 'CREDENTIAL_UNAVAILABLE';
+  constructor() { super('Stored credentials could not be decrypted. Restore the original encryption key or reconnect the integration.'); this.name = 'CredentialError'; }
+}
+
 function getEncryptionKey(): Buffer {
+  if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) throw new CredentialError();
   const envKey =
     process.env.ENCRYPTION_KEY ||
     process.env.JWT_SECRET ||
@@ -45,7 +51,7 @@ export function verifyPassword(password: string, storedHash?: string): boolean {
 export function encryptToken(plainText: string): string {
   if (!plainText) return '';
   // Avoid double-encrypting
-  if (plainText.startsWith('enc:gcm:')) return plainText;
+  if (plainText.startsWith('enc:gcm:')) { decryptToken(plainText); return plainText; }
 
   try {
     const key = getEncryptionKey();
@@ -58,8 +64,7 @@ export function encryptToken(plainText: string): string {
 
     return `enc:gcm:${iv.toString('hex')}:${authTag}:${encrypted}`;
   } catch (error) {
-    console.error('[Crypto] Encryption error:', error);
-    return plainText;
+    throw new CredentialError();
   }
 }
 
@@ -75,9 +80,10 @@ export function decryptToken(cipherString: string): string {
 
   try {
     const parts = cipherString.split(':');
-    if (parts.length !== 5) return cipherString;
+    if (parts.length !== 5) throw new CredentialError();
 
     const [, , ivHex, tagHex, encryptedHex] = parts;
+    if (!/^[a-f0-9]{24}$/i.test(ivHex) || !/^[a-f0-9]{32}$/i.test(tagHex) || !/^(?:[a-f0-9]{2})+$/i.test(encryptedHex)) throw new CredentialError();
     const key = getEncryptionKey();
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(tagHex, 'hex');
@@ -90,8 +96,7 @@ export function decryptToken(cipherString: string): string {
 
     return decrypted;
   } catch (error) {
-    console.error('[Crypto] Decryption failed (invalid key or corrupted ciphertext):', error);
-    return cipherString;
+    throw new CredentialError();
   }
 }
 
@@ -134,6 +139,7 @@ export function verifyMetaSignature(
     }
 
     const signatureHash = signatureHeader.substring(expectedPrefix.length);
+    if (!/^[a-f0-9]{64}$/i.test(signatureHash)) return false;
     const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, 'utf8');
 
     const hmac = crypto.createHmac('sha256', secret);

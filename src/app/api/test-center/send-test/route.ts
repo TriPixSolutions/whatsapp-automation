@@ -1,3 +1,4 @@
+import { META_GRAPH_VERSION } from '@/lib/meta/config';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { MetaWhatsAppClient } from '@/lib/meta/api';
@@ -314,7 +315,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       timestamp: new Date().toISOString(),
       direction: 'outbound_request',
-      endpoint: `/${process.env.META_GRAPH_API_VERSION || 'v25.0'}/${phoneNumberId}/messages`,
+      endpoint: `/${META_GRAPH_VERSION}/${phoneNumberId}/messages`,
       method: 'POST',
       phoneNumberId,
       httpStatus: 200,

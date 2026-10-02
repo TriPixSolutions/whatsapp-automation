@@ -424,7 +424,7 @@ export default function SettingsPage() {
                         <span>WhatsApp Official Connection</span>
                       </h2>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Manage your official Meta Cloud API v25.0 credentials and check live connection health.
+                        Manage your official Meta Cloud API credentials and check live connection health.
                       </p>
                     </div>
                     <span

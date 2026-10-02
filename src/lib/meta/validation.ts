@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { SettingsDB } from '@/lib/db';
 
-export const META_GRAPH_VERSION = process.env.META_GRAPH_API_VERSION || 'v21.0';
+import { META_GRAPH_VERSION } from './config';
+export { META_GRAPH_VERSION } from './config';
 
 export interface StructuredMetaError {
   code: string;

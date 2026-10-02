@@ -85,7 +85,7 @@ export default function ApiLogsPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden md:pl-60">
         <Header
           title="Meta Debug Center"
-          subtitle="Graph API v25.0 request/response telemetry, HTTP status codes, delivery receipts & error diagnosis"
+          subtitle="Graph API request/response telemetry, HTTP status codes, delivery receipts & error diagnosis"
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
@@ -148,7 +148,7 @@ export default function ApiLogsPage() {
                 <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
                   Meta Graph API Requests ({filteredLogs.length})
                 </h3>
-                <span className="text-[10px] font-mono text-slate-400">Graph API v25.0</span>
+                <span className="text-[10px] font-mono text-slate-400">Graph API</span>
               </div>
 
               <div className="divide-y divide-slate-100 max-h-[620px] overflow-y-auto custom-scrollbar">

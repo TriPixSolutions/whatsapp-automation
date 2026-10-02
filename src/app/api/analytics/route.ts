@@ -1,5 +1,6 @@
+import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { NextRequest, NextResponse } from 'next/server';
-import { MessagesDB, CampaignsDB, AutomationsDB, ConversationsDB, ContactsDB, SettingsDB } from '@/lib/db';
+import { MessagesDB, CampaignsDB, ConversationsDB, ContactsDB, SettingsDB } from '@/lib/db';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     // Fetch live statistics
     const stats = await MessagesDB.getStats(targetWorkspaceId);
     const campaigns = await CampaignsDB.list(targetWorkspaceId);
-    const automations = AutomationsDB.list(targetWorkspaceId);
+    const automations = await TestCenterStore.listWorkflows(targetWorkspaceId);
     const conversations = await ConversationsDB.list(targetWorkspaceId);
     const contacts = await ContactsDB.list({ workspaceId: targetWorkspaceId });
     const settings = await SettingsDB.get(targetWorkspaceId);

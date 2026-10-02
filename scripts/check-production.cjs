@@ -12,7 +12,7 @@ const requiredTables = [
   'contacts', 'contact_tags', 'contact_notes', 'contact_activities', 'messages',
   'message_statuses', 'conversations', 'conversation_events', 'workflow_definitions',
   'workflow_sessions', 'workflow_executions', 'webhook_events', 'campaigns',
-  'campaign_contacts', 'scheduled_jobs',
+  'campaign_contacts', 'scheduled_jobs', 'companies', 'templates', 'media_assets', 'data_deletions',
 ];
 
 const results = [];
@@ -38,6 +38,10 @@ async function checkDatabase() {
       const { error } = await db.from(table).select('*', { head: true }).abortSignal(AbortSignal.timeout(8000));
       if (error) throw new Error(`${table} unavailable`);
     }
+    const columns = await db.from('companies').select('phone,contact_count,deal_value', {head:true});
+    if(columns.error) throw new Error('Business/media migration required');
+    const bucket = await db.storage.getBucket('workspace-media');
+    if(bucket.error || bucket.data.public) throw new Error('Private workspace-media bucket required');
     record('Supabase schema', true, `${requiredTables.length} core tables available`);
   } catch (error) {
     record('Supabase schema', false, error.message || 'probe failed');
@@ -73,7 +77,7 @@ async function checkMeta() {
   const token = process.env.META_ACCESS_TOKEN;
   const phoneId = process.env.META_PHONE_NUMBER_ID;
   const wabaId = process.env.META_WABA_ID;
-  const version = process.env.META_GRAPH_API_VERSION || 'v25.0';
+  const version = require('../shared/meta-config.cjs').graphVersion(process.env);
   if (![token, phoneId, wabaId].every(configured)) {
     record('Meta WhatsApp credentials', false, 'token, Phone Number ID or WABA ID is missing');
     return;
@@ -101,6 +105,7 @@ async function main() {
   const sessionReady = Boolean(sessionSecret && sessionSecret.length >= 32);
   const workerReady = Boolean(process.env.WORKER_SECRET && process.env.WORKER_SECRET.length >= 32);
   const webhookSecretReady = configured(process.env.META_APP_SECRET);
+  record('Credential encryption', Boolean(process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length >= 32), 'stable ENCRYPTION_KEY of at least 32 characters required');
   record('Session signing', sessionReady, sessionReady ? 'configured' : 'requires at least 32 characters');
   record('Worker authentication', workerReady, workerReady ? 'configured' : 'requires at least 32 characters');
   record('Webhook signature secret', webhookSecretReady, webhookSecretReady ? 'configured' : 'META_APP_SECRET is required for inbound signature checks');

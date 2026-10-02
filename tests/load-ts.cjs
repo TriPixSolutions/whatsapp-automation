@@ -10,6 +10,8 @@ module.exports = function load(file, imports = {}, env = {}) {
   vm.runInNewContext(js, {
     module, exports: module.exports, require(id) {
       if (Object.hasOwn(imports, id)) return imports[id];
+      if (id === "crypto") return require("node:crypto");
+      if (id === "@/lib/meta/config" || (id === "./config" && file.includes("/meta/"))) return { META_GRAPH_VERSION: require("../shared/meta-config.cjs").graphVersion(env) };
       throw new Error(`Unexpected dependency ${id} in ${file}`);
     },
     process: { env, cwd: () => '/isolated-test' },

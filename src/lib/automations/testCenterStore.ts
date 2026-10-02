@@ -498,12 +498,12 @@ export const TestCenterStore = {
     return WorkflowSessionsDB.save(session);
   },
 
-  async getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID): Promise<WorkflowSessionState | null> {
-    return WorkflowSessionsDB.get(phoneNumber, workspaceId);
+  async getActiveSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID, simulation = false): Promise<WorkflowSessionState | null> {
+    return WorkflowSessionsDB.get(phoneNumber, workspaceId, simulation);
   },
 
-  async clearSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID, expectedId?: string): Promise<boolean> {
-    return WorkflowSessionsDB.delete(phoneNumber, workspaceId, expectedId);
+  async clearSession(phoneNumber: string, workspaceId = DEFAULT_WORKSPACE_ID, expectedId?: string, simulation = false): Promise<boolean> {
+    return WorkflowSessionsDB.delete(phoneNumber, workspaceId, expectedId, simulation);
   },
 
   async listActiveSessions(workspaceId = DEFAULT_WORKSPACE_ID): Promise<WorkflowSessionState[]> {

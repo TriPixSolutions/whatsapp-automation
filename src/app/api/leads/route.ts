@@ -43,13 +43,15 @@ export async function GET(request: NextRequest) {
     // 2. Fetch all messages to associate the latest conversation message
     const allMessages = await MessagesDB.list({ workspaceId, limit: 1000 });
 
+    const latestByPhone = new Map<string, typeof allMessages[number]>();
+    for (const message of allMessages) {
+      const key = message.phoneNumber.replace(/[^0-9]/g, '');
+      if (!latestByPhone.has(key)) latestByPhone.set(key, message);
+    }
     const leads = contacts.map((contact) => {
       // Find latest message for this contact
       const contactPhoneClean = contact.phoneNumber.replace(/[^0-9]/g, '');
-      const messagesForContact = allMessages.filter(
-        (m) => m.phoneNumber.replace(/[^0-9]/g, '') === contactPhoneClean
-      );
-      const latestMsg = messagesForContact[0];
+      const latestMsg = latestByPhone.get(contactPhoneClean);
       const lastMessageContent = latestMsg?.content || (contact.metadata as any)?.lastMessage || 'New lead captured via Meta Ad';
       const lastActivityTime = latestMsg?.createdAt || contact.updatedAt || contact.createdAt;
 
@@ -59,7 +61,7 @@ export async function GET(request: NextRequest) {
         ['Asked Price', 'Wants to Order', 'Stock Check', 'Delivery Charge', 'High Interest'].includes(intent);
 
       const status = (contact.metadata as any)?.status || (isPriority ? 'priority' : 'new');
-      const assignedAgent = (contact.metadata as any)?.assignedAgent || (isPriority ? 'Sales Specialist' : 'Unassigned');
+      const assignedAgent = (contact.metadata as any)?.assignedAgent || 'Unassigned';
 
       return {
         id: contact.id,

@@ -8,7 +8,7 @@ const integrations = [
   {
     name: 'Meta WhatsApp Cloud API',
     desc: 'Official direct connection. Zero third-party markups and high throughput.',
-    badge: 'Native v25.0',
+    badge: 'Native Cloud API',
   },
   {
     name: 'Google Gemini & OpenAI',

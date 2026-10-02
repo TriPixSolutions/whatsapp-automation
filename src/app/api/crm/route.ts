@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ contact, timeline: await ContactsDB.getTimeline(contactId, workspaceId) });
     }
     const contacts = await ContactsDB.list({ workspaceId });
-    const companies = CompaniesDB.list(workspaceId);
+    const companies = await CompaniesDB.list(workspaceId);
     const stages = {
       new_lead: contacts.filter(c => !c.stage || ['new_lead', 'lead', 'new'].includes(c.stage)),
       contacted: contacts.filter(c => c.stage === 'contacted'),
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const workspaceId = user.workspaceId!;
     const { action, contactId, note, stage, leadScore, assignedAgent, companyData } = await request.json();
     if (action === 'create_company' && companyData?.name) {
-      return NextResponse.json({ success: true, company: CompaniesDB.upsert(companyData, workspaceId) });
+      return NextResponse.json({ success: true, company: await CompaniesDB.upsert(companyData, workspaceId) });
     }
     if (!contactId) return NextResponse.json({ error: 'Contact ID is required' }, { status: 400 });
     const contact = await ContactsDB.getById(contactId, workspaceId);

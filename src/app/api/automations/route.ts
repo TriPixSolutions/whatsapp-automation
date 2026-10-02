@@ -1,5 +1,6 @@
+import { workflowValidationError } from '@/lib/automations/validateWorkflow';
 import { NextRequest, NextResponse } from 'next/server';
-import { AutomationsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { WorkflowDefinition } from '@/types/automations';
@@ -15,14 +16,7 @@ export async function GET(request: NextRequest) {
     const targetWorkspaceId = user.workspaceId!;
     const format = searchParams.get('format'); // 'nodes' or default
 
-    // If requesting modern DAG workflows
-    const workflows = await TestCenterStore.listWorkflows(targetWorkspaceId);
-    if (format === 'dag' || workflows.length > 0) {
-      return NextResponse.json(workflows);
-    }
-
-    const flows = AutomationsDB.list(targetWorkspaceId);
-    return NextResponse.json(flows);
+    return NextResponse.json(await TestCenterStore.listWorkflows(targetWorkspaceId));
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -37,6 +31,8 @@ export async function POST(request: NextRequest) {
 
     // Check if this is a Workflow 2.0 DAG definition
     if (Array.isArray(body.nodes)) {
+      const validation = workflowValidationError(body);
+      if (validation) return NextResponse.json({ error: validation }, { status: 422 });
       const existing = body.id ? await TestCenterStore.getWorkflow(body.id, targetWorkspaceId) : null;
       if (existing && existing.workspaceId !== targetWorkspaceId) {
         return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
@@ -53,8 +49,8 @@ export async function POST(request: NextRequest) {
         edges: body.edges || [],
         isActive: body.isActive !== undefined ? body.isActive : true,
         debugModeEnabled: Boolean(body.debugModeEnabled),
-        executionCount: body.executionCount || 0,
-        stats: body.stats || {
+        executionCount: existing?.executionCount || 0,
+        stats: existing?.stats || {
           enteredCount: 0,
           completedCount: 0,
           droppedCount: 0,
@@ -73,28 +69,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(saved, { status: 201 });
     }
 
-    // Legacy simple flow creation
-    const { name, triggerKeyword, triggerType = 'keyword', actionType = 'buttons', actionPayload } = body;
-    if (!triggerKeyword || !actionPayload) {
-      return NextResponse.json(
-        { error: 'Trigger keyword and action payload are required.' },
-        { status: 400 }
-      );
-    }
-
-    const created = AutomationsDB.create(
-      {
-        name: name || `Flow: ${triggerKeyword}`,
-        triggerKeyword,
-        triggerType,
-        actionType,
-        actionPayload,
-        isActive: true,
-      },
-      targetWorkspaceId
-    );
-
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json({ error: 'Use the workflow builder to save a connected node workflow.' }, { status: 422 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -119,21 +94,26 @@ export async function PUT(request: NextRequest) {
       if ((existingWf.workspaceId === 'default' ? DEFAULT_WORKSPACE_ID : existingWf.workspaceId) !== targetWorkspaceId) {
         return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
       }
+      const validation = workflowValidationError({ nodes: partial.nodes ?? existingWf.nodes, edges: partial.edges ?? existingWf.edges });
+      if (validation) return NextResponse.json({ error: validation }, { status: 422 });
       const updatedWf = await TestCenterStore.saveWorkflow({
         ...existingWf,
-        ...partial,
+        name: partial.name ?? existingWf.name,
+        description: partial.description ?? existingWf.description,
+        nodes: partial.nodes ?? existingWf.nodes,
+        edges: partial.edges ?? existingWf.edges,
+        triggerType: partial.triggerType ?? existingWf.triggerType,
+        triggerKeyword: partial.triggerKeyword ?? existingWf.triggerKeyword,
+        triggerMatchPattern: partial.triggerMatchPattern ?? existingWf.triggerMatchPattern,
+        isActive: partial.isActive ?? existingWf.isActive,
+        debugModeEnabled: partial.debugModeEnabled ?? existingWf.debugModeEnabled,
         workspaceId: targetWorkspaceId,
         id,
       });
       return NextResponse.json(updatedWf);
     }
 
-    const updated = AutomationsDB.update(id, partial, targetWorkspaceId);
-    if (!updated) {
-      return NextResponse.json({ error: 'Flow not found.' }, { status: 404 });
-    }
-
-    return NextResponse.json(updated);
+    return NextResponse.json({ error: 'Flow not found.' }, { status: 404 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -157,8 +137,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
     const dagDeleted = workflow ? await TestCenterStore.deleteWorkflow(id, targetWorkspaceId) : false;
-    const legacyDeleted = AutomationsDB.delete(id, targetWorkspaceId);
-    const success = dagDeleted || legacyDeleted;
+    const success = dagDeleted;
     return NextResponse.json({ success });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

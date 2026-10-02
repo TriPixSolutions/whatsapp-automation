@@ -42,7 +42,7 @@ export function PublicNav() {
           <PassionFruitLogo size="sm" showSubtitle={false} />
           <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-50/80 border border-indigo-200/60 text-[10px] font-bold text-indigo-700 uppercase tracking-wide">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
-            Meta Cloud v25.0
+            Meta Cloud
           </span>
         </Link>
 

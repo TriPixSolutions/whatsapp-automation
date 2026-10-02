@@ -1,3 +1,4 @@
+import { META_GRAPH_VERSION } from '@/lib/meta/config';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { SettingsDB, CampaignsDB, MessagesDB, ContactsDB } from '@/lib/db';
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     if (isLiveConfigured) {
       try {
         const cleanActId = adAccountId!.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
-        const metaUrl = new URL(`https://graph.facebook.com/v25.0/${cleanActId}/insights`);
+        const metaUrl = new URL(`https://graph.facebook.com/${META_GRAPH_VERSION}/${cleanActId}/insights`);
         metaUrl.searchParams.set('fields', 'spend,impressions,clicks,cpc,ctr,actions');
         metaUrl.searchParams.set('date_preset', datePreset);
         metaUrl.searchParams.set('access_token', accessToken!);

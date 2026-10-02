@@ -51,7 +51,7 @@ const plans = [
       'Unlimited Team Seats & Routing Rules',
       'Dedicated Meta WABA Verification',
       'Custom Webhooks & REST API Access',
-      '99.9% Uptime SLA & Dedicated Account Manager',
+      'WhatsApp automation & Dedicated Account Manager',
     ],
     cta: 'Contact Enterprise Sales',
     popular: false,

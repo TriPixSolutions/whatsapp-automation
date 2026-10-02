@@ -26,12 +26,13 @@ function parseSignedRequest(signedRequest: string, appSecret: string) {
         .update(encodedPayload)
         .digest('hex');
 
-      if (sig !== expectedSig) {
+      if (sig.length !== expectedSig.length || !crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expectedSig, 'hex'))) {
         console.warn('[Meta Data Deletion] Signed request signature mismatch');
-        // Still proceed in sandbox mode or if testing
+        return null;
       }
     }
 
+    if (!appSecret || data.algorithm?.toUpperCase() !== 'HMAC-SHA256') return null;
     return data;
   } catch (e) {
     console.error('[Meta Data Deletion] Failed to parse signed_request:', e);
@@ -72,21 +73,11 @@ export async function POST(request: NextRequest) {
           details = `User ID ${userId} requested deletion via Facebook/Meta Settings.`;
         }
       }
-    } else {
-      // JSON payload (used by manual requests or tests)
-      try {
-        const body = await request.json();
-        userId = body.userId || body.user_id;
-        if (body.email) {
-          details = `Deletion requested for email: ${body.email}`;
-        }
-      } catch {
-        // Fallback if empty body
-      }
     }
+    if (!userId) return NextResponse.json({ error: 'A valid signed Meta deletion request is required' }, { status: 400 });
 
     // Create persistent deletion record
-    const deletionRecord = DataDeletionDB.create({
+    const deletionRecord = await DataDeletionDB.create({
       userId,
       details,
     });
@@ -118,7 +109,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing confirmation code' }, { status: 400 });
   }
 
-  const record = DataDeletionDB.getByCode(code);
+  const record = await DataDeletionDB.getByCode(code);
   if (!record) {
     return NextResponse.json({ error: 'Confirmation code not found' }, { status: 404 });
   }

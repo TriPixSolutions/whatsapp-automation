@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         error: isConfigured ? null : 'Access token is missing, mock, or placeholder',
       },
       webhookHealth: {
-        status: verifyToken && appSecret ? 'healthy' : 'pending_configuration',
+        status: verifyToken && appSecret ? 'configured_not_verified' : 'pending_configuration',
         verifyTokenSet: Boolean(verifyToken),
         appSecretSet: Boolean(appSecret),
         webhookUrl: webhookUrl || '/api/webhook/whatsapp',
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         verifiedName: 'WhatsApp Business',
       },
       wabaHealth: {
-        status: wabaId ? 'active' : 'unconfigured',
+        status: wabaId ? 'configured_not_verified' : 'unconfigured',
         wabaId: wabaId || '',
       },
     };
@@ -88,8 +88,8 @@ export async function GET(request: NextRequest) {
           status: 'verified',
           displayPhoneNumber: pData.display_phone_number || phoneNumberId,
           verifiedName: pData.verified_name || 'Verified Business',
-          qualityRating: pData.quality_rating || 'GREEN',
-          codeVerificationStatus: pData.code_verification_status || 'VERIFIED',
+          qualityRating: pData.quality_rating || 'UNKNOWN',
+          codeVerificationStatus: pData.code_verification_status || 'UNKNOWN',
         };
         healthReport.tokenHealth = {
           status: 'valid',
@@ -136,6 +136,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    if (!['owner', 'admin', 'super_admin'].includes(user.role)) return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
     const body = await request.json();
     const {
       businessId,
@@ -158,7 +159,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const current = await SettingsDB.get(targetWorkspaceId);
+    const replacementCredentials = Object.fromEntries(['accessToken','appSecret'].filter(key => typeof body[key] === 'string' && body[key].trim() && !/[•*]/.test(body[key])).map(key => [key, body[key].trim()]));
+    const current = await SettingsDB.get(targetWorkspaceId, replacementCredentials);
     const isMasked = (value: unknown) =>
       typeof value === 'string' && (value.includes('••••') || value.includes('****'));
     const resolvedToken = !accessToken || isMasked(accessToken) ? current.accessToken : accessToken;
@@ -175,11 +177,12 @@ export async function POST(request: NextRequest) {
     // 1. Live Validation Probe against Meta Graph API
     let verifiedName = 'WhatsApp Business Account';
     let displayPhone = cleanPhoneId;
-    let qualityRating = 'GREEN';
+    let qualityRating = 'UNKNOWN';
     let webhookConfigured = false;
     let webhookConfigurationError: string | null = null;
 
-    const isLive = !cleanToken.includes('SAMPLE_TOKEN') && !cleanToken.startsWith('MOCK_');
+    const isLive = !cleanToken.includes('SAMPLE_TOKEN') && !/^(MOCK_|TEST_)/.test(cleanToken);
+    if (!isLive) return NextResponse.json({ error: 'Real Meta credentials are required' }, { status: 400 });
 
     if (isLive) {
       try {
@@ -225,7 +228,7 @@ export async function POST(request: NextRequest) {
           console.log(`[Meta Webhook] Successfully subscribed apps for WABA: ${cleanWabaId}`);
         } catch (subErr: any) {
           console.warn('[Meta Subscribed Apps Warning]:', subErr.response?.data || subErr.message);
-          // Proceed even if already subscribed or permissions pending
+          return NextResponse.json({ error: 'Business account subscription failed. Check token permissions and business asset assignment.' }, { status: 400 });
         }
       }
 
