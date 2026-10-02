@@ -80,7 +80,8 @@ export class WhatsAppMessageService {
     );
 
     // 2. 24-Hour Policy Window Enforcement (Enforces Meta Cloud API Conversation Window)
-    if (options.type !== 'template') {
+    const isTemplateMessage = options.type === 'template' || (options.type === 'carousel' && Boolean(options.templateName?.trim()));
+    if (!isTemplateMessage) {
       const windowOpen = await ConversationsDB.isWindowOpen(cleanTo, workspaceId);
 
       if (!windowOpen) {

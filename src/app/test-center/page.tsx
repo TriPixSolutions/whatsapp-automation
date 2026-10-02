@@ -96,6 +96,7 @@ export default function WhatsAppTestCenterPage() {
   const [testClickedButtonTitle, setTestClickedButtonTitle] = useState('Browse Catalog');
   const [testCardIndex, setTestCardIndex] = useState(0);
   const [testCardButtonId, setTestCardButtonId] = useState('buy_shoes');
+  const [carouselTemplateName, setCarouselTemplateName] = useState('');
   const [testTemplateName, setTestTemplateName] = useState('hello_world');
 
   // Execution & Diagnostics State
@@ -276,7 +277,7 @@ export default function WhatsAppTestCenterPage() {
 
         case 'send_carousel':
           endpoint = '/api/test-center/send-test';
-          payload = { type: 'carousel', phoneNumber: testRecipient, text: 'Product Showcase Carousel' };
+          payload = { type: 'carousel', phoneNumber: testRecipient, text: 'Product Showcase Carousel', carouselTemplateName };
           break;
 
         case 'send_template':
@@ -912,8 +913,11 @@ export default function WhatsAppTestCenterPage() {
                       <span>Product Showcase 3-Card Carousel</span>
                     </div>
                     <p className="text-[11px] text-purple-700">
-                      Dispatches Runner Pro Sneakers, Chronos Smart Watch, and Aviator Shades with interactive Order CTA buttons.
+                      Enter an approved carousel template matching the configured cards. Live sends never substitute a list.
                     </p>
+                    <label className="block pt-2">Approved carousel template name
+                      <input aria-label="Approved carousel template name" value={carouselTemplateName} onChange={(e) => setCarouselTemplateName(e.target.value)} className="block w-full p-2 mt-1 rounded border border-purple-200 bg-white" />
+                    </label>
                   </div>
                 )}
 

@@ -224,7 +224,8 @@ export class MetaWhatsAppClient {
         timeout: 12000,
       });
 
-      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
@@ -290,7 +291,8 @@ export class MetaWhatsAppClient {
         timeout: 12000,
       });
 
-      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
@@ -327,7 +329,9 @@ export class MetaWhatsAppClient {
       return { success: false, error: 'Carousel requires at least one configured card.' };
     }
 
-    // If templateName is provided, send via Meta Carousel Template API
+    if (!templateName?.trim()) return { success: false, error: 'An approved Meta carousel template name is required. A carousel will not be replaced with a list.' };
+
+    // Send the configured carousel template without changing the message type.
     if (templateName) {
       const carouselCards = normalizedCards.map((card, idx) => ({
         card_index: idx,
@@ -370,35 +374,16 @@ export class MetaWhatsAppClient {
           },
           timeout: 12000,
         });
-        const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+        const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
         return { success: true, messageId, metaMessageId: messageId, details: res.data };
       } catch (err: any) {
-        // Fallback to interactive list if template is unapproved
-        console.warn('[WhatsApp] Operation failed; inspect authorized execution diagnostics.');
+        const parsed = this.parseMetaError(err);
+        return { success: false, error: parsed.message, errorCode: parsed.code, errorSubcode: parsed.subcode, details: err.response?.data };
       }
     }
 
-    // Interactive fallback: Deliver card items as rich structured interactive list
-    const fallbackSections: ListSection[] = [
-      {
-        title: 'Featured Carousel Items',
-        rows: normalizedCards.map((c, idx) => ({
-          id: c.buttons[0]?.id || `card_${idx}`,
-          title: c.title.substring(0, 24),
-          description: c.description.substring(0, 72),
-        })),
-      },
-    ];
-
-    return this.sendInteractiveList({
-      phoneNumberId,
-      accessToken,
-      to: recipient,
-      headerText: 'Featured Showcase',
-      bodyText: bodyText || 'Swipe through our featured catalog items below:',
-      buttonText: 'Browse Items',
-      sections: fallbackSections,
-    });
+    return { success: false, error: 'Carousel template configuration is required.' };
   }
 
   /**
@@ -514,7 +499,8 @@ export class MetaWhatsAppClient {
         timeout: 15000,
       });
 
-      const messageId = res.data?.messages?.[0]?.id || `wamid.${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
@@ -632,7 +618,8 @@ export class MetaWhatsAppClient {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         timeout: 15000,
       });
-      const messageId = res.data?.messages?.[0]?.id || `wamid.loc_${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
@@ -677,7 +664,8 @@ export class MetaWhatsAppClient {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         timeout: 15000,
       });
-      const messageId = res.data?.messages?.[0]?.id || `wamid.cnt_${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);
@@ -756,7 +744,8 @@ export class MetaWhatsAppClient {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         timeout: 15000,
       });
-      const messageId = res.data?.messages?.[0]?.id || `wamid.flow_${Date.now()}`;
+      const messageId = res.data?.messages?.[0]?.id;
+      if (typeof messageId !== 'string' || !messageId.startsWith('wamid.')) return { success: false, error: 'Meta did not return a valid message ID.' };
       return { success: true, messageId, metaMessageId: messageId, details: res.data };
     } catch (err: any) {
       const parsed = this.parseMetaError(err);

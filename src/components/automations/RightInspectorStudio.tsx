@@ -446,6 +446,10 @@ export function RightInspectorStudio({
               {/* 4. Carousel */}
               {(nodeType === 'carousel' || nodeType === 'whatsapp_carousel') && (
                 <div className="space-y-3 p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
+                  <label className="text-xs text-slate-300 block">Approved Meta carousel template name
+                    <input aria-label="Carousel template name" value={config.templateName || ''} onChange={(e) => updateConfig({ templateName: e.target.value })} className="w-full mt-1 p-2 bg-slate-950 rounded border border-slate-700" />
+                  </label>
+                  <p className="text-xs text-slate-400">Live sends require a matching approved template. Sandbox previews do not verify approval or delivery.</p>
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-slate-200">Carousel Cards ({cards.length}/10)</h4>
                     {cards.length < 10 && (

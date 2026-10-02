@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const dispatchStarted = Date.now();
     let metaResult: any = null;
     let messageId = `wamid.HBgM${Date.now()}`;
     let sentContent = text;
@@ -201,7 +202,7 @@ export async function POST(request: NextRequest) {
             accessToken,
             to: cleanPhone,
             // Native WhatsApp carousels require an approved carousel template.
-            // Without one, the Meta client sends a valid interactive product list.
+            // Missing or rejected templates fail explicitly.
             templateName: carouselTemplateName || undefined,
             bodyText: text,
             cards: carouselCards,
@@ -326,7 +327,7 @@ export async function POST(request: NextRequest) {
         type: dbType,
       },
       responseBody: metaResult,
-      latencyMs: 145,
+      latencyMs: Date.now() - dispatchStarted,
       deliveryStatus: 'sent',
     });
 
