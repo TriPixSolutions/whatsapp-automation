@@ -118,6 +118,7 @@ export type VisualNodeType =
   | 'trigger_carousel'
   | 'trigger_list'
   | 'trigger_flow'
+  | 'trigger_scheduled'
   // WhatsApp Messages & Actions
   | 'whatsapp_message'
   | 'whatsapp_button'
@@ -221,6 +222,9 @@ export interface WorkflowNode {
     delayUnit?: 'seconds' | 'minutes' | 'hours' | 'days';
     timeoutMinutes?: number;
     timeoutUnit?: 'minutes' | 'hours' | 'days';
+    scheduleAt?: string;
+    recipientPhone?: string;
+    recurrenceMinutes?: number;
     // Conditions & Branches
     conditionVariable?: string;
     conditionOperator?: 'equals' | 'contains' | 'not_equals' | 'exists' | 'greater_than' | 'less_than' | 'replied_within_24h';

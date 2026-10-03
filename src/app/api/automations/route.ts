@@ -1,12 +1,22 @@
 import { workflowValidationErrors } from '@/lib/automations/validateWorkflow';
 import { NextRequest, NextResponse } from 'next/server';
-import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { DEFAULT_WORKSPACE_ID, ScheduledJobsDB } from '@/lib/db';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
 import { getAuthorizedUser } from '@/lib/auth-server';
 import { WorkflowDefinition } from '@/types/automations';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function resolvedTriggerType(body: any, fallback: WorkflowDefinition['triggerType'] = 'keyword'): WorkflowDefinition['triggerType'] {
+  const trigger = Array.isArray(body.nodes) ? body.nodes.find((node: any) => node?.type === 'trigger' || String(node?.type || '').startsWith('trigger_')) : null;
+  if (trigger?.type === 'trigger_scheduled') return 'scheduled_trigger';
+  if (trigger?.type === 'trigger_incoming') return 'incoming_message';
+  if (trigger?.type === 'trigger_button') return 'button_click';
+  if (trigger?.type === 'trigger_carousel') return 'carousel_click';
+  if (trigger?.type === 'trigger_keyword' || trigger?.type === 'trigger') return 'keyword';
+  return body.triggerType || fallback;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,7 +52,7 @@ export async function POST(request: NextRequest) {
         workspaceId: targetWorkspaceId,
         name: body.name || 'Untitled Workflow',
         description: body.description || '',
-        triggerType: body.triggerType || 'keyword',
+        triggerType: resolvedTriggerType(body),
         triggerKeyword: body.triggerKeyword || 'hello',
         triggerMatchPattern: body.triggerMatchPattern || 'contains',
         nodes: body.nodes,
@@ -65,6 +75,7 @@ export async function POST(request: NextRequest) {
       };
 
       const saved = await TestCenterStore.saveWorkflow(newWorkflow);
+      await ScheduledJobsDB.syncWorkflowTrigger(saved);
 
       return NextResponse.json(saved, { status: 201 });
     }
@@ -106,7 +117,7 @@ export async function PUT(request: NextRequest) {
         description: partial.description ?? existingWf.description,
         nodes: partial.nodes ?? existingWf.nodes,
         edges: partial.edges ?? existingWf.edges,
-        triggerType: partial.triggerType ?? existingWf.triggerType,
+        triggerType: resolvedTriggerType({ ...partial, nodes: partial.nodes ?? existingWf.nodes }, existingWf.triggerType),
         triggerKeyword: partial.triggerKeyword ?? existingWf.triggerKeyword,
         triggerMatchPattern: partial.triggerMatchPattern ?? existingWf.triggerMatchPattern,
         isActive: partial.isActive ?? existingWf.isActive,
@@ -114,6 +125,7 @@ export async function PUT(request: NextRequest) {
         workspaceId: targetWorkspaceId,
         id,
       });
+      await ScheduledJobsDB.syncWorkflowTrigger(updatedWf);
       return NextResponse.json(updatedWf);
     }
 
@@ -141,6 +153,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
     }
     const dagDeleted = workflow ? await TestCenterStore.deleteWorkflow(id, targetWorkspaceId) : false;
+    if (dagDeleted) await ScheduledJobsDB.cancelWorkflowTrigger(id, targetWorkspaceId);
     const success = dagDeleted;
     return NextResponse.json({ success });
   } catch (err: any) {

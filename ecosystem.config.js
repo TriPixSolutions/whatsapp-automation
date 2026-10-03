@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'whatsapp-saas-web',
       script: 'scripts/start-standalone.cjs',
-      instances: 1, // Workflow sessions still use a local store; keep one web writer.
+      instances: 1,
       exec_mode: 'fork',
       autorestart: true,
       watch: false,

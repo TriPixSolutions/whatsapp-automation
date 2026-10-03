@@ -124,18 +124,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 2. Local Usage & Sandbox Analytics Aggregation Engine
+    // 2. Local usage analytics. Ad metrics cannot be inferred from message activity.
     const totalDelivered = campaigns.reduce((acc, c) => acc + (c.deliveredCount || 0), 0);
     const totalRead = campaigns.reduce((acc, c) => acc + (c.readCount || 0), 0);
     const totalReplied = campaigns.reduce((acc, c) => acc + (c.repliedCount || 0), 0);
     const totalSent = campaigns.reduce((acc, c) => acc + (c.sentCount || 0), 0) + allMessages.length;
-
-    // Cloud messaging cost: standard $0.045 / message
-    const calculatedSpend = Math.round(totalSent * 0.045 * 100) / 100;
-    const estimatedImpressions = totalDelivered * 3 + totalSent * 2 + 120;
-    const estimatedClicks = totalRead * 2 + totalReplied * 4 + 48;
-    const calculatedCtr = estimatedImpressions > 0 ? (estimatedClicks / estimatedImpressions) * 100 : 0;
-    const calculatedCpc = estimatedClicks > 0 ? calculatedSpend / estimatedClicks : 0;
 
     return NextResponse.json({
       success: true,
@@ -143,15 +136,20 @@ export async function GET(request: NextRequest) {
       configured: Boolean(settings.phoneNumberId && settings.accessToken),
       source: 'local_engine',
       metrics: {
-        spend: calculatedSpend,
-        impressions: estimatedImpressions,
-        clicks: estimatedClicks,
-        cpc: Math.round(calculatedCpc * 100) / 100,
-        ctr: Math.round(calculatedCtr * 10) / 10,
+        spend: null,
+        impressions: null,
+        clicks: null,
+        cpc: null,
+        ctr: null,
         conversationsStarted: totalReplied + allMessages.filter((m) => m.direction === 'inbound').length,
         totalContacts,
         totalMessages: totalSent,
+        deliveredMessages: totalDelivered,
+        readMessages: totalRead,
+        repliedMessages: totalReplied,
       },
+      unavailableMetrics: ['spend', 'impressions', 'clicks', 'cpc', 'ctr'],
+      notice: 'Connect a Meta ad account to view ad metrics. Message activity is not used to estimate ad performance.',
       campaigns,
     });
   } catch (error: any) {

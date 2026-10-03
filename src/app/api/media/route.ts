@@ -58,8 +58,18 @@ export async function GET(request: NextRequest) {
       if (signed.error) throw new Error('Unavailable');
       return NextResponse.redirect(signed.data.signedUrl);
     }
-    const rows=checked(await db.from('media_assets').select('*').eq('workspace_id',user.workspaceId!).order('created_at',{ascending:false}).limit(100));
-    return NextResponse.json(rows);
+    const rows=checked(await db.from('media_assets')
+      .select('id,file_name,file_size_bytes,mime_type,meta_media_id,created_at')
+      .eq('workspace_id',user.workspaceId!).order('created_at',{ascending:false}).limit(100));
+    return NextResponse.json((rows || []).map((row: any) => ({
+      id: row.id,
+      fileName: row.file_name,
+      fileSize: Number(row.file_size_bytes || 0),
+      mimeType: row.mime_type,
+      providerReady: Boolean(row.meta_media_id),
+      createdAt: row.created_at,
+      previewUrl: `/api/media?id=${row.id}`,
+    })));
   } catch { return NextResponse.json({error:'Media unavailable'},{status:503}); }
 }
 export async function DELETE(request: NextRequest) {

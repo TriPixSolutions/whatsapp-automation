@@ -78,6 +78,15 @@ const CATEGORY_STYLES: Record<
     badgeBg: 'bg-amber-500/10 border-amber-500/30',
     tagLabel: 'KEYWORD TRIGGER',
   },
+  trigger_scheduled: {
+    icon: Clock,
+    accent: 'text-amber-400',
+    border: 'border-amber-500/40',
+    bg: 'from-amber-950/20 to-gray-900',
+    badge: 'text-amber-400',
+    badgeBg: 'bg-amber-500/10 border-amber-500/30',
+    tagLabel: 'SCHEDULED TRIGGER',
+  },
   trigger_button: {
     icon: MousePointerClick,
     accent: 'text-amber-400',
@@ -526,6 +535,13 @@ export const CustomWorkflowNode = memo(function CustomWorkflowNode({
           <div className="text-gray-400 flex items-center gap-1 text-[10px]">
             <Sparkles className="w-3 h-3 text-amber-400" />
             Fires on any customer inbound WhatsApp message
+          </div>
+        )}
+
+        {resolvedKey === 'trigger_scheduled' && (
+          <div className="space-y-1 text-[10px] text-gray-400">
+            <div className="flex items-center gap-1"><Clock className="h-3 w-3 text-amber-400" />{node.config?.scheduleAt ? new Date(node.config.scheduleAt).toLocaleString() : 'Choose a start time'}</div>
+            <div className="font-mono">{node.config?.recipientPhone || 'Add recipient phone'}</div>
           </div>
         )}
 

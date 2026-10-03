@@ -71,6 +71,16 @@ test('custom workflow validation rejects broken edges and duplicate nodes', () =
   assert.match(validate({isActive:false,nodes:[{id:'t',type:'trigger_keyword'}],edges:[{source:'t',target:'missing'}]}),/existing steps/);
   assert.match(validate({isActive:false,nodes:[{id:'t',type:'trigger_keyword'},{id:'t',type:'end'}]}),/duplicated/);
 });
+test('active scheduled workflows require a valid recipient and start time', () => {
+  const { workflowValidationError: validate }=load('src/lib/automations/validateWorkflow.ts',{
+    '@/lib/whatsapp/messageModel':{messageFromWorkflowNode:()=>null,validateOutboundMessage:()=>[]},
+  });
+  const end={id:'end',type:'end',title:'End',config:{}};
+  const workflow=(config)=>({isActive:true,nodes:[{id:'schedule',type:'trigger_scheduled',title:'Schedule',config},end],edges:[{source:'schedule',target:'end'}]});
+  assert.match(validate(workflow({scheduleAt:'bad',recipientPhone:'123'})),/valid start date/);
+  assert.match(validate(workflow({scheduleAt:new Date().toISOString(),recipientPhone:'123'})),/E\.164/);
+  assert.equal(validate(workflow({scheduleAt:new Date().toISOString(),recipientPhone:'+919876543210',recurrenceMinutes:0})),null);
+});
 test('sandbox waiting sessions cannot replace, resume or clear live sessions for the same recipient', async () => {
  const b=backend(); const repo=()=>load('src/lib/db/workflows.ts',{'./client':b.client});
  const now=new Date().toISOString(); const session={workspaceId:'ws-a',phoneNumber:'+15550001111',workflowId:'wf-a',executionId:'e-a',currentNodeId:'button',waitingFor:'button_click',variables:{},pausedAt:now,expiresAt:new Date(Date.now()+60000).toISOString()};

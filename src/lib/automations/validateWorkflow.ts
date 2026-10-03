@@ -58,6 +58,14 @@ export function workflowValidationErrors(workflow: WorkflowShape): string[] {
     const trigger = triggers[0];
     const keyword = String(trigger.config?.text || trigger.config?.triggerKeyword || trigger.triggerKeyword || '').trim();
     if (trigger.type === 'trigger_keyword' && !keyword) errors.push(`Trigger "${trigger.title || trigger.id}" needs at least one keyword.`);
+    if (trigger.type === 'trigger_scheduled') {
+      const scheduleAt = String(trigger.config?.scheduleAt || '');
+      const recipient = String(trigger.config?.recipientPhone || '').replace(/[\s()-]/g, '');
+      const recurrenceMinutes = Number(trigger.config?.recurrenceMinutes || 0);
+      if (!scheduleAt || !Number.isFinite(Date.parse(scheduleAt))) errors.push('Scheduled trigger needs a valid start date and time.');
+      if (!/^\+[1-9]\d{7,14}$/.test(recipient)) errors.push('Scheduled trigger recipient must use E.164 format, for example +919876543210.');
+      if (recurrenceMinutes < 0 || !Number.isFinite(recurrenceMinutes)) errors.push('Scheduled trigger recurrence must be zero or a positive number of minutes.');
+    }
   }
 
   if (strict) {
@@ -70,6 +78,24 @@ export function workflowValidationErrors(workflow: WorkflowShape): string[] {
       if (node.type === 'delay') {
         const amount = Number(node.config?.delayAmount);
         if (!Number.isFinite(amount) || amount <= 0) errors.push(`${node.title || node.id}: Delay must be greater than zero.`);
+      }
+
+      if ((node.type === 'tag' || node.type === 'tag_management') && !String(node.config?.tag || '').trim()) {
+        errors.push(`${node.title || node.id}: Choose a contact tag.`);
+      }
+      if (node.type === 'lead_management' && !String(node.config?.leadStatus || '').trim()) {
+        errors.push(`${node.title || node.id}: Choose the lead stage to save.`);
+      }
+      if ((node.type === 'crm_action' || node.type === 'assign_agent') &&
+        !String(node.config?.assigneeEmail || node.config?.agentId || node.config?.stage || node.config?.notes || '').trim()) {
+        errors.push(`${node.title || node.id}: Choose an assignee or a CRM update.`);
+      }
+      if ((node.type === 'ai' || node.type === 'ai_agent' || node.type === 'ai_smart_reply') &&
+        !String(node.config?.systemPrompt || node.config?.prompt || '').trim()) {
+        errors.push(`${node.title || node.id}: Add instructions for the AI agent.`);
+      }
+      if ((node.type === 'branch' || node.type === 'multi_branch') && !(node.config?.branches || []).length) {
+        errors.push(`${node.title || node.id}: Add at least one branch.`);
       }
 
       if (interactiveNode(node)) {

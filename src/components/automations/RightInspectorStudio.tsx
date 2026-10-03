@@ -639,6 +639,28 @@ export function RightInspectorStudio({
               )}
 
               {/* 5. Condition / Logic */}
+              {nodeType === 'trigger_scheduled' && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">Schedule</h4>
+                  <label className="block text-[11px] text-slate-400">Start date and time
+                    <input type="datetime-local" value={config.scheduleAt ? String(config.scheduleAt).slice(0, 16) : ''}
+                      onChange={(event) => updateConfig({ scheduleAt: event.target.value ? new Date(event.target.value).toISOString() : '' })}
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white" />
+                  </label>
+                  <label className="block text-[11px] text-slate-400">Recipient phone (E.164)
+                    <input value={config.recipientPhone || ''} onChange={(event) => updateConfig({ recipientPhone: event.target.value })}
+                      placeholder="+919876543210" className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 font-mono text-xs text-white" />
+                  </label>
+                  <label className="block text-[11px] text-slate-400">Repeat every minutes (0 = once)
+                    <input type="number" min={0} value={config.recurrenceMinutes || 0}
+                      onChange={(event) => updateConfig({ recurrenceMinutes: Math.max(0, Number(event.target.value)) })}
+                      className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white" />
+                  </label>
+                  <p className="text-[11px] text-slate-400">Saving an active workflow creates a durable database job. The background worker must be online.</p>
+                </div>
+              )}
+
+              {/* 5. Condition / Logic */}
               {(nodeType === 'condition' || nodeType === 'conditional_logic') && (
                 <div className="space-y-3 p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
                   <h4 className="text-xs font-bold text-slate-200">Condition Evaluation</h4>
@@ -781,7 +803,7 @@ export function RightInspectorStudio({
               )}
 
               {/* 9. CRM / Tagging */}
-              {(nodeType === 'tag' || nodeType === 'tag_management' || nodeType === 'lead_management') && (
+              {(nodeType === 'tag' || nodeType === 'tag_management') && (
                 <div className="space-y-3 p-3 bg-slate-900/40 rounded-xl border border-slate-800/80">
                   <h4 className="text-xs font-bold text-slate-200">CRM Actions</h4>
                   <div>
@@ -805,6 +827,35 @@ export function RightInspectorStudio({
                       <option value="remove">Remove Tag from Contact</option>
                     </select>
                   </div>
+                </div>
+              )}
+
+              {nodeType === 'lead_management' && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">Update lead</h4>
+                  <label className="block text-[11px] text-slate-400">Lead status
+                    <select value={config.leadStatus || ''} onChange={(event) => updateConfig({ leadStatus: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white">
+                      <option value="">Choose status</option><option value="new">New</option><option value="contacted">Contacted</option><option value="qualified">Qualified</option><option value="disqualified">Disqualified</option><option value="converted">Converted</option>
+                    </select>
+                  </label>
+                  <label className="block text-[11px] text-slate-400">Lead value (optional)
+                    <input type="number" min={0} value={config.leadValue ?? ''} onChange={(event) => updateConfig({ leadValue: event.target.value === '' ? undefined : Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white" />
+                  </label>
+                </div>
+              )}
+
+              {nodeType === 'crm_action' && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">Assign conversation</h4>
+                  <label className="block text-[11px] text-slate-400">Agent email or stable agent ID
+                    <input type="text" value={config.assigneeEmail || ''} onChange={(event) => updateConfig({ assigneeEmail: event.target.value })} placeholder="agent@example.com" className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white" />
+                  </label>
+                  <label className="block text-[11px] text-slate-400">Priority
+                    <select value={config.priority || 'normal'} onChange={(event) => updateConfig({ priority: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white"><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>
+                  </label>
+                  <label className="block text-[11px] text-slate-400">Internal note (optional)
+                    <textarea rows={3} value={config.notes || ''} onChange={(event) => updateConfig({ notes: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 p-2 text-xs text-white" />
+                  </label>
                 </div>
               )}
             </>

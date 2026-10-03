@@ -889,7 +889,8 @@ export class AdvancedWorkflowEngine {
           case 'trigger_button':
           case 'trigger_carousel':
           case 'trigger_list':
-          case 'trigger_flow': {
+          case 'trigger_flow':
+          case 'trigger_scheduled': {
             // Trigger Evaluation Logging & Processing
 
 
@@ -1395,7 +1396,9 @@ export class AdvancedWorkflowEngine {
             const branches = currentNode.config.branches || [];
             const matchedBranch = branches.find((b: any) =>
               b.conditionValue && varVal.includes(b.conditionValue.toLowerCase())
-            ) || branches[0];
+            ) || branches.find((b: any) => !b.conditionValue);
+
+            if (!matchedBranch) throw new Error('No workflow branch matched and no default branch is configured.');
 
             branchHandleToFollow = matchedBranch?.id;
             traceStep.outputResult = {
@@ -1409,24 +1412,22 @@ export class AdvancedWorkflowEngine {
 
           case 'crm_action': {
             const conf = currentNode.config || {};
-
-
             const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contactRecord) {
-              if (conf.stage) {
-                await ContactsDB.upsert({ phoneNumber: contactRecord.phoneNumber, stage: conf.stage as any }, context.workspaceId);
-              }
-              if (conf.notes) {
-                await ContactsDB.addNote(contactRecord.id, {
-                  authorName: 'Workflow Engine',
-                  content: conf.notes,
-                }, context.workspaceId);
-              }
-            }
+            if (!contactRecord) throw new Error('Contact was not found for CRM update.');
+            const assignee = String(conf.assigneeEmail || conf.agentId || '').trim();
+            if (!assignee && !conf.stage && !conf.notes) throw new Error('CRM action needs an assignee, stage, or note.');
+            await ContactsDB.upsert({
+              phoneNumber: contactRecord.phoneNumber,
+              ...(conf.stage ? { stage: conf.stage as any } : {}),
+              ...(assignee ? { assignedAgent: assignee } : {}),
+              ...(conf.priority ? { priority: conf.priority } : {}),
+            }, context.workspaceId);
+            if (conf.notes) await ContactsDB.addNote(contactRecord.id, { authorName: 'Workflow Engine', content: conf.notes }, context.workspaceId);
             traceStep.outputResult = {
               crmUpdated: true,
+              assignedAgent: assignee || undefined,
               stage: conf.stage,
-              notesAdded: conf.notes || 'None',
+              notesAdded: Boolean(conf.notes),
             };
             traceStep.status = 'node_executed';
 
@@ -1437,22 +1438,22 @@ export class AdvancedWorkflowEngine {
           case 'lead_management': {
             const conf = currentNode.config || {};
             const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contactRecord) {
-              const updatedContact = {
-                ...contactRecord,
-                leadStatus: conf.leadStatus || 'qualified',
-                metadata: {
-                  ...(contactRecord.metadata || {}),
-                  leadValue: conf.leadValue || 500,
-                  priority: conf.priority || 'high',
-                },
-              };
-              await ContactsDB.upsert(updatedContact, context.workspaceId);
-            }
+            if (!contactRecord) throw new Error('Contact was not found for lead update.');
+            if (!conf.leadStatus) throw new Error('Lead update needs a target status.');
+            const updatedContact = {
+              ...contactRecord,
+              leadStatus: conf.leadStatus,
+              metadata: {
+                ...(contactRecord.metadata || {}),
+                ...(conf.leadValue !== undefined ? { leadValue: conf.leadValue } : {}),
+                ...(conf.priority ? { priority: conf.priority } : {}),
+              },
+            };
+            await ContactsDB.upsert(updatedContact, context.workspaceId);
             traceStep.outputResult = {
-              leadStatus: conf.leadStatus || 'qualified',
-              leadValue: conf.leadValue || 500,
-              priority: conf.priority || 'high',
+              leadStatus: conf.leadStatus,
+              leadValue: conf.leadValue,
+              priority: conf.priority,
             };
             traceStep.status = 'node_executed';
 
@@ -1463,16 +1464,13 @@ export class AdvancedWorkflowEngine {
           case 'tag_management': {
             const conf = currentNode.config || {};
             const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contactRecord && conf.tag) {
-              const tagToApply = conf.tag.trim();
-              let tags = contactRecord.tags || [];
-              if (conf.action === 'remove') {
-                tags = tags.filter((t) => t.toLowerCase() !== tagToApply.toLowerCase());
-              } else {
-                tags = Array.from(new Set([...tags, tagToApply]));
-              }
-              await ContactsDB.upsert({ ...contactRecord, tags }, context.workspaceId);
-            }
+            if (!contactRecord) throw new Error('Contact was not found for tag update.');
+            if (!conf.tag?.trim()) throw new Error('Tag action needs a tag.');
+            const tagToApply = conf.tag.trim();
+            let tags = contactRecord.tags || [];
+            if (conf.action === 'remove') tags = tags.filter((t) => t.toLowerCase() !== tagToApply.toLowerCase());
+            else tags = Array.from(new Set([...tags, tagToApply]));
+            await ContactsDB.upsert({ ...contactRecord, tags }, context.workspaceId);
             traceStep.outputResult = {
               action: conf.action || 'add',
               tag: conf.tag,
@@ -1507,18 +1505,12 @@ export class AdvancedWorkflowEngine {
           case 'assign_agent': {
             const conf = currentNode.config || {};
             const contactRecord = await ContactsDB.getByPhone(context.phoneNumber, context.workspaceId);
-            if (contactRecord) {
-              await ContactsDB.upsert(
-                {
-                  ...contactRecord,
-                  assignedAgent: conf.agentName || conf.agentId || 'Support Specialist',
-                  stage: 'in_progress',
-                },
-                context.workspaceId
-              );
-            }
+            if (!contactRecord) throw new Error('Contact was not found for assignment.');
+            const assignedAgent = String(conf.assigneeEmail || conf.agentName || conf.agentId || '').trim();
+            if (!assignedAgent) throw new Error('Agent assignment needs an email or stable agent ID.');
+            await ContactsDB.upsert({ ...contactRecord, assignedAgent, stage: 'in_progress' }, context.workspaceId);
             traceStep.outputResult = {
-              assignedAgent: conf.agentName || conf.agentId || 'Support Specialist',
+              assignedAgent,
               status: 'assigned',
             };
             traceStep.status = 'node_executed';
@@ -1566,8 +1558,7 @@ export class AdvancedWorkflowEngine {
           }
 
           default: {
-            traceStep.status = 'node_executed';
-            traceStep.outputResult = { executed: true };
+            throw new Error(`Unsupported workflow step type: ${currentNode.type}`);
           }
         }
 

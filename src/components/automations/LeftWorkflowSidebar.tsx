@@ -83,6 +83,16 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     defaultConfig: { text: 'pricing, catalog, order', triggerKeyword: 'pricing' },
   },
   {
+    type: 'trigger_scheduled',
+    title: 'Scheduled Trigger',
+    description: 'Start this workflow for one recipient at a saved date and time',
+    category: 'Trigger Nodes',
+    icon: Clock,
+    color: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+    badge: 'Schedule',
+    defaultConfig: { scheduleAt: '', recipientPhone: '', recurrenceMinutes: 0 },
+  },
+  {
     type: 'trigger_button',
     title: 'Button Click Trigger',
     description: 'Fires when customer taps a WhatsApp quick reply button',
@@ -404,7 +414,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     badge: 'Tagging',
     defaultConfig: {
       action: 'add',
-      tag: 'vip_buyer',
+      tag: '',
     },
   },
   {
@@ -416,8 +426,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
     badge: 'Lead Stage',
     defaultConfig: {
-      leadStatus: 'qualified',
-      scoreIncrement: 10,
+      leadStatus: '',
     },
   },
   {
@@ -429,8 +438,8 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
     badge: 'Assign',
     defaultConfig: {
-      assigneeEmail: 'agent@tripixsolutions.com',
-      priority: 'high',
+      assigneeEmail: '',
+      priority: 'normal',
     },
   },
 
@@ -478,7 +487,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
 ];
 
 const SIMPLE_NODE_GROUPS = [
-  { label: 'Triggers', types: ['trigger_incoming', 'trigger_keyword', 'trigger_button', 'trigger_list'] },
+  { label: 'Triggers', types: ['trigger_incoming', 'trigger_keyword', 'trigger_scheduled', 'trigger_button', 'trigger_list'] },
   { label: 'Messages', types: ['whatsapp_message', 'message_media', 'message_template', 'whatsapp_button', 'whatsapp_list', 'whatsapp_carousel', 'whatsapp_catalog', 'whatsapp_flow'] },
   { label: 'Logic', types: ['conditional_logic', 'multi_branch'] },
   { label: 'Actions', types: ['ai_agent', 'tag_management', 'lead_management', 'crm_action', 'api_node', 'webhook_node'] },

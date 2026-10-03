@@ -14,6 +14,8 @@ import {
   FlaskConical,
   BarChart3,
   Settings,
+  Image,
+  Plug,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -30,10 +32,12 @@ export const navItems: NavItem[] = [
   { name: 'Leads', href: '/leads', icon: Users },
   { name: 'Contacts', href: '/contacts', icon: Contact },
   { name: 'Automations', href: '/automations', icon: Zap },
-  { name: 'Templates', href: '/templates', icon: FileText, badge: 'New' },
-  { name: 'Broadcasts', href: '/campaigns', icon: Send },
   { name: 'Automation Lab', href: '/test-center', icon: FlaskConical },
+  { name: 'Templates', href: '/templates', icon: FileText, badge: 'New' },
+  { name: 'Media', href: '/media', icon: Image },
+  { name: 'Broadcasts', href: '/campaigns', icon: Send },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Integrations', href: '/integrations', icon: Plug },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

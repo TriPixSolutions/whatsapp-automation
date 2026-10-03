@@ -13,6 +13,7 @@ const requiredTables = [
   'message_statuses', 'conversations', 'conversation_events', 'workflow_definitions',
   'workflow_sessions', 'workflow_executions', 'webhook_events', 'campaigns',
   'campaign_contacts', 'scheduled_jobs', 'companies', 'templates', 'media_assets', 'data_deletions',
+  'worker_heartbeats',
 ];
 
 const results = [];

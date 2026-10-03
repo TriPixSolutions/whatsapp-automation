@@ -276,10 +276,19 @@ function VisualCanvasInner({
         animated: e.animated,
       }));
 
+      const triggerNode = updatedNodes.find((node) => node.type === 'trigger' || node.type.startsWith('trigger_'));
+      const triggerType = triggerNode?.type === 'trigger_scheduled' ? 'scheduled_trigger'
+        : triggerNode?.type === 'trigger_incoming' ? 'incoming_message'
+          : triggerNode?.type === 'trigger_button' ? 'button_click'
+            : triggerNode?.type === 'trigger_carousel' ? 'carousel_click'
+              : triggerNode?.type === 'trigger_keyword' || triggerNode?.type === 'trigger' ? 'keyword'
+                : workflow.triggerType;
+
       onChangeWorkflow({
         ...workflow,
         nodes: updatedNodes,
         edges: updatedEdges,
+        triggerType,
       });
     },
     [workflow, onChangeWorkflow]

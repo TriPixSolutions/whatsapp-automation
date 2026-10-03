@@ -1,4 +1,3 @@
-const { getWorkspaceConnection } = require('./connection');
 const { claimDueJobs, completeJob, failJob } = require('./scheduled-jobs');
 /**
  * ==============================================================================
@@ -13,27 +12,23 @@ require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const { Worker } = require('bullmq');
 const Redis = require('ioredis');
 const { createClient } = require('@supabase/supabase-js');
-const axios = require('axios');
-const { graphVersion } = require('../shared/meta-config.cjs');
-const META_GRAPH_VERSION = graphVersion(process.env);
 
-// Initialize Redis Client
-if (!process.env.REDIS_URL) throw new Error('REDIS_URL is required for the background worker');
+// Redis is required for broadcasts. Database-backed schedules continue without it.
 const redisUrl = process.env.REDIS_URL;
-const redisConnection = new Redis(redisUrl, {
+const redisConnection = redisUrl ? new Redis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   retryStrategy(times) {
     const delay = Math.min(times * 200, 3000);
     return delay;
   },
-});
+}) : null;
 
-redisConnection.on('connect', () => {
+redisConnection?.on('connect', () => {
   console.log('[Worker] Connected to Redis queue server successfully.');
 });
 
-redisConnection.on('error', (err) => {
+redisConnection?.on('error', (err) => {
   console.error('[Worker] Redis connection error:', err.message);
 });
 
@@ -46,42 +41,24 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const workerStartedAt = new Date().toISOString();
+let heartbeatTimer = null;
+
+async function recordWorkerHeartbeat(status = 'online') {
+  if (!supabase) return;
+  const { error } = await supabase.from('worker_heartbeats').upsert({
+    worker_name: 'whatsapp-background-worker',
+    status,
+    capabilities: ['broadcasts', 'follow_ups', 'workflow_delays', 'scheduled_workflows'],
+    details: { redisConfigured: Boolean(process.env.REDIS_URL), redisStatus: redisConnection?.status || 'not_configured' },
+    last_seen_at: new Date().toISOString(),
+    started_at: workerStartedAt,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'worker_name' });
+  if (error) console.error('[Worker] Heartbeat update failed:', error.message);
+}
 
 const crypto = require('crypto');
-
-// AES-256-GCM Decryption Helper
-const ALGORITHM = 'aes-256-gcm';
-function getEncryptionKey() {
-  if (process.env.NODE_ENV === 'production' && !process.env.ENCRYPTION_KEY) throw new Error('ENCRYPTION_KEY required');
-  const envKey =
-    process.env.ENCRYPTION_KEY ||
-    process.env.JWT_SECRET ||
-    process.env.NEXTAUTH_SECRET ||
-    'production_secure_tripix_aes256_key_32bytes_min';
-  return crypto.createHash('sha256').update(envKey).digest();
-}
-
-function decryptToken(cipherString) {
-  if (!cipherString) return '';
-  if (!cipherString.startsWith('enc:gcm:')) {
-    return cipherString;
-  }
-  try {
-    const parts = cipherString.split(':');
-    if (parts.length !== 5) throw new Error('Malformed encrypted credential');
-    const [, , ivHex, tagHex, encryptedHex] = parts;
-    const key = getEncryptionKey();
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(tagHex, 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    decipher.setAuthTag(authTag);
-    let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch (error) {
-    throw new Error('Stored credential cannot be decrypted; restore ENCRYPTION_KEY or reconnect Meta');
-  }
-}
 
 // Helper: Sleep to respect Meta API rate limits (60ms per request = ~16 req/s)
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -90,50 +67,25 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * Dispatch single message through Meta WhatsApp Cloud API
  */
 async function sendWhatsAppTemplateMessage({
-  phoneNumberId,
-  accessToken,
+  workspaceId,
   recipientPhone,
   templateName,
   languageCode = 'en_US',
 }) {
-  const url = `https://graph.facebook.com/${META_GRAPH_VERSION}/${phoneNumberId}/messages`;
-
-  const payload = {
-    messaging_product: 'whatsapp',
-    recipient_type: 'individual',
-    to: recipientPhone.replace(/[^0-9]/g, ''),
-    type: 'template',
-    template: {
-      name: templateName,
-      language: {
-        code: languageCode,
-      },
-    },
-  };
-
-  if (!accessToken || accessToken.includes('SAMPLE_TOKEN') || !phoneNumberId) {
-    return {
-      success: false,
-      error: 'Unconfigured Meta credentials. Connect live Meta WABA access token.',
-    };
-  }
-
   try {
-    const response = await axios.post(url, payload, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 12000,
+    if (!process.env.WORKER_SECRET || process.env.WORKER_SECRET.length < 32) throw new Error('WORKER_SECRET is not configured');
+    const endpoint = process.env.MESSAGE_RUNNER_URL || `http://127.0.0.1:${process.env.PORT || 3000}/api/internal/send-message`;
+    const response = await fetch(endpoint, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(60000),
+      headers: { authorization: `Bearer ${process.env.WORKER_SECRET}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ workspaceId, to: recipientPhone, templateName, languageCode }),
     });
-
-    const metaMessageId = response.data?.messages?.[0]?.id;
-    if (!metaMessageId) return { success: false, error: 'Meta accepted the request without returning a message ID' };
-    return { success: true, metaMessageId, responseData: response.data };
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.success || !body.messageId) return { success: false, error: body.error || `Message runner HTTP ${response.status}` };
+    return { success: true, metaMessageId: body.messageId };
   } catch (error) {
-    const errorDetail = error.response?.data?.error?.message || error.message;
-    console.error('[Worker API Error] Meta template dispatch failed:', errorDetail);
-    return { success: false, error: errorDetail };
+    console.error('[Worker API Error] Template dispatch failed:', error.message);
+    return { success: false, error: error.message };
   }
 }
 
@@ -143,7 +95,7 @@ async function sendWhatsAppTemplateMessage({
 const queueName = 'whatsapp-campaigns';
 console.log(`[Worker] Initializing queue worker listening on '${queueName}'...`);
 
-const campaignWorker = new Worker(
+const campaignWorker = redisConnection ? new Worker(
   queueName,
   async (job) => {
     console.log(`\n======================================================`);
@@ -153,7 +105,6 @@ const campaignWorker = new Worker(
       campaignId,
       workspaceId,
       templateName = 'teaser_alert',
-      targetTag = 'all',
       languageCode = 'en_US',
       contactIds = [],
     } = job.data;
@@ -169,28 +120,14 @@ const campaignWorker = new Worker(
       throw new Error('Supabase client not initialized in worker environment.');
     }
 
-    // 1. Fetch Workspace Credentials
-    const { data: workspace, error: wsError } = await supabase
-      .from('workspaces')
-      .select('id, name')
-      .eq('id', workspaceId)
-      .maybeSingle();
-
-    if (wsError) {
-      console.warn(`[Worker] Workspace lookup warning for ${workspaceId}:`, wsError.message);
-    }
-
-    const { encryptedToken, phoneNumberId } = await getWorkspaceConnection(supabase, workspaceId);
-    const accessToken = decryptToken(encryptedToken);
-
-    // 2. Update Campaign status to 'processing'
+    // 1. Update Campaign status to 'processing'
     await supabase
       .from('campaigns')
       .update({ status: 'processing', updated_at: new Date().toISOString() })
       .eq('id', campaignId)
       .eq('workspace_id', workspaceId);
 
-    // 3. Fetch Targeted Contacts
+    // 2. Fetch Targeted Contacts
     let query = supabase
       .from('contacts')
       .select('id, phone_number, first_name, last_name, optin_status')
@@ -212,7 +149,7 @@ const campaignWorker = new Worker(
     let sentCount = 0;
     let failedCount = 0;
 
-    // 4. Iterate and dispatch with 60ms rate limit pacing
+    // 3. Iterate and dispatch with 60ms rate limit pacing
     for (let i = 0; i < totalContacts; i++) {
       const contact = contacts[i];
 
@@ -234,8 +171,7 @@ const campaignWorker = new Worker(
       console.log(`[Worker] [${i + 1}/${totalContacts}] Dispatching campaign recipient ${contact.id}...`);
 
       const result = await sendWhatsAppTemplateMessage({
-        phoneNumberId,
-        accessToken,
+        workspaceId,
         recipientPhone: contact.phone_number,
         templateName,
         languageCode,
@@ -243,36 +179,12 @@ const campaignWorker = new Worker(
 
       if (result.success) {
         sentCount++;
-        const { error: messageError } = await supabase.from('messages').upsert({
-          workspace_id: workspaceId,
-          contact_id: contact.id,
-          phone_number: contact.phone_number,
-          meta_message_id: result.metaMessageId,
-          direction: 'outbound',
-          type: 'template',
-          status: 'sent',
-          content: `Template: ${templateName}`,
-          payload: { template: templateName, recipient: contact.phone_number },
-        }, { onConflict: 'meta_message_id', ignoreDuplicates: true });
-        if (messageError) console.error(`[Worker] Message ledger warning for campaign recipient ${contact.id}:`, messageError.message);
         const { error: recipientError } = await supabase.from('campaign_contacts').update({
           status: 'sent', meta_message_id: result.metaMessageId, sent_at: new Date().toISOString(), error_message: null,
         }).eq('campaign_id', campaignId).eq('contact_id', contact.id);
         if (recipientError) throw recipientError;
       } else {
         failedCount++;
-        const { error: messageError } = await supabase.from('messages').insert({
-          workspace_id: workspaceId,
-          contact_id: contact.id,
-          phone_number: contact.phone_number,
-          direction: 'outbound',
-          type: 'template',
-          status: 'failed',
-          content: `Template: ${templateName}`,
-          error_message: result.error,
-          payload: { template: templateName, error: result.error },
-        });
-        if (messageError) console.error(`[Worker] Failure ledger warning for campaign recipient ${contact.id}:`, messageError.message);
         const { error: recipientError } = await supabase.from('campaign_contacts').update({
           status: 'failed', error_message: result.error,
         }).eq('campaign_id', campaignId).eq('contact_id', contact.id);
@@ -283,7 +195,7 @@ const campaignWorker = new Worker(
       await sleep(60);
     }
 
-    // 5. Mark Campaign Completed in Supabase
+    // 4. Mark Campaign Completed in Supabase
     await supabase
       .from('campaigns')
       .update({
@@ -311,13 +223,15 @@ const campaignWorker = new Worker(
     connection: redisConnection,
     concurrency: 2,
   }
-);
+) : null;
 
-campaignWorker.on('completed', (job) => {
+if (!campaignWorker) console.warn('[Worker] REDIS_URL is not configured. Broadcast queue is unavailable; scheduled database jobs remain active.');
+
+campaignWorker?.on('completed', (job) => {
   console.log(`[Worker] Event: Job #${job.id} reported completed successfully.`);
 });
 
-campaignWorker.on('failed', (job, err) => {
+campaignWorker?.on('failed', (job, err) => {
   console.error(`[Worker] Event: Job #${job?.id} failed with error:`, err.message);
 });
 
@@ -326,8 +240,11 @@ const handleShutdown = async (signal) => {
   console.log(`\n[Worker] Received ${signal}. Gracefully closing worker, intervals, and redis connection...`);
   if (workflowDelayTimer) clearInterval(workflowDelayTimer);
   if (followUpIntervalTimer) clearInterval(followUpIntervalTimer);
-  await campaignWorker.close();
-  await redisConnection.quit();
+  if (scheduledWorkflowTimer) clearInterval(scheduledWorkflowTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  await recordWorkerHeartbeat('stopping');
+  if (campaignWorker) await campaignWorker.close();
+  if (redisConnection) await redisConnection.quit();
   console.log('[Worker] Shutdown complete.');
   process.exit(0);
 };
@@ -362,16 +279,9 @@ async function processDueFollowUpJobs() {
         const payload = job.payload || {};
         const templateName = payload.templateName || (payload.payload && payload.payload.templateName) || 'teaser_alert';
         const languageCode = payload.languageCode || 'en_US';
-        const { encryptedToken, phoneNumberId } = await getWorkspaceConnection(supabase, workspaceId);
-        const result = await sendWhatsAppTemplateMessage({ phoneNumberId, accessToken: decryptToken(encryptedToken),
+        const result = await sendWhatsAppTemplateMessage({ workspaceId,
           recipientPhone, templateName, languageCode });
         if (!result.success) throw new Error(result.error || 'Meta dispatch failed');
-        const { error: ledgerError } = await supabase.from('messages').upsert({
-          workspace_id: workspaceId, phone_number: recipientPhone, meta_message_id: result.metaMessageId,
-          direction: 'outbound', type: 'template', status: 'sent', content: `Follow-Up: ${templateName}`,
-          payload: { template: templateName, jobId: job.id },
-        }, { onConflict: 'meta_message_id', ignoreDuplicates: true });
-        if (ledgerError) console.error(`[Follow-Up Runner] Message ledger warning for job ${job.id}:`, ledgerError.message);
         await completeJob(supabase, job);
         console.log(`[Follow-Up Runner] Dispatched job ${job.id}`);
       } catch (error) {
@@ -384,9 +294,58 @@ async function processDueFollowUpJobs() {
   }
 }
 
+async function processDueWorkflowTriggers() {
+  if (!supabase) return;
+  try {
+    const dueJobs = await claimDueJobs(supabase, 'workflow_trigger', 10);
+    for (const job of dueJobs) {
+      try {
+        const payload = job.payload || {};
+        if (!process.env.WORKER_SECRET || process.env.WORKER_SECRET.length < 32) throw new Error('WORKER_SECRET is not configured');
+        const endpoint = process.env.SCHEDULED_WORKFLOW_RUNNER_URL || `http://127.0.0.1:${process.env.PORT || 3000}/api/internal/scheduled-workflows`;
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${process.env.WORKER_SECRET}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ jobId: job.id, workflowId: job.reference_id, workspaceId: job.workspace_id, phoneNumber: payload.phoneNumber }),
+          signal: AbortSignal.timeout(60000),
+          redirect: 'error',
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.success) throw new Error(result.error || `Scheduled workflow runner HTTP ${response.status}`);
+
+        const recurrenceMinutes = Number(payload.recurrenceMinutes || 0);
+        if (Number.isFinite(recurrenceMinutes) && recurrenceMinutes > 0) {
+          const digest = crypto.createHash('sha256').update(`${job.id}:${recurrenceMinutes}`).digest('hex');
+          const nextJobId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+          const { error: recurrenceError } = await supabase.from('scheduled_jobs').insert({
+            id: nextJobId, workspace_id: job.workspace_id, job_type: 'workflow_trigger',
+            reference_id: job.reference_id, payload,
+            scheduled_at: new Date(Date.now() + recurrenceMinutes * 60_000).toISOString(), status: 'pending',
+          });
+          if (recurrenceError && recurrenceError.code !== '23505') throw new Error(`Recurring workflow could not be rescheduled: ${recurrenceError.message}`);
+        }
+        await completeJob(supabase, job);
+        console.log(`[Scheduled Workflow Runner] Executed job ${job.id} as ${result.executionId}`);
+      } catch (error) {
+        const retry = await failJob(supabase, job, error);
+        console.error(`[Scheduled Workflow Runner] Job ${job.id} ${retry.terminal ? 'failed permanently' : 'scheduled for retry'}:`, error.message);
+      }
+    }
+  } catch (error) {
+    console.error('[Scheduled Workflow Runner] Polling failed:', error.message);
+  }
+}
+
 // Start polling every 15 seconds
 followUpIntervalTimer = setInterval(processDueFollowUpJobs, 15000);
 console.log('[Worker] Scheduled follow-up dispatch runner active (15s polling interval).');
+
+recordWorkerHeartbeat().catch(error => console.error('[Worker] Initial heartbeat failed:', error.message));
+heartbeatTimer = setInterval(() => {
+  recordWorkerHeartbeat().catch(error => console.error('[Worker] Heartbeat failed:', error.message));
+}, 30000);
+
+const scheduledWorkflowTimer = setInterval(processDueWorkflowTriggers, 15000);
 
 
 const { createDelayPoller } = require('./workflow-delays');
