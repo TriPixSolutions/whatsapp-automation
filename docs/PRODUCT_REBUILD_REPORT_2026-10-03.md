@@ -7,7 +7,7 @@ Branch: `rebuild/product-experience-2026-10-03`
 
 The product architecture and application code have been rebuilt around one inbound workflow path and one outbound message service. The repository passes its type check, 109 regression tests, production build, and dependency audit. The Supabase migration for worker heartbeat evidence and scheduled workflow jobs was applied successfully to project `madbskyoofviycpedshs` on 2026-10-03.
 
-The code is ready to deploy. The live service is **not yet production-ready** because the current Meta token returns Graph API error 190, Redis cannot be reached, and the deployment environment still needs its public HTTPS application URL and Meta App Secret. These external failures cannot be reported as successful by the application.
+The code is ready to deploy. The live service is **not yet production-ready** because the current Meta token returns Graph API error 190 and Redis cannot be reached. These external failures cannot be reported as successful by the application.
 
 ## Architecture now in use
 
@@ -51,16 +51,16 @@ Outbound sends from the Inbox, Automation Lab live tests, workflow engine, sched
 | Worker/scheduled migration | PASS — applied in Supabase SQL Editor |
 | Meta live phone probe | NEEDS FIX — HTTP 401, code 190 |
 | Redis queue probe | NEEDS FIX — connection failed |
-| Public deployment URL environment | NEEDS FIX — missing locally/deployment value not verified |
-| Meta App Secret environment | NEEDS FIX — deployment value not verified |
+| Public deployment URL environment | PASS — verified in Hostinger |
+| Meta App Secret | PASS — valid-format encrypted workspace secret verified |
 | Real WhatsApp end-to-end retest after deployment | BLOCKED by Meta token and deployment update |
 
 ## Required deployment values
 
 Configure these in Hostinger for both the web process and worker where applicable, then rebuild/restart:
 
-- `NEXT_PUBLIC_APP_URL=https://lightcoral-owl-812884.hostingersite.com`
-- `META_APP_SECRET` with the matching Meta app secret
+- keep `NEXT_PUBLIC_APP_URL=https://lightcoral-owl-812884.hostingersite.com` unchanged
+- keep the encrypted workspace Meta App Secret and `ENCRYPTION_KEY` unchanged
 - a reachable TLS Redis `REDIS_URL`
 - a fresh permanent Meta System User token assigned to the correct app and WABA
 - `WORKER_SECRET`, `ENCRYPTION_KEY`, and session signing secret must remain stable and at least 32 characters

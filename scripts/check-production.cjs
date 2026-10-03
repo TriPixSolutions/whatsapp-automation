@@ -1,6 +1,7 @@
 // Read-only production probe. It never prints credentials or customer data.
 const path = require('path');
 const Redis = require('ioredis');
+const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
 const root = path.resolve(__dirname, '..');
@@ -17,6 +18,7 @@ const requiredTables = [
 ];
 
 const results = [];
+let savedWebhookSecretReady = false;
 function record(name, ok, detail) {
   results.push({ name, ok });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? `: ${detail}` : ''}`);
@@ -24,6 +26,19 @@ function record(name, ok, detail) {
 
 function configured(value) {
   return Boolean(value && !/placeholder|your_|change-me|example/i.test(value));
+}
+
+function decryptSavedCredential(value) {
+  if (!value) return '';
+  if (!value.startsWith('enc:gcm:')) return value;
+  const parts = value.split(':');
+  if (parts.length !== 5 || !process.env.ENCRYPTION_KEY) return '';
+  try {
+    const key = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY).digest();
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(parts[2], 'hex'));
+    decipher.setAuthTag(Buffer.from(parts[3], 'hex'));
+    return decipher.update(parts[4], 'hex', 'utf8') + decipher.final('utf8');
+  } catch { return ''; }
 }
 
 async function checkDatabase() {
@@ -43,6 +58,9 @@ async function checkDatabase() {
     if(columns.error) throw new Error('Business/media migration required');
     const bucket = await db.storage.getBucket('workspace-media');
     if(bucket.error || bucket.data.public) throw new Error('Private workspace-media bucket required');
+    const savedSecrets = await db.from('meta_connections').select('app_secret_encrypted').limit(50);
+    if (savedSecrets.error) throw new Error('Meta connection settings unavailable');
+    savedWebhookSecretReady = (savedSecrets.data || []).some(row => /^[a-f0-9]{32}$/i.test(decryptSavedCredential(row.app_secret_encrypted)));
     record('Supabase schema', true, `${requiredTables.length} core tables available`);
   } catch (error) {
     record('Supabase schema', false, error.message || 'probe failed');
@@ -105,11 +123,9 @@ async function main() {
   const sessionSecret = process.env.AUTH_SESSION_SECRET || process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
   const sessionReady = Boolean(sessionSecret && sessionSecret.length >= 32);
   const workerReady = Boolean(process.env.WORKER_SECRET && process.env.WORKER_SECRET.length >= 32);
-  const webhookSecretReady = configured(process.env.META_APP_SECRET);
   record('Credential encryption', Boolean(process.env.ENCRYPTION_KEY && process.env.ENCRYPTION_KEY.length >= 32), 'stable ENCRYPTION_KEY of at least 32 characters required');
   record('Session signing', sessionReady, sessionReady ? 'configured' : 'requires at least 32 characters');
   record('Worker authentication', workerReady, workerReady ? 'configured' : 'requires at least 32 characters');
-  record('Webhook signature secret', webhookSecretReady, webhookSecretReady ? 'configured' : 'META_APP_SECRET is required for inbound signature checks');
 
   const publicUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
   let publicUrlReady = false;
@@ -120,6 +136,8 @@ async function main() {
   record('Public HTTPS application URL', publicUrlReady, publicUrlReady ? 'configured' : 'required for the Meta webhook callback');
 
   await checkDatabase();
+  const webhookSecretReady = configured(process.env.META_APP_SECRET) || savedWebhookSecretReady;
+  record('Webhook signature secret', webhookSecretReady, webhookSecretReady ? 'configured for at least one workspace' : 'META_APP_SECRET or a saved workspace App Secret is required');
   await checkRedis();
   await checkMeta();
 
