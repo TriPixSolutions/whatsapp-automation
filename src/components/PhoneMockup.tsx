@@ -69,56 +69,19 @@ export interface PhoneMockupProps {
 
 export function PhoneMockup({
   businessName = 'TriPix Business',
-  templateName = 'welcome_notice',
-  bodyText = 'Hello {{name}}! Welcome to our official WhatsApp service. How can we assist you today?',
+  templateName = '',
+  bodyText = 'Message preview will appear here.',
   headerText,
   footerText,
   mediaUrl,
   mediaType = 'image',
   messageType = 'text',
-  buttons = [
-    { id: 'btn_1', title: 'View Products' },
-    { id: 'btn_2', title: 'Talk to Support' },
-  ],
-  sections = [
-    {
-      title: 'Our Services',
-      rows: [
-        { id: 'row_1', title: 'Catalog Inquiries', description: 'Browse active items and pricing' },
-        { id: 'row_2', title: 'Order Tracking', description: 'Real-time status updates' },
-        { id: 'row_3', title: 'Support Assistance', description: 'Direct contact with team' },
-      ],
-    },
-  ],
-  cards = [
-    {
-      headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-      title: 'Premium Watch Series',
-      description: 'Handcrafted precision timepieces with sapphire crystal.',
-      buttons: [{ id: 'card_btn_1', title: 'View Specs' }, { id: 'card_btn_2', title: 'Order Now' }],
-    },
-    {
-      headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
-      title: 'Signature Athletic',
-      description: 'Aerodynamic performance engineered for speed and comfort.',
-      buttons: [{ id: 'card_btn_3', title: 'Select Size' }],
-    },
-  ],
-  location = {
-    name: 'TriPix Headquarters',
-    address: 'Business Park Tower A, Suite 400',
-  },
-  contactCard = {
-    name: 'Customer Support Lead',
-    phone: '+1 (555) 019-2834',
-    organization: 'TriPix Solutions Support',
-  },
-  catalogProduct = {
-    title: 'Precision Mechanical Watch',
-    price: '$249.00',
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&auto=format&fit=crop&q=80',
-    subtitle: 'Free Worldwide Shipping',
-  },
+  buttons = [],
+  sections = [],
+  cards = [],
+  location = { name: 'Location not configured', address: '' },
+  contactCard = { name: 'Contact not configured', phone: '' },
+  catalogProduct = { title: 'Product not configured', price: '' },
   couponCode = 'WELCOME20',
   fileName = 'Product_Brochure_2026.pdf',
   fileSize = '2.4 MB PDF',

@@ -113,6 +113,11 @@ test('missing live credentials fail instead of recording a sent message', async 
       MessagesDB: { create: msg => { saved.push(msg); return msg; } },
       ConversationsDB: { isWindowOpen: () => true, recordOutbound() {} },
     }, '@/lib/meta/api': {}, '@/lib/crypto': { decryptToken: v => v },
+    './messageModel': {
+      canonicalizeOutboundMessage: value => ({ ...value, bodyText: value.bodyText || value.text }),
+      validateOutboundMessage: () => [],
+      dbMessageType: kind => kind,
+    },
   });
   const result = await WhatsAppMessageService.send({ to: '+15550001111', type: 'text', text: 'hello' });
   assert.equal(result.success, false);

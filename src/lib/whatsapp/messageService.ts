@@ -1,11 +1,18 @@
 import { SettingsDB, MessagesDB, ContactsDB, ConversationsDB, DEFAULT_WORKSPACE_ID, Message, MessageType } from '@/lib/db';
 import { MetaWhatsAppClient, MetaApiResult } from '@/lib/meta/api';
 import { decryptToken } from '@/lib/crypto';
+import {
+  CanonicalOutboundMessage,
+  OutboundMessageKind,
+  canonicalizeOutboundMessage,
+  dbMessageType,
+  validateOutboundMessage,
+} from './messageModel';
 
 export interface SendWhatsAppMessageOptions {
   workspaceId?: string;
   to: string;
-  type: MessageType;
+  type: OutboundMessageKind;
   text?: string;
   phoneNumberId?: string;
   accessToken?: string;
@@ -29,6 +36,12 @@ export interface SendWhatsAppMessageOptions {
   catalogId?: string;
   productRetailerId?: string;
   productSections?: any[];
+  flowId?: string;
+  flowToken?: string;
+  flowCta?: string;
+  flowScreen?: string;
+  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  contact?: { formattedName: string; phoneNumber: string; organization?: string };
   bypassWindowCheck?: boolean; // Only for system alerts
 }
 
@@ -69,6 +82,44 @@ export class WhatsAppMessageService {
     const phoneNumberId = (options.phoneNumberId || settings.phoneNumberId || '').trim();
     const accessToken = decryptToken((options.accessToken || settings.accessToken || '').trim());
 
+    const message: CanonicalOutboundMessage = canonicalizeOutboundMessage({
+      kind: options.type,
+      text: options.text,
+      headerText: options.headerText,
+      bodyText: options.bodyText,
+      footerText: options.footerText,
+      templateName: options.templateName,
+      languageCode: options.languageCode,
+      components: options.components,
+      buttons: options.buttons,
+      buttonText: options.buttonText,
+      sections: options.sections,
+      cards: options.cards,
+      mediaUrl: options.mediaUrl,
+      mediaId: options.mediaId,
+      caption: options.caption,
+      filename: options.filename,
+      catalogId: options.catalogId || settings.catalogId,
+      productRetailerId: options.productRetailerId,
+      productSections: options.productSections,
+      flowId: options.flowId,
+      flowToken: options.flowToken,
+      flowCta: options.flowCta,
+      flowScreen: options.flowScreen,
+      location: options.location,
+      contact: options.contact,
+    });
+    const validationErrors = validateOutboundMessage(message);
+    if (validationErrors.length) {
+      return {
+        success: false,
+        error: validationErrors.join(' '),
+        phoneNumberIdUsed: phoneNumberId,
+        isSimulated: false,
+      };
+    }
+    const persistedType = dbMessageType(message.kind);
+
     const cleanTo = options.to.startsWith('+') ? options.to : `+${options.to.replace(/[^0-9]/g, '')}`;
 
     // 1. Ensure contact exists in database
@@ -80,7 +131,7 @@ export class WhatsAppMessageService {
     );
 
     // 2. 24-Hour Policy Window Enforcement (Enforces Meta Cloud API Conversation Window)
-    const isTemplateMessage = options.type === 'template' || (options.type === 'carousel' && Boolean(options.templateName?.trim()));
+    const isTemplateMessage = message.kind === 'template' || message.kind === 'carousel';
     if (!isTemplateMessage) {
       const windowOpen = await ConversationsDB.isWindowOpen(cleanTo, workspaceId);
 
@@ -94,11 +145,11 @@ export class WhatsAppMessageService {
             phoneNumber: cleanTo,
             contactId: contact.id,
             direction: 'outbound',
-            type: options.type,
+            type: persistedType,
             status: 'failed',
-            content: options.text || options.bodyText || `[${options.type.toUpperCase()}]`,
+            content: message.text || message.bodyText || `[${message.kind.toUpperCase()}]`,
             errorMessage: errorMsg,
-            payload: { type: options.type, templateName: options.templateName, mediaId: options.mediaId },
+            payload: { type: message.kind, templateName: message.templateName, mediaId: message.mediaId },
           },
           workspaceId
         );
@@ -165,10 +216,10 @@ export class WhatsAppMessageService {
           phoneNumber: cleanTo,
           contactId: contact.id,
           direction: 'outbound',
-          type: options.type,
+          type: persistedType,
           status: 'sent',
-          content: options.text || options.bodyText || options.templateName || `[${options.type.toUpperCase()}]`,
-          payload: { type: options.type, templateName: options.templateName, mediaId: options.mediaId },
+          content: message.text || message.bodyText || message.templateName || `[${message.kind.toUpperCase()}]`,
+          payload: { type: message.kind, templateName: message.templateName, mediaId: message.mediaId, isSimulation: true },
         },
         workspaceId
       );
@@ -192,84 +243,106 @@ export class WhatsAppMessageService {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        if (options.type === 'text') {
+        if (message.kind === 'text') {
           metaResult = await MetaWhatsAppClient.sendText({
             phoneNumberId,
             accessToken,
             to: cleanTo,
-            text: options.text || options.bodyText || '',
+            text: message.text || message.bodyText || '',
           });
-        } else if (options.type === 'button' || options.type === 'interactive') {
+        } else if (message.kind === 'button' || (message.kind === 'interactive' && message.buttons?.length)) {
           metaResult = await MetaWhatsAppClient.sendInteractiveButtons({
             phoneNumberId,
             accessToken,
             to: cleanTo,
-            headerText: options.headerText,
-            bodyText: options.bodyText || options.text || '',
-            footerText: options.footerText,
-            buttons: options.buttons || [{ id: 'btn_1', title: 'Reply' }],
+            headerText: message.headerText,
+            bodyText: message.bodyText || message.text || '',
+            footerText: message.footerText,
+            buttons: message.buttons || [],
           });
-        } else if (options.type === 'list') {
+        } else if (message.kind === 'list') {
           metaResult = await MetaWhatsAppClient.sendInteractiveList({
             phoneNumberId,
             accessToken,
             to: cleanTo,
-            headerText: options.headerText,
-            bodyText: options.bodyText || options.text || '',
-            footerText: options.footerText,
-            buttonText: options.buttonText || 'Options',
-            sections: options.sections || [],
+            headerText: message.headerText,
+            bodyText: message.bodyText || message.text || '',
+            footerText: message.footerText,
+            buttonText: message.buttonText || 'Options',
+            sections: message.sections || [],
           });
-        } else if (options.type === 'carousel') {
+        } else if (message.kind === 'carousel') {
           metaResult = await MetaWhatsAppClient.sendCarouselTemplate({
             phoneNumberId,
             accessToken,
             to: cleanTo,
-            templateName: options.templateName,
-            bodyText: options.bodyText,
-            cards: options.cards || [],
+            templateName: message.templateName,
+            bodyText: message.bodyText,
+            cards: message.cards || [],
           });
-        } else if (options.type === 'template') {
+        } else if (message.kind === 'template') {
           metaResult = await MetaWhatsAppClient.sendTemplate({
             phoneNumberId,
             accessToken,
             to: cleanTo,
-            templateName: options.templateName || 'teaser_alert',
-            languageCode: options.languageCode || 'en_US',
-            components: options.components,
+            templateName: message.templateName!,
+            languageCode: message.languageCode || 'en_US',
+            components: message.components,
           });
-        } else if (['image', 'video', 'audio', 'document'].includes(options.type)) {
+        } else if (['image', 'video', 'audio', 'document'].includes(message.kind)) {
           metaResult = await MetaWhatsAppClient.sendMedia({
             phoneNumberId,
             accessToken,
             to: cleanTo,
-            type: options.type as any,
-            mediaUrl: options.mediaUrl,
-            mediaId: options.mediaId,
-            caption: options.caption || options.text,
-            filename: options.filename,
+            type: message.kind as any,
+            mediaUrl: message.mediaUrl,
+            mediaId: message.mediaId,
+            caption: message.caption || message.text,
+            filename: message.filename,
           });
-        } else if (options.type === 'catalog') {
-          if (options.productRetailerId) {
+        } else if (message.kind === 'catalog') {
+          if (message.productRetailerId) {
             metaResult = await MetaWhatsAppClient.sendSingleProduct({
               phoneNumberId,
               accessToken,
               to: cleanTo,
-              catalogId: options.catalogId || settings.catalogId || '',
-              productRetailerId: options.productRetailerId,
-              bodyText: options.bodyText,
+              catalogId: message.catalogId || '',
+              productRetailerId: message.productRetailerId,
+              bodyText: message.bodyText,
             });
           } else {
             metaResult = await MetaWhatsAppClient.sendMultiProduct({
               phoneNumberId,
               accessToken,
               to: cleanTo,
-              catalogId: options.catalogId || settings.catalogId || '',
-              headerText: options.headerText || 'Product Catalog',
-              bodyText: options.bodyText || 'Browse our items',
-              sections: options.productSections || [],
+              catalogId: message.catalogId || '',
+              headerText: message.headerText || 'Product Catalog',
+              bodyText: message.bodyText || 'Browse our items',
+              sections: message.productSections || [],
             });
           }
+        } else if (message.kind === 'flow') {
+          metaResult = await MetaWhatsAppClient.sendWhatsAppFlow({
+            phoneNumberId, accessToken, to: cleanTo, flowId: message.flowId!,
+            flowToken: message.flowToken, flowCta: message.flowCta,
+            screen: message.flowScreen, headerText: message.headerText,
+            bodyText: message.bodyText || message.text || '', footerText: message.footerText,
+          });
+        } else if (message.kind === 'location') {
+          metaResult = await MetaWhatsAppClient.sendLocation({
+            phoneNumberId, accessToken, to: cleanTo,
+            latitude: message.location!.latitude, longitude: message.location!.longitude,
+            name: message.location!.name, address: message.location!.address,
+          });
+        } else if (message.kind === 'contact_card') {
+          metaResult = await MetaWhatsAppClient.sendContactCard({
+            phoneNumberId, accessToken, to: cleanTo,
+            contactName: message.contact!.formattedName,
+            contactPhone: message.contact!.phoneNumber,
+            organization: message.contact!.organization,
+          });
+        } else {
+          metaResult = { success: false, error: `Unsupported message type: ${message.kind}` };
         }
 
         if (metaResult.success) {
@@ -297,9 +370,9 @@ export class WhatsAppMessageService {
     // 5. Save outbound message record
     const metaMessageId = metaResult.messageId || metaResult.metaMessageId;
     const outboundContent =
-      options.text ||
-      options.bodyText ||
-      (options.templateName ? `Template: ${options.templateName}` : `[${options.type.toUpperCase()}]`);
+      message.text ||
+      message.bodyText ||
+      (message.templateName ? `Template: ${message.templateName}` : `[${message.kind.toUpperCase()}]`);
 
     const savedMessage = await MessagesDB.create(
       {
@@ -307,11 +380,11 @@ export class WhatsAppMessageService {
         phoneNumber: cleanTo,
         contactId: contact.id,
         direction: 'outbound',
-        type: options.type,
+        type: persistedType,
         status: metaResult.success ? 'sent' : 'failed',
         content: outboundContent,
-        mediaUrl: options.mediaUrl,
-        payload: { type: options.type, templateName: options.templateName, mediaId: options.mediaId },
+        mediaUrl: message.mediaUrl,
+        payload: { type: message.kind, templateName: message.templateName, mediaId: message.mediaId },
         errorMessage: metaResult.error,
       },
       workspaceId

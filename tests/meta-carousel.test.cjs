@@ -34,11 +34,16 @@ test('carousel templates use the template messaging policy outside the care wind
       ContactsDB:{upsert:async()=>({id:'contact-a'})},MessagesDB:{create:async msg=>({...msg,id:'message-a'})},
       ConversationsDB:{isWindowOpen:async()=>false,recordOutbound:async()=>{}}},
     '@/lib/crypto':{decryptToken:v=>v},'@/lib/meta/api':{MetaWhatsAppClient:{sendCarouselTemplate:async()=>{sent++;return {success:true,messageId:'wamid.real'};}}},
+    './messageModel':{
+      canonicalizeOutboundMessage:value=>value,
+      validateOutboundMessage:value=>value.templateName?[]:['Select an approved carousel template before sending.'],
+      dbMessageType:kind=>kind,
+    },
   });
   const accepted=await WhatsAppMessageService.send({workspaceId:'workspace-a',to:'+15550001111',type:'carousel',templateName:'approved_catalog',cards:options.cards});
   assert.equal(accepted.success,true);assert.equal(sent,1);
   const ordinary=await WhatsAppMessageService.send({workspaceId:'workspace-a',to:'+15550001111',type:'carousel',cards:options.cards});
-  assert.equal(ordinary.success,false);assert.equal(ordinary.windowClosed,true);assert.equal(sent,1);
+  assert.equal(ordinary.success,false);assert.match(ordinary.error,/approved carousel template/);assert.equal(sent,1);
 });
 
 test('catalog product sends reject missing provider IDs',async()=>{

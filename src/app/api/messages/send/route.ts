@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
+import { OutboundMessageKind } from '@/lib/whatsapp/messageModel';
 import { getAuthorizedUser } from '@/lib/auth-server';
 
 export const runtime = 'nodejs';
@@ -21,20 +22,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Recipient phone number is required' }, { status: 400 });
     }
 
-    console.log(`[Send Message API] Dispatching message to: ${toPhone} (Type: ${messageType}, BypassWindow: ${Boolean(body.bypassWindowCheck)})`);
-    if (messageType === 'template' || body.templateName) {
-      console.log('[Send Message API] Template Params:', {
-        templateName: body.templateName,
-        languageCode: body.languageCode || 'en_US',
-        components: body.components,
-      });
-    }
-
     const result = await WhatsAppMessageService.send({
       // The signed session is the only source of workspace authority.
       workspaceId: user.workspaceId!,
       to: toPhone,
-      type: messageType,
+      type: messageType as OutboundMessageKind,
       text: messageText,
       phoneNumberId: body.phoneNumberId,
       accessToken: body.accessToken,
@@ -57,17 +49,20 @@ export async function POST(request: NextRequest) {
       catalogId: body.catalogId,
       productRetailerId: body.productRetailerId,
       productSections: body.productSections,
+      flowId: body.flowId,
+      flowToken: body.flowToken,
+      flowCta: body.flowCta,
+      flowScreen: body.flowScreen,
+      location: body.location,
+      contact: body.contact,
       bypassWindowCheck: Boolean(body.bypassWindowCheck),
     });
 
     if (!result.success) {
       console.error('[Send Message API] Dispatch failed:', {
-        to: toPhone,
         type: messageType,
         error: result.error,
         errorCode: result.errorCode,
-        details: result.details,
-        phoneNumberIdUsed: result.phoneNumberIdUsed,
         windowClosed: result.windowClosed,
       });
       return NextResponse.json(
@@ -86,7 +81,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`[Send Message API] Dispatch succeeded for ${toPhone}. Meta ID: ${result.metaMessageId} (Phone ID: ${result.phoneNumberIdUsed})`);
+    console.log(`[Send Message API] ${messageType} dispatch succeeded.`);
 
     return NextResponse.json({
       success: true,

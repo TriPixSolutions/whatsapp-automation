@@ -16,6 +16,7 @@ import {
 import { PhoneMockup } from '@/components/PhoneMockup';
 import { WorkflowNode, ExecutionTraceStep } from '@/types/automations';
 import { cn } from '@/lib/utils';
+import { messageFromWorkflowNode, toWhatsAppPreview } from '@/lib/whatsapp/messageModel';
 
 interface RightLivePreviewPanelProps {
   selectedNode: WorkflowNode | null;
@@ -48,46 +49,31 @@ export function RightLivePreviewPanel({
     );
   }
 
-  // Derive preview properties based on selected node or execution
+  // The preview consumes the same canonical message contract as live dispatch.
   const node = selectedNode || allNodes[0];
   const nodeType = (node?.type || 'whatsapp_message') as string;
   const config = node?.config || {};
+  const canonicalMessage = node ? messageFromWorkflowNode(node) : null;
+  const preview = canonicalMessage ? toWhatsAppPreview(canonicalMessage) : null;
 
-  // Resolve messageType for PhoneMockup
-  let previewMessageType: any = 'text';
-  if (nodeType === 'whatsapp_button' || nodeType === 'button') previewMessageType = 'button';
-  else if (nodeType === 'whatsapp_carousel' || nodeType === 'carousel') previewMessageType = 'carousel';
-  else if (nodeType === 'whatsapp_catalog') previewMessageType = 'catalog';
-  else if (nodeType === 'whatsapp_flow') previewMessageType = 'whatsapp_flow';
-  else if (nodeType === 'trigger_incoming' || nodeType === 'trigger_keyword' || nodeType === 'trigger') {
-    previewMessageType = 'text';
-  }
-
-  const buttons = (config.buttons || []).map((b: any) => ({
-    id: b.id || b.title,
-    title: b.title,
-  }));
-
-  const cards = (config.cards || []).map((c: any) => ({
-    headerImage: c.headerImage,
-    title: c.title,
-    description: c.description,
-    buttons: c.buttons || [{ id: 'b1', title: 'Select' }],
-  }));
+  const previewMessageType: any = preview?.kind === 'flow'
+    ? 'whatsapp_flow'
+    : preview?.kind === 'contact_card'
+      ? 'contact'
+      : preview?.kind || 'text';
 
   const catalogProduct = {
-    title: config.productTitle || 'Featured Product',
-    price: config.productPrice || '$149.00',
-    subtitle: config.productSubtitle || 'In Stock',
-    image: config.mediaUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+    title: config.productTitle || 'Product not configured',
+    price: config.productPrice || '',
+    subtitle: config.productSubtitle || '',
+    image: config.mediaUrl,
   };
 
   const bodyText =
-    config.bodyText ||
-    config.text ||
+    preview?.body ||
     (isTriggerNode(nodeType)
-      ? `[Customer Inbound]: "${config.text || node?.triggerKeyword || 'Hello, I want pricing'}"`
-      : 'Hello! Welcome to our automated WhatsApp assistance.');
+      ? `[Customer message]: "${config.text || node?.triggerKeyword || 'Configure a trigger'}"`
+      : 'Select a message node to preview it.');
 
   function isTriggerNode(type: string) {
     return type.startsWith('trigger');
@@ -167,12 +153,14 @@ export function RightLivePreviewPanel({
           <PhoneMockup
             businessName="TriPix Business"
             bodyText={bodyText}
-            headerText={config.headerText}
-            footerText={config.footerText || 'Official Verified WhatsApp'}
-            mediaUrl={config.mediaUrl}
+            templateName={canonicalMessage?.templateName}
+            headerText={preview?.title}
+            footerText={preview?.footer}
+            mediaUrl={preview?.mediaUrl}
             messageType={previewMessageType}
-            buttons={buttons.length > 0 ? buttons : undefined}
-            cards={cards.length > 0 ? cards : undefined}
+            buttons={preview?.buttons || []}
+            sections={preview?.sections || []}
+            cards={preview?.cards || []}
             catalogProduct={catalogProduct}
             flowTitle={config.flowTitle || 'Registration Form'}
             flowCta={config.flowCta || 'Start Form'}
@@ -183,6 +171,12 @@ export function RightLivePreviewPanel({
         </div>
       </div>
 
+      {preview?.limitation && (
+        <div className="px-3 py-2 text-[10px] leading-relaxed text-amber-200 bg-amber-500/10 border-t border-amber-500/20">
+          {preview.limitation}
+        </div>
+      )}
+
       {/* Execution Trace Mini Bar if available */}
       {executionTrace && executionTrace.length > 0 && (
         <div className="p-2.5 bg-gray-900/90 border-t border-gray-800 text-[11px] flex items-center justify-between">
@@ -191,7 +185,7 @@ export function RightLivePreviewPanel({
             <span>Execution Completed</span>
           </div>
           <span className="text-gray-400 font-mono text-[10px]">
-            {executionTrace.length} steps simulated
+            {executionTrace.length} execution steps
           </span>
         </div>
       )}

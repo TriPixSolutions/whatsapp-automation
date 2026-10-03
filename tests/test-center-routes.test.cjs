@@ -24,28 +24,19 @@ test('authenticated message sends ignore a request-supplied workspace', async ()
 });
 
 test('test send persists a real Meta acceptance in the authenticated workspace', async () => {
-  const calls = { messageWorkspaces: [], conversationWorkspaces: [] };
-  let templateOptions;
+  let sendOptions;
   const route = load('src/app/api/test-center/send-test/route.ts', {
     'next/server': { NextResponse },
     '@/lib/auth-server': { getAuthorizedUser: async () => user },
-    '@/lib/meta/api': { MetaWhatsAppClient: {
-      sendTemplate: async value => { templateOptions = value; return { success: true, messageId: 'wamid.real' }; },
-    } },
+    '@/lib/meta/config': { META_GRAPH_VERSION: 'v25.0' },
+    '@/lib/whatsapp/messageService': { WhatsAppMessageService: { send: async value => {
+      sendOptions = value;
+      return { success: true, metaMessageId: 'wamid.real', phoneNumberIdUsed: 'phone-a', savedMessage: { id: 'message-a' } };
+    } } },
+    '@/lib/whatsapp/messageModel': { dbMessageType: kind => kind },
     '@/lib/automations/testCenterStore': { TestCenterStore: {
       recordMetaLog() {}, recordDeliveryReceipt() {},
     } },
-    '@/lib/db': {
-      SettingsDB: { get: async () => ({ phoneNumberId: 'phone-a', accessToken: 'live-token' }) },
-      ContactsDB: { upsert: async (_data, workspaceId) => ({ id: `contact-${workspaceId}` }) },
-      MessagesDB: { create: async (_data, workspaceId) => {
-        calls.messageWorkspaces.push(workspaceId);
-        return { id: 'message-a', metaMessageId: 'wamid.real' };
-      } },
-      ConversationsDB: { recordOutbound: async (_phone, _contact, workspaceId) => {
-        calls.conversationWorkspaces.push(workspaceId);
-      } },
-    },
     '@/types': {},
     '@/types/automations': {},
   }, { META_GRAPH_API_VERSION: 'v25.0' });
@@ -56,26 +47,23 @@ test('test send persists a real Meta acceptance in the authenticated workspace',
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.success, true);
-  assert.equal(templateOptions.components, undefined);
-  assert.deepEqual(calls.messageWorkspaces, ['workspace-a']);
-  assert.deepEqual(calls.conversationWorkspaces, ['workspace-a']);
+  assert.equal(sendOptions.workspaceId, 'workspace-a');
+  assert.equal(sendOptions.templateName, 'hello_world');
+  assert.equal(sendOptions.requireRealDelivery, true);
 });
 
 test('test send reports Meta rejection and does not fabricate persistence', async () => {
-  let persisted = false;
+  let sendCalls = 0;
   const route = load('src/app/api/test-center/send-test/route.ts', {
     'next/server': { NextResponse },
     '@/lib/auth-server': { getAuthorizedUser: async () => user },
-    '@/lib/meta/api': { MetaWhatsAppClient: {
-      sendText: async () => ({ success: false, error: 'Recipient not allowed', errorCode: 131030 }),
-    } },
+    '@/lib/meta/config': { META_GRAPH_VERSION: 'v25.0' },
+    '@/lib/whatsapp/messageService': { WhatsAppMessageService: { send: async () => {
+      sendCalls += 1;
+      return { success: false, error: 'Recipient not allowed', errorCode: 131030 };
+    } } },
+    '@/lib/whatsapp/messageModel': { dbMessageType: kind => kind },
     '@/lib/automations/testCenterStore': { TestCenterStore: {} },
-    '@/lib/db': {
-      SettingsDB: { get: async () => ({ phoneNumberId: 'phone-a', accessToken: 'live-token' }) },
-      ContactsDB: { upsert: async () => { persisted = true; } },
-      MessagesDB: { create: async () => { persisted = true; } },
-      ConversationsDB: {},
-    },
     '@/types': {},
     '@/types/automations': {},
   });
@@ -87,33 +75,34 @@ test('test send reports Meta rejection and does not fabricate persistence', asyn
   assert.equal(response.status, 400);
   assert.equal(body.success, false);
   assert.equal(body.code, 131030);
-  assert.equal(persisted, false);
+  assert.equal(sendCalls, 1);
 });
 
-test('carousel test sends normalized cards without assuming an unapproved template', async () => {
-  let carouselOptions;
+test('carousel test requires and forwards an approved template with stable card actions', async () => {
+  let sendOptions;
   const route = load('src/app/api/test-center/send-test/route.ts', {
     'next/server': { NextResponse },
     '@/lib/auth-server': { getAuthorizedUser: async () => user },
-    '@/lib/meta/api': { MetaWhatsAppClient: {
-      sendCarouselTemplate: async value => { carouselOptions = value; return { success: true, messageId: 'wamid.carousel' }; },
-    } },
+    '@/lib/meta/config': { META_GRAPH_VERSION: 'v25.0' },
+    '@/lib/whatsapp/messageService': { WhatsAppMessageService: { send: async value => {
+      sendOptions = value;
+      return { success: true, metaMessageId: 'wamid.carousel', phoneNumberIdUsed: 'phone-a', savedMessage: { id: 'message-a' } };
+    } } },
+    '@/lib/whatsapp/messageModel': { dbMessageType: kind => kind },
     '@/lib/automations/testCenterStore': { TestCenterStore: { recordMetaLog() {}, recordDeliveryReceipt() {} } },
-    '@/lib/db': {
-      SettingsDB: { get: async () => ({ phoneNumberId: 'phone-a', accessToken: 'live-token' }) },
-      ContactsDB: { upsert: async () => ({ id: 'contact-a' }) },
-      MessagesDB: { create: async value => ({ id: 'message-a', ...value }) },
-      ConversationsDB: { recordOutbound: async () => {} },
-    },
     '@/types': {}, '@/types/automations': {},
   });
+  const cards = [
+    { title: 'Runner Pro', description: 'First', buttons: [{ id: 'buy_card_1', title: 'Buy' }] },
+    { title: 'Walker Pro', description: 'Second', buttons: [{ id: 'buy_card_2', title: 'Buy' }] },
+  ];
   const response = await route.POST(new Request('https://example.test/api/test-center/send-test', {
-    method: 'POST', body: JSON.stringify({ type: 'carousel', phoneNumber: '+15550001111' }),
+    method: 'POST', body: JSON.stringify({ type: 'carousel', phoneNumber: '+15550001111', carouselTemplateName: 'approved_catalog', carouselCards: cards }),
   }));
   assert.equal(response.status, 200);
-  assert.equal(carouselOptions.templateName, undefined);
-  assert.equal(carouselOptions.cards[0].title, 'Runner Pro Sneakers');
-  assert.equal(carouselOptions.cards[0].buttons[0].id, 'buy_card_1');
+  assert.equal(sendOptions.templateName, 'approved_catalog');
+  assert.equal(sendOptions.cards[0].title, 'Runner Pro');
+  assert.equal(sendOptions.cards[1].buttons[0].id, 'buy_card_2');
 });
 
 function triggerRouteHarness(workflow, initialSession = null) {
