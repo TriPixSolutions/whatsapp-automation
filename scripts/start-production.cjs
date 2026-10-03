@@ -1,7 +1,10 @@
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
+const standaloneServer = path.join(root, '.next', 'standalone', 'server.js');
+const standaloneScript = path.join(root, 'scripts', 'start-standalone.cjs');
 const nextCli = require.resolve('next/dist/bin/next');
 let stopping = false;
 let desiredExitCode = 0;
@@ -38,7 +41,11 @@ function start(name, command, args) {
   return child;
 }
 
-web = start('web process', process.execPath, [nextCli, 'start']);
+const webArgs = fs.existsSync(standaloneServer)
+  ? [standaloneScript]
+  : [nextCli, 'start'];
+
+web = start('web process', process.execPath, webArgs);
 worker = start('background worker', process.execPath, [path.join(root, 'worker', 'worker.js')]);
 
 function shutdown(signal, exitCode = 0) {

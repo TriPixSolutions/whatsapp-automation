@@ -24,12 +24,22 @@ const redisConnection = redisUrl ? new Redis(redisUrl, {
   },
 }) : null;
 
+let lastLoggedRedisError = null;
+let lastLoggedRedisTime = 0;
+
 redisConnection?.on('connect', () => {
+  lastLoggedRedisError = null;
   console.log('[Worker] Connected to Redis queue server successfully.');
+  recordWorkerHeartbeat('online').catch(() => {});
 });
 
 redisConnection?.on('error', (err) => {
-  console.error('[Worker] Redis connection error:', err.message);
+  const now = Date.now();
+  if (err.message !== lastLoggedRedisError || now - lastLoggedRedisTime > 30000) {
+    lastLoggedRedisError = err.message;
+    lastLoggedRedisTime = now;
+    console.warn(`[Worker] Redis connection unavailable (${err.message}). Retrying in background; scheduled database jobs remain active.`);
+  }
 });
 
 // Initialize Supabase Admin Client
@@ -235,6 +245,14 @@ campaignWorker?.on('failed', (job, err) => {
   console.error(`[Worker] Event: Job #${job?.id} failed with error:`, err.message);
 });
 
+campaignWorker?.on('error', (err) => {
+  const now = Date.now();
+  if (now - lastLoggedRedisTime > 30000) {
+    lastLoggedRedisTime = now;
+    console.warn(`[Worker] Broadcast queue notice (${err.message}). Retrying in background; scheduled database jobs remain active.`);
+  }
+});
+
 // Graceful process shutdown
 const handleShutdown = async (signal) => {
   console.log(`\n[Worker] Received ${signal}. Gracefully closing worker, intervals, and redis connection...`);
@@ -242,9 +260,38 @@ const handleShutdown = async (signal) => {
   if (followUpIntervalTimer) clearInterval(followUpIntervalTimer);
   if (scheduledWorkflowTimer) clearInterval(scheduledWorkflowTimer);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
-  await recordWorkerHeartbeat('stopping');
-  if (campaignWorker) await campaignWorker.close();
-  if (redisConnection) await redisConnection.quit();
+  try {
+    await Promise.race([
+      recordWorkerHeartbeat('stopping'),
+      new Promise(resolve => setTimeout(resolve, 3000)),
+    ]);
+  } catch (err) {
+    console.error('[Worker] Shutdown heartbeat record error:', err.message);
+  }
+  try {
+    if (campaignWorker) {
+      await Promise.race([
+        campaignWorker.close(),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ]);
+    }
+  } catch (err) {
+    console.error('[Worker] Shutdown campaign worker close error:', err.message);
+  }
+  try {
+    if (redisConnection) {
+      if (redisConnection.status === 'ready') {
+        await Promise.race([
+          redisConnection.quit(),
+          new Promise(resolve => setTimeout(resolve, 2000)),
+        ]);
+      } else {
+        redisConnection.disconnect();
+      }
+    }
+  } catch (err) {
+    console.error('[Worker] Shutdown redis disconnect error:', err.message);
+  }
   console.log('[Worker] Shutdown complete.');
   process.exit(0);
 };
