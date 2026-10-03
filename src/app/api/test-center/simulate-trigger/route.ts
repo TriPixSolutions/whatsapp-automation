@@ -30,21 +30,14 @@ export async function POST(request: NextRequest) {
       webhookPayload,
       apiPayload,
       debugMode = true,
-      deliveryMode, // 'sandbox' | 'live'
-      isSandbox, // backwards compatibility flag
-      isLiveDelivery: explicitLive,
     } = body;
 
     const workspaceId = user.workspaceId!;
     const cleanPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/[^0-9]/g, '')}`;
 
-    // Delivery mode: Default is SANDBOX (safe preview). Live Meta calls require explicit opt-in.
-    const isLiveDelivery = Boolean(
-      explicitLive === true ||
-      deliveryMode === 'live' ||
-      (deliveryMode === 'production' && isSandbox === false)
-    );
-    const isTestSimulation = !isLiveDelivery;
+    // Synthetic events are always sandboxed. Real workflow delivery can only start
+    // from an authenticated Meta webhook; a browser request must never impersonate it.
+    const isTestSimulation = true;
 
     if (['incoming_message','keyword_trigger','button_click','cta_click','carousel_click','list_selection'].includes(simulationType)) {
       const interaction = ['button_click','cta_click','carousel_click','list_selection'].includes(simulationType)
@@ -52,8 +45,8 @@ export async function POST(request: NextRequest) {
             id: cardButtonId || buttonId || '', title: buttonTitle || buttonId || '', cardIndex, cardButtonId } : undefined;
       const result = await InboundAutomationDispatcher.dispatch({workspaceId,phoneNumber:cleanPhone,
         messageId:`test_${randomUUID()}`,timestamp:String(Math.floor(Date.now()/1000)),rawType:interaction?'interactive':'text',
-        text:text || (interaction ? undefined : 'Hello'),interaction,isTestSimulation,metadata:{synthetic:true},deliveryMode:isLiveDelivery?'live':'sandbox'}, { workflowId });
-      return NextResponse.json({...result,simulationType,deliveryMode:isLiveDelivery?'production':'sandbox',
+        text:text || (interaction ? undefined : 'Hello'),interaction,isTestSimulation,metadata:{synthetic:true},deliveryMode:'sandbox'}, { workflowId });
+      return NextResponse.json({...result,simulationType,deliveryMode:'sandbox',
         resumed:result.sessionAction==='resumed',activeExecution:result.executions[0]}, {status:result.success?200:409});
     }
 
@@ -96,7 +89,7 @@ export async function POST(request: NextRequest) {
         success: true,
         simulationType,
         phoneNumber: cleanPhone,
-        deliveryMode: isLiveDelivery ? 'production' : 'sandbox',
+        deliveryMode: 'sandbox',
         matchedWorkflowsCount: 0,
         executions: [],
         message: `No active workflow matched incoming ${simulationType.replace('_', ' ')} "${text || buttonId || ''}". Inbound message persisted to inbox.`,
@@ -105,7 +98,7 @@ export async function POST(request: NextRequest) {
           workspaceId,
           triggerType,
           triggerEvaluation: 'NO_MATCH',
-          deliveryMode: isLiveDelivery ? 'production' : 'sandbox',
+          deliveryMode: 'sandbox',
         },
       });
     }
@@ -136,7 +129,7 @@ export async function POST(request: NextRequest) {
       success: !failedExecution,
       simulationType,
       phoneNumber: cleanPhone,
-      deliveryMode: isLiveDelivery ? 'production' : 'sandbox',
+      deliveryMode: 'sandbox',
       matchedWorkflowsCount: targetWorkflows.length,
       executions: executionResults,
       activeExecution: executionResults[0],

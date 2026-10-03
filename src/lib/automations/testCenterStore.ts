@@ -42,11 +42,7 @@ const globalState: TestCenterState = {
   webhookLogs: [],
   buttonLogs: [],
   carouselLogs: [],
-  sandboxRecipients: [
-    { phoneNumber: '+919876543210', name: 'Primary Test Recipient', addedAt: new Date().toISOString(), verified: true },
-    { phoneNumber: '+919800011122', name: 'Secondary QA SIM', addedAt: new Date().toISOString(), verified: true },
-    { phoneNumber: '+15550192831', name: 'Meta Dev Sandbox Recipient', addedAt: new Date().toISOString(), verified: true },
-  ],
+  sandboxRecipients: [],
   sandboxEnabled: false,
 };
 

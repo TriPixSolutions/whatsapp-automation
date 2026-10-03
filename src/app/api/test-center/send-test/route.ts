@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       cards: body.carouselCards || body.cards,
       mediaUrl: body.mediaUrl,
       mediaId: body.mediaId,
+      mediaAssetId: body.mediaAssetId,
       caption: body.caption,
       filename: body.filename,
       catalogId: body.catalogId,

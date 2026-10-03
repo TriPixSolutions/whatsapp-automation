@@ -30,10 +30,13 @@ import {
   RotateCcw,
   Bot,
   ExternalLink,
+  UploadCloud,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WorkflowNode, NodeValidationError } from '@/types/automations';
 import { PhoneMockup } from '@/components/PhoneMockup';
+import { messageFromWorkflowNode, toWhatsAppPreview } from '@/lib/whatsapp/messageModel';
 
 interface RightInspectorStudioProps {
   selectedNode: WorkflowNode | null;
@@ -60,6 +63,8 @@ export function RightInspectorStudio({
 }: RightInspectorStudioProps) {
   const [activeTab, setActiveTab] = useState<'inspector' | 'preview'>('inspector');
   const [variablePickerField, setVariablePickerField] = useState<string | null>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [mediaUploadError, setMediaUploadError] = useState('');
 
   // Derive node errors
   const nodeErrors = useMemo(() => {
@@ -108,6 +113,43 @@ export function RightInspectorStudio({
     });
   };
 
+  const uploadMedia = async (file?: File) => {
+    if (!activeNode || !file) return;
+    if (file.size > 16 * 1024 * 1024) {
+      setMediaUploadError('Choose a file smaller than 16 MB.');
+      return;
+    }
+    setIsUploadingMedia(true);
+    setMediaUploadError('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const response = await fetch('/api/media', { method: 'POST', body: form });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The file could not be uploaded.');
+      const messageType = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('video/') ? 'video'
+          : file.type.startsWith('audio/') ? 'audio' : 'document';
+      onUpdateNode({
+        ...activeNode,
+        messageType,
+        config: {
+          ...config,
+          mediaAssetId: result.assetId,
+          mediaPreviewUrl: result.previewUrl,
+          mediaUrl: undefined,
+          fileName: result.fileName,
+          mediaMimeType: result.mimeType,
+          mediaSize: result.fileSize,
+        },
+      });
+    } catch (error) {
+      setMediaUploadError(error instanceof Error ? error.message : 'The file could not be uploaded.');
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
   // Button helpers
   const buttons = config.buttons || [];
   const addButton = () => {
@@ -135,9 +177,9 @@ export function RightInspectorStudio({
   const addCard = () => {
     if (cards.length >= 10) return;
     const newCard = {
-      headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
+      headerImage: '',
       title: `Item ${cards.length + 1}`,
-      description: 'Exclusive product highlights and details.',
+      description: '',
       buttons: [{ id: `card_btn_${Date.now()}`, title: 'Order Now' }],
     };
     updateConfig({ cards: [...cards, newCard] });
@@ -153,33 +195,19 @@ export function RightInspectorStudio({
     updateConfig({ cards: cards.filter((_: any, i: number) => i !== index) });
   };
 
-  // Preview derivations
-  let previewMessageType: any = 'text';
-  if (nodeType.includes('button')) previewMessageType = 'button';
-  else if (nodeType.includes('carousel')) previewMessageType = 'carousel';
-  else if (nodeType.includes('catalog')) previewMessageType = 'catalog';
-  else if (nodeType.includes('flow')) previewMessageType = 'whatsapp_flow';
-  else if (nodeType.includes('list')) previewMessageType = 'list';
+  const listRows = config.sections?.[0]?.rows || [];
+  const updateListRows = (rows: any[]) => updateConfig({
+    sections: [{ title: config.sections?.[0]?.title || 'Options', rows }],
+  });
 
-  const previewBodyText =
-    config.bodyText ||
-    config.text ||
-    (nodeType.startsWith('trigger')
-      ? `[Customer Message]: "${config.text || activeNode?.triggerKeyword || 'Hi, send details'}"`
-      : 'Hello! Thank you for contacting our WhatsApp service.');
-
-  const handleSimulatedButtonClick = (buttonTitle: string) => {
-    // If condition or branch matches, auto select next target node in preview
-    const nextNode = allNodes.find(
-      (n) =>
-        n.id === activeNode?.nextNodeId ||
-        n.id === activeNode?.config?.trueNextNodeId ||
-        n.title.toLowerCase().includes(buttonTitle.toLowerCase())
-    );
-    if (nextNode) {
-      onSelectNode(nextNode.id);
-    }
-  };
+  const canonicalMessage = activeNode ? messageFromWorkflowNode(activeNode) : null;
+  const preview = canonicalMessage ? toWhatsAppPreview(canonicalMessage) : null;
+  const previewMessageType: any = preview?.kind === 'flow' ? 'whatsapp_flow'
+    : preview?.kind === 'contact_card' ? 'contact'
+      : preview?.kind || 'text';
+  const previewBodyText = preview?.body || (nodeType.startsWith('trigger')
+    ? `[Customer message] ${config.text || activeNode?.triggerKeyword || ''}`
+    : 'Configure this step to see the WhatsApp message.');
 
   const DYNAMIC_VARIABLES = [
     { label: 'First Name', value: '{{contact.firstName}}' },
@@ -380,16 +408,44 @@ export function RightInspectorStudio({
                   </div>
                   <div>
                     <label className="text-[11px] font-medium text-slate-400 mb-1 block">
-                      Media URL (Optional Image/PDF)
+                      Image, video, audio or PDF
                     </label>
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-slate-700 bg-slate-950 px-3 py-3 text-xs font-semibold text-slate-300 transition-colors hover:border-emerald-500 hover:text-white">
+                      {isUploadingMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4 text-emerald-400" />}
+                      {isUploadingMedia ? 'Uploading securely…' : config.mediaAssetId ? 'Replace uploaded file' : 'Upload file'}
+                      <input
+                        type="file"
+                        className="sr-only"
+                        disabled={isUploadingMedia}
+                        accept="image/jpeg,image/png,image/webp,video/mp4,audio/mpeg,audio/ogg,application/pdf"
+                        onChange={(event) => uploadMedia(event.target.files?.[0])}
+                      />
+                    </label>
+                    {config.fileName && (
+                      <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-[11px]">
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-slate-200">{config.fileName}</p>
+                          <p className="text-slate-500">{config.mediaMimeType} · {config.mediaSize ? `${(config.mediaSize / 1024 / 1024).toFixed(2)} MB` : ''}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => updateConfig({ mediaAssetId: undefined, mediaPreviewUrl: undefined, fileName: undefined, mediaMimeType: undefined, mediaSize: undefined })}
+                          className="ml-2 text-rose-400 hover:text-rose-300"
+                        >Remove</button>
+                      </div>
+                    )}
+                    {mediaUploadError && <p role="alert" className="mt-2 text-[11px] text-rose-400">{mediaUploadError}</p>}
+                  </div>
+                  <details className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2">
+                    <summary className="cursor-pointer text-[11px] font-semibold text-slate-400">Use an HTTPS media URL instead</summary>
                     <input
                       type="text"
                       value={config.mediaUrl || ''}
-                      onChange={(e) => updateConfig({ mediaUrl: e.target.value })}
+                      onChange={(e) => updateConfig({ mediaUrl: e.target.value, mediaAssetId: undefined, mediaPreviewUrl: undefined })}
                       placeholder="https://example.com/banner.jpg"
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
+                      className="mt-2 w-full rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 font-mono text-xs text-white focus:border-emerald-500"
                     />
-                  </div>
+                  </details>
                 </div>
               )}
 
@@ -421,19 +477,28 @@ export function RightInspectorStudio({
 
                   <div className="space-y-2">
                     {buttons.map((b: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
-                        <span className="text-[10px] font-mono text-slate-500">{idx + 1}.</span>
-                        <input
-                          type="text"
-                          maxLength={20}
-                          value={b.title || ''}
-                          onChange={(e) => updateButton(idx, { title: e.target.value })}
-                          placeholder="Button title (max 20 chars)"
-                          className="flex-1 bg-transparent text-xs text-white outline-none"
-                        />
+                      <div key={idx} className="grid grid-cols-[1fr_auto] gap-2 bg-slate-950 p-2 rounded-lg border border-slate-800">
+                        <div className="space-y-1.5">
+                          <input
+                            type="text"
+                            maxLength={20}
+                            value={b.title || ''}
+                            onChange={(e) => updateButton(idx, { title: e.target.value })}
+                            placeholder="Visible title (max 20 chars)"
+                            className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-white outline-none focus:border-emerald-500"
+                          />
+                          <input
+                            type="text"
+                            maxLength={256}
+                            value={b.id || ''}
+                            onChange={(e) => updateButton(idx, { id: e.target.value.replace(/[^a-zA-Z0-9_-]/g, '_') })}
+                            placeholder="Stable action ID"
+                            className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-1 font-mono text-[10px] text-slate-400 outline-none focus:border-emerald-500"
+                          />
+                        </div>
                         <button
                           onClick={() => removeButton(idx)}
-                          className="text-slate-500 hover:text-rose-400 p-1"
+                          className="self-center text-slate-500 hover:text-rose-400 p-1"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -495,9 +560,81 @@ export function RightInspectorStudio({
                           placeholder="Image URL"
                           className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-400 font-mono"
                         />
+                        {(c.buttons || []).map((button: any, buttonIndex: number) => (
+                          <div key={buttonIndex} className="grid grid-cols-2 gap-2">
+                            <input
+                              value={button.title || ''}
+                              maxLength={20}
+                              onChange={(event) => {
+                                const nextButtons = [...(c.buttons || [])];
+                                nextButtons[buttonIndex] = { ...button, title: event.target.value };
+                                updateCard(idx, { buttons: nextButtons });
+                              }}
+                              placeholder="Button title"
+                              className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-white"
+                            />
+                            <input
+                              value={button.id || ''}
+                              onChange={(event) => {
+                                const nextButtons = [...(c.buttons || [])];
+                                nextButtons[buttonIndex] = { ...button, id: event.target.value.replace(/[^a-zA-Z0-9_-]/g, '_') };
+                                updateCard(idx, { buttons: nextButtons });
+                              }}
+                              placeholder="Stable action ID"
+                              className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-1 font-mono text-[10px] text-slate-400"
+                            />
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {(nodeType === 'list' || nodeType === 'whatsapp_list') && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">WhatsApp list</h4>
+                  <textarea value={config.bodyText || ''} onChange={(event) => updateConfig({ bodyText: event.target.value })} rows={3} placeholder="What should the customer choose?" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-xs text-white" />
+                  <input value={config.buttonText || ''} maxLength={20} onChange={(event) => updateConfig({ buttonText: event.target.value })} placeholder="Open list button text" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-xs text-white" />
+                  <input value={config.sections?.[0]?.title || ''} maxLength={24} onChange={(event) => updateConfig({ sections: [{ title: event.target.value, rows: listRows }] })} placeholder="Section title" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-xs text-white" />
+                  <div className="space-y-2">
+                    {listRows.map((row: any, index: number) => (
+                      <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded-lg border border-slate-800 bg-slate-950 p-2">
+                        <input value={row.title || ''} maxLength={24} onChange={(event) => { const rows = [...listRows]; rows[index] = { ...row, title: event.target.value }; updateListRows(rows); }} placeholder="Visible option" className="rounded border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-white" />
+                        <input value={row.id || ''} onChange={(event) => { const rows = [...listRows]; rows[index] = { ...row, id: event.target.value.replace(/[^a-zA-Z0-9_-]/g, '_') }; updateListRows(rows); }} placeholder="Stable action ID" className="rounded border border-slate-800 bg-slate-900 px-2 py-1 font-mono text-[10px] text-slate-400" />
+                        <button type="button" onClick={() => updateListRows(listRows.filter((_: any, rowIndex: number) => rowIndex !== index))} className="text-rose-400"><X className="h-3.5 w-3.5" /></button>
+                      </div>
+                    ))}
+                  </div>
+                  {listRows.length < 10 && <button type="button" onClick={() => updateListRows([...listRows, { id: `option_${Date.now()}`, title: `Option ${listRows.length + 1}` }])} className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400"><Plus className="h-3 w-3" /> Add option</button>}
+                </div>
+              )}
+
+              {nodeType === 'message_template' && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">Approved Meta template</h4>
+                  <input value={config.templateName || ''} onChange={(event) => updateConfig({ templateName: event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') })} placeholder="template_name" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-xs text-white" />
+                  <input value={config.languageCode || 'en_US'} onChange={(event) => updateConfig({ languageCode: event.target.value })} placeholder="en_US" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-xs text-white" />
+                  <p className="text-[11px] text-slate-400">The final content and buttons come from the approved Meta template.</p>
+                </div>
+              )}
+
+              {nodeType === 'whatsapp_catalog' && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">Connected Meta catalog</h4>
+                  <input value={config.catalogId || ''} onChange={(event) => updateConfig({ catalogId: event.target.value })} placeholder="Catalog ID" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-xs text-white" />
+                  <input value={config.retailerId || ''} onChange={(event) => updateConfig({ retailerId: event.target.value })} placeholder="Product retailer ID (optional)" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-xs text-white" />
+                  <textarea value={config.bodyText || ''} onChange={(event) => updateConfig({ bodyText: event.target.value })} rows={3} placeholder="Browse our products" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-xs text-white" />
+                  <p className="text-[11px] text-slate-400">IDs must come from the catalog connected to this WhatsApp Business Account.</p>
+                </div>
+              )}
+
+              {(nodeType === 'whatsapp_flow' || nodeType === 'flow') && (
+                <div className="space-y-3 rounded-xl border border-slate-800/80 bg-slate-900/40 p-3">
+                  <h4 className="text-xs font-bold text-slate-200">Published WhatsApp Flow</h4>
+                  <input value={config.flowId || ''} onChange={(event) => updateConfig({ flowId: event.target.value })} placeholder="Published Flow ID" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 font-mono text-xs text-white" />
+                  <input value={config.flowCta || ''} maxLength={20} onChange={(event) => updateConfig({ flowCta: event.target.value })} placeholder="Open form" className="w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-2 text-xs text-white" />
+                  <textarea value={config.bodyText || ''} onChange={(event) => updateConfig({ bodyText: event.target.value })} rows={3} placeholder="Complete this form" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-xs text-white" />
                 </div>
               )}
 
@@ -690,23 +827,42 @@ export function RightInspectorStudio({
 
           <div className="w-full flex justify-center scale-90 origin-top">
             <PhoneMockup
-              businessName="TriPix Verified"
+              businessName="Your business"
               messageType={previewMessageType}
               bodyText={previewBodyText}
-              buttons={buttons.map((b: any) => ({
+              headerText={canonicalMessage?.headerText}
+              footerText={preview?.footer}
+              mediaUrl={preview?.mediaUrl}
+              mediaType={['image', 'video', 'audio', 'document'].includes(preview?.kind || '') ? preview?.kind as any : undefined}
+              fileName={canonicalMessage?.filename}
+              buttons={(preview?.buttons || []).map((b: any) => ({
                 id: b.id || b.title,
                 title: b.title,
                 type: b.type === 'reply' ? 'quick_reply' : b.type === 'call' ? 'call' : b.type === 'url' ? 'url' : 'quick_reply',
                 url: b.url,
                 phone: b.phone,
               }))}
-              cards={cards}
-              catalogProduct={{
-                title: config.productTitle || 'Official Product',
-                price: config.productPrice || '$149.00',
-                image: config.mediaUrl || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
-              }}
-              onButtonClick={handleSimulatedButtonClick}
+              sections={preview?.sections || []}
+              cards={preview?.cards || []}
+              catalogProduct={preview?.kind === 'catalog' ? {
+                title: config.productTitle || 'Select a product',
+                price: config.productPrice || '',
+                image: preview.mediaUrl,
+                subtitle: config.productSubtitle,
+              } : undefined}
+              location={canonicalMessage?.location ? {
+                name: canonicalMessage.location.name || 'Location',
+                address: canonicalMessage.location.address || '',
+                latitude: canonicalMessage.location.latitude,
+                longitude: canonicalMessage.location.longitude,
+              } : undefined}
+              contactCard={canonicalMessage?.contact ? {
+                name: canonicalMessage.contact.formattedName,
+                phone: canonicalMessage.contact.phoneNumber,
+                organization: canonicalMessage.contact.organization,
+              } : undefined}
+              flowTitle={config.flowTitle}
+              flowCta={canonicalMessage?.flowCta}
               className="shadow-2xl"
             />
           </div>

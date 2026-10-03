@@ -53,8 +53,11 @@ test('accounts and membership come from persisted records and new owners receive
 test('workflow update/delete reject another workspace even for a known workflow ID', async () => {
   const { NextRequest, NextResponse } = require('next/server');
   let mutated = false;
+  const validator = load('src/lib/automations/validateWorkflow.ts', {
+    '@/lib/whatsapp/messageModel': { messageFromWorkflowNode: () => null, validateOutboundMessage: () => [] },
+  });
   const route = load('src/app/api/automations/route.ts', {
-    '@/lib/automations/validateWorkflow': load('src/lib/automations/validateWorkflow.ts'),
+    '@/lib/automations/validateWorkflow': validator,
     'next/server': { NextResponse },
     '@/lib/auth-server': { getAuthorizedUser: async () => ({ id: 'a', workspaceId: 'a' }) },
     '@/lib/db': { DEFAULT_WORKSPACE_ID: 'default', AutomationsDB: {} },

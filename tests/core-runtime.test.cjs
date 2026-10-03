@@ -163,6 +163,10 @@ test('live nodes send interpolated text with policy enforcement; simulations nev
     }}},
     '@/lib/db': { SettingsDB: { get: () => ({ accessToken: 'live', phoneNumberId: 'phone' }) } },
     '@/lib/meta/api': {},
+    '@/lib/whatsapp/messageModel': {
+      messageFromWorkflowNode: node => ({ kind: 'text', text: node.config.text, bodyText: node.config.bodyText || node.config.text }),
+      validateOutboundMessage: () => [],
+    },
   });
   const node = { id: 'greeting', type: 'message', config: { text: 'Hi {{contact.firstName}}, {{offer}}' } };
   const context = { workspaceId: 'a', workflowId: 'wf', phoneNumber: '+15550001111' };

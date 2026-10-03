@@ -22,7 +22,9 @@ export interface CanonicalOutboundMessage {
     buttons: { id: string; title: string; url?: string }[];
   }[];
   mediaUrl?: string;
+  mediaPreviewUrl?: string;
   mediaId?: string;
+  mediaAssetId?: string;
   caption?: string;
   filename?: string;
   catalogId?: string;
@@ -84,7 +86,9 @@ export function canonicalizeOutboundMessage(input: Partial<CanonicalOutboundMess
       })),
     })),
     mediaUrl: clean(input.mediaUrl) || undefined,
+    mediaPreviewUrl: clean(input.mediaPreviewUrl) || undefined,
     mediaId: clean(input.mediaId) || undefined,
+    mediaAssetId: clean(input.mediaAssetId) || undefined,
     caption: clean(input.caption) || undefined,
     filename: clean(input.filename) || undefined,
     catalogId: clean(input.catalogId) || undefined,
@@ -146,7 +150,7 @@ export function validateOutboundMessage(message: CanonicalOutboundMessage): stri
   }
 
   if (['image', 'video', 'audio', 'document'].includes(message.kind)) {
-    if (!message.mediaId && !message.mediaUrl) errors.push('Upload a file or provide a media URL.');
+    if (!message.mediaId && !message.mediaUrl && !message.mediaAssetId) errors.push('Upload a file or provide a media URL.');
     if (message.mediaUrl && !/^https:\/\//i.test(message.mediaUrl)) errors.push('Media URLs must use HTTPS.');
   }
 
@@ -190,7 +194,7 @@ export function toWhatsAppPreview(message: CanonicalOutboundMessage): WhatsAppPr
     title: message.headerText || (message.kind === 'template' ? message.templateName || 'Template' : ''),
     body: message.bodyText || message.text || message.caption || `[${message.kind}]`,
     footer: message.footerText,
-    mediaUrl: message.mediaUrl,
+    mediaUrl: message.mediaPreviewUrl || message.mediaUrl,
     buttons: message.buttons || [],
     sections: message.sections || [],
     cards: message.cards || [],
@@ -205,6 +209,7 @@ export function messageFromWorkflowNode(node: WorkflowNode): CanonicalOutboundMe
     whatsapp_message: (node.messageType === 'image' || node.messageType === 'video' || node.messageType === 'audio' || node.messageType === 'document' || node.messageType === 'template') ? node.messageType : 'text',
     message_media: (node.messageType === 'video' || node.messageType === 'audio' || node.messageType === 'document') ? node.messageType : 'image',
     message_template: 'template',
+    message_location: 'location',
     button: 'button',
     whatsapp_button: 'button',
     list: 'list',
@@ -230,7 +235,9 @@ export function messageFromWorkflowNode(node: WorkflowNode): CanonicalOutboundMe
     sections: config.sections,
     cards: config.cards,
     mediaUrl: config.mediaUrl,
+    mediaPreviewUrl: config.mediaPreviewUrl,
     mediaId: config.mediaId,
+    mediaAssetId: config.mediaAssetId,
     caption: config.caption,
     filename: config.fileName,
     catalogId: config.catalogId,
@@ -240,6 +247,17 @@ export function messageFromWorkflowNode(node: WorkflowNode): CanonicalOutboundMe
     flowToken: config.flowToken,
     flowCta: config.flowCta,
     flowScreen: config.flowScreen,
+    location: (Number.isFinite(Number(config.latitude)) && Number.isFinite(Number(config.longitude))) ? {
+      latitude: Number(config.latitude),
+      longitude: Number(config.longitude),
+      name: config.locationName,
+      address: config.locationAddress,
+    } : undefined,
+    contact: config.contactName || config.contactPhone ? {
+      formattedName: config.contactName || '',
+      phoneNumber: config.contactPhone || '',
+      organization: config.contactOrganization,
+    } : undefined,
   });
 }
 

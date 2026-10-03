@@ -1,4 +1,4 @@
-import { SettingsDB, MessagesDB, ContactsDB, ConversationsDB, DEFAULT_WORKSPACE_ID, Message, MessageType } from '@/lib/db';
+import { SettingsDB, MessagesDB, ContactsDB, ConversationsDB, MediaAssetsDB, DEFAULT_WORKSPACE_ID, Message, MessageType } from '@/lib/db';
 import { MetaWhatsAppClient, MetaApiResult } from '@/lib/meta/api';
 import { decryptToken } from '@/lib/crypto';
 import {
@@ -31,6 +31,7 @@ export interface SendWhatsAppMessageOptions {
   cards?: any[];
   mediaUrl?: string;
   mediaId?: string;
+  mediaAssetId?: string;
   caption?: string;
   filename?: string;
   catalogId?: string;
@@ -97,6 +98,7 @@ export class WhatsAppMessageService {
       cards: options.cards,
       mediaUrl: options.mediaUrl,
       mediaId: options.mediaId,
+      mediaAssetId: options.mediaAssetId,
       caption: options.caption,
       filename: options.filename,
       catalogId: options.catalogId || settings.catalogId,
@@ -235,6 +237,25 @@ export class WhatsAppMessageService {
         isSimulated: true,
         savedMessage,
       };
+    }
+
+    if (['image', 'video', 'audio', 'document'].includes(message.kind) && message.mediaAssetId && !message.mediaId) {
+      const asset = await MediaAssetsDB.download(message.mediaAssetId, workspaceId);
+      if (!asset) return { success: false, error: 'The uploaded media file no longer exists in this workspace.' };
+      if (asset.metaMediaId) {
+        message.mediaId = asset.metaMediaId;
+      } else {
+        const upload = await MetaWhatsAppClient.uploadMedia({
+          phoneNumberId,
+          accessToken,
+          fileBuffer: asset.buffer,
+          mimeType: asset.mimeType,
+          filename: asset.fileName,
+        });
+        if (!upload.success || !upload.mediaId) return { success: false, error: upload.error || 'Meta could not prepare the uploaded media file.' };
+        message.mediaId = upload.mediaId;
+        await MediaAssetsDB.setMetaMediaId(asset.id, workspaceId, upload.mediaId);
+      }
     }
 
     // 4. Dispatch with exponential backoff retries (up to 3 attempts)

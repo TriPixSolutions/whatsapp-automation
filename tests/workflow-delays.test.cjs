@@ -21,6 +21,7 @@ function engineHarness() {
   const { AdvancedWorkflowEngine: engine } = load('src/lib/automations/advancedWorkflowEngine.ts', {
     './testCenterStore': { TestCenterStore: store }, '@/lib/meta/api': {},
     '@/lib/whatsapp/messageService': { WhatsAppMessageService: { send() { throw new Error('Unexpected live send'); } } },
+    '@/lib/whatsapp/messageModel': { messageFromWorkflowNode: () => null, validateOutboundMessage: () => [] },
     '@/lib/db': { ContactsDB: { getByPhone: async () => ({ id: 'contact-a' }) } },
   });
   return { engine, sessions, workflow, cleared: () => cleared };

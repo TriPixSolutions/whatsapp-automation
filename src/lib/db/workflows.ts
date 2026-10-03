@@ -36,15 +36,6 @@ export const WorkflowsDB = {
     const row = checked(await database().from('workflow_definitions').select('*').eq('id', id)
       .eq('workspace_id', workspace(workspaceId)).maybeSingle());
     if (row) return mapWorkflow(row);
-    if (id === 'wf_welcome_interactive') {
-      try {
-        const { buildProductionVipWorkflow } = await import('@/lib/automations/testCenterStore');
-        const defaultWf = buildProductionVipWorkflow(workspaceId);
-        return await this.save(defaultWf);
-      } catch {
-        return null;
-      }
-    }
     return null;
   },
   async save(definition: WorkflowDefinition): Promise<WorkflowDefinition> {

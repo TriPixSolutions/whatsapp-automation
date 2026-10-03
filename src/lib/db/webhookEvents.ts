@@ -40,4 +40,25 @@ export const WebhookEventsDB = {
       .order('processed_at', { ascending: false }).limit(1)) || [];
     return rows[0]?.processed_at || null;
   },
+
+  async list(workspaceId = DEFAULT_ID, limit = 50) {
+    const rows = checked(await database().from('webhook_events').select('*')
+      .eq('workspace_id', workspace(workspaceId))
+      .order('created_at', { ascending: false }).limit(Math.min(Math.max(limit, 1), 200))) || [];
+    return rows.map((row: any) => ({
+      id: row.meta_event_id,
+      workspaceId: row.workspace_id,
+      timestamp: row.created_at,
+      direction: 'incoming' as const,
+      source: 'Meta WhatsApp Cloud API',
+      eventType: row.event_type,
+      payload: row.payload,
+      responseStatus: row.status === 'failed' ? 500 : 200,
+      responseBody: row.last_error ? { error: row.last_error } : { received: true },
+      executionTimeMs: 0,
+      signatureVerified: true,
+      status: row.status === 'failed' ? 'failed' as const : row.status === 'ignored' ? 'ignored' as const : 'success' as const,
+      error: row.last_error || undefined,
+    }));
+  },
 };

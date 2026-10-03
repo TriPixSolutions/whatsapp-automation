@@ -37,6 +37,7 @@ export { WorkflowsDB } from './workflows';
 export { WebhookEventsDB } from './webhookEvents';
 export { CampaignsDB } from './campaigns';
 export { ScheduledJobsDB } from './scheduledJobs';
+export { MediaAssetsDB } from './mediaAssets';
 
 export { UsersDB } from './users';
 export { DataDeletionDB } from './deletions';

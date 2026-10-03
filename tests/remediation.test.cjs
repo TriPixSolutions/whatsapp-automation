@@ -64,10 +64,12 @@ test('deletion requests persist pending status and public lookup does not expose
   assert.equal(publicRow.userId,undefined);assert.equal(publicRow.email,undefined);assert.equal(publicRow.completedAt,null);
 });
 test('custom workflow validation rejects broken edges and duplicate nodes', () => {
-  const { workflowValidationError: validate }=load('src/lib/automations/validateWorkflow.ts');
-  assert.equal(validate({nodes:[{id:'t',type:'trigger_keyword'},{id:'e',type:'end'}],edges:[{source:'t',target:'e'}]}),null);
-  assert.match(validate({nodes:[{id:'t',type:'trigger_keyword'}],edges:[{source:'t',target:'missing'}]}),/existing nodes/);
-  assert.match(validate({nodes:[{id:'t',type:'trigger_keyword'},{id:'t',type:'end'}]}),/unique/);
+  const { workflowValidationError: validate }=load('src/lib/automations/validateWorkflow.ts',{
+    '@/lib/whatsapp/messageModel':{messageFromWorkflowNode:()=>null,validateOutboundMessage:()=>[]},
+  });
+  assert.equal(validate({isActive:false,nodes:[{id:'t',type:'trigger_keyword'},{id:'e',type:'end'}],edges:[{source:'t',target:'e'}]}),null);
+  assert.match(validate({isActive:false,nodes:[{id:'t',type:'trigger_keyword'}],edges:[{source:'t',target:'missing'}]}),/existing steps/);
+  assert.match(validate({isActive:false,nodes:[{id:'t',type:'trigger_keyword'},{id:'t',type:'end'}]}),/duplicated/);
 });
 test('sandbox waiting sessions cannot replace, resume or clear live sessions for the same recipient', async () => {
  const b=backend(); const repo=()=>load('src/lib/db/workflows.ts',{'./client':b.client});

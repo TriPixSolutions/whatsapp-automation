@@ -5,6 +5,7 @@ const path = require('node:path');
 const load = require('./load-ts.cjs');
 const backend = require('./fake-database.cjs');
 const { NextRequest, NextResponse } = require('next/server');
+const messageModel = load('src/lib/whatsapp/messageModel.ts', { '@/types': {}, '@/types/automations': {} });
 
 // ============================================================================
 // SHARED HARNESS HELPERS
@@ -72,6 +73,7 @@ function createEngineHarness(workflows = [], initialSessions = []) {
     './testCenterStore': { TestCenterStore: store },
     '@/lib/meta/api': {},
     '@/lib/whatsapp/messageService': messageService,
+    '@/lib/whatsapp/messageModel': messageModel,
     '@/lib/db': dbMock,
   });
 
@@ -266,10 +268,11 @@ test('TEST 6: Workflow sends carousel -> Click CTA for Card 2 routes to Card 2 b
         type: 'whatsapp_carousel',
         config: {
           text: 'Check out our featured products:',
+          templateName: 'approved_product_carousel',
           cards: [
-            { id: 'card_1', title: 'Product 1', buttons: [{ id: 'cta_buy_1', title: 'Buy 1' }] },
-            { id: 'card_2', title: 'Product 2', buttons: [{ id: 'cta_buy_2', title: 'Buy 2' }] },
-            { id: 'card_3', title: 'Product 3', buttons: [{ id: 'cta_buy_3', title: 'Buy 3' }] },
+            { id: 'card_1', title: 'Product 1', description: 'First product', buttons: [{ id: 'cta_buy_1', title: 'Buy 1' }] },
+            { id: 'card_2', title: 'Product 2', description: 'Second product', buttons: [{ id: 'cta_buy_2', title: 'Buy 2' }] },
+            { id: 'card_3', title: 'Product 3', description: 'Third product', buttons: [{ id: 'cta_buy_3', title: 'Buy 3' }] },
           ],
         },
       },
@@ -312,6 +315,34 @@ test('TEST 6: Workflow sends carousel -> Click CTA for Card 2 routes to Card 2 b
   assert.equal(resumed.status, 'completed');
   assert.ok(resumed.steps.some(s => s.nodeId === 'node_card_2_action'));
   assert.ok(!resumed.steps.some(s => s.nodeId === 'node_card_1_action'));
+});
+
+test('unknown interactive IDs do not enter an arbitrary branch and keep the session waiting', async () => {
+  const workflow = {
+    id: 'wf-strict-buttons', workspaceId: 'ws-prod', name: 'Strict button flow', isActive: true,
+    nodes: [
+      { id: 'trigger', type: 'trigger_keyword', title: 'Trigger', config: { text: 'menu' }, nextNodeId: 'buttons' },
+      { id: 'buttons', type: 'whatsapp_button', title: 'Menu', config: { bodyText: 'Choose', buttons: [
+        { id: 'sales', title: 'Sales' }, { id: 'support', title: 'Support' },
+      ] } },
+      { id: 'sales-node', type: 'whatsapp_message', title: 'Sales', config: { text: 'Sales branch' } },
+      { id: 'support-node', type: 'whatsapp_message', title: 'Support', config: { text: 'Support branch' } },
+    ],
+    edges: [
+      { id: 'sales-edge', source: 'buttons', sourceHandle: 'sales', target: 'sales-node' },
+      { id: 'support-edge', source: 'buttons', sourceHandle: 'support', target: 'support-node' },
+    ],
+  };
+  const h = createEngineHarness([workflow]);
+  const initial = await h.engine.executeWorkflow(workflow, {
+    workflowId: workflow.id, workspaceId: 'ws-prod', phoneNumber: '+15550001111',
+    triggerType: 'keyword', triggerPayload: { text: 'menu' }, isTestSimulation: true,
+  });
+  const session = h.savedSessions.get('ws-prod:+15550001111');
+  assert.equal(initial.status, 'waiting');
+  assert.equal(await h.engine.resumeWorkflowExecution(session, { action: 'button_click', buttonId: 'stale-id' }, true), null);
+  assert.equal(h.savedSessions.get('ws-prod:+15550001111').id, session.id);
+  assert.ok(!h.executions.flatMap(item => item.steps || []).some(step => ['sales-node', 'support-node'].includes(step.nodeId)));
 });
 
 test('TEST 7: Inbound message during delay -> Message is NOT silently dropped; saved and evaluated', async () => {

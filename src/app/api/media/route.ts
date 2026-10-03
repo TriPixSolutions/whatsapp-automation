@@ -35,9 +35,15 @@ export async function POST(request: NextRequest) {
       await db.storage.from(bucket).remove([storagePath]);
       throw error;
     }
-    const signed = await db.storage.from(bucket).createSignedUrl(storagePath,3600);
-    if (signed.error) throw new Error('Media retrieval link unavailable');
-    return NextResponse.json({success:true,assetId:id,publicUrl:signed.data.signedUrl,mimeType:file.type,fileSize:file.size});
+    return NextResponse.json({
+      success:true,
+      assetId:id,
+      previewUrl:`/api/media?id=${id}`,
+      fileName:file.name,
+      mimeType:file.type,
+      fileSize:file.size,
+      providerReady:false,
+    });
   } catch { return NextResponse.json({error:'Media upload failed. Check the storage bucket and database migration.'},{status:503}); }
 }
 export async function GET(request: NextRequest) {

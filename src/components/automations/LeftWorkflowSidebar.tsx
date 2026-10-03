@@ -60,16 +60,6 @@ export interface NodePaletteItem {
   defaultConfig: Record<string, any>;
 }
 
-export const PALETTE_CATEGORIES = [
-  'Trigger Nodes',
-  'Message Nodes',
-  'WhatsApp Nodes',
-  'Logic Nodes',
-  'AI Nodes',
-  'CRM Nodes',
-  'Integrations',
-] as const;
-
 export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
   // 1. TRIGGER NODES
   {
@@ -155,8 +145,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
     badge: 'Media',
     defaultConfig: {
-      mediaUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&auto=format&fit=crop&q=80',
-      caption: 'Explore our latest lookbook and seasonal collection.',
+      caption: '',
     },
   },
   {
@@ -168,7 +157,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
     badge: 'Template',
     defaultConfig: {
-      templateName: 'order_confirmation',
+      templateName: '',
       languageCode: 'en_US',
     },
   },
@@ -237,19 +226,20 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
     badge: 'Carousel',
     defaultConfig: {
-      bodyText: 'Explore our hand-picked VIP selection today:',
+      bodyText: 'Explore our available items:',
+      templateName: '',
       cards: [
         {
-          headerImage: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&auto=format&fit=crop&q=80',
-          title: 'Runner Pro Sneakers',
-          description: 'Ultra-light breathable performance shoes. $129',
-          buttons: [{ id: 'card_btn_1', title: 'Order Sneakers' }],
+          headerImage: '',
+          title: 'First item',
+          description: '',
+          buttons: [{ id: 'item_1', title: 'Select' }],
         },
         {
-          headerImage: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
-          title: 'Chronos Smart Watch',
-          description: 'Titanium chassis with sapphire glass. $249',
-          buttons: [{ id: 'card_btn_2', title: 'Order Watch' }],
+          headerImage: '',
+          title: 'Second item',
+          description: '',
+          buttons: [{ id: 'item_2', title: 'Select' }],
         },
       ],
     },
@@ -263,10 +253,10 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-teal-400 bg-teal-500/10 border-teal-500/30',
     badge: 'Flow Form',
     defaultConfig: {
-      flowId: 'flow_consultation_form',
-      flowTitle: 'Book VIP Consultation',
-      flowCta: 'Start Booking',
-      flowScreen: 'SCREEN_DETAILS',
+      flowId: '',
+      flowTitle: '',
+      flowCta: 'Open form',
+      flowScreen: '',
     },
   },
   {
@@ -454,7 +444,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
     badge: 'REST API',
     defaultConfig: {
-      apiUrl: 'https://api.example.com/v1/leads',
+      apiUrl: '',
       apiMethod: 'POST',
       webhookBody: '{\n  "phone": "{{contact.phoneNumber}}",\n  "status": "active"\n}',
     },
@@ -468,7 +458,7 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     color: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
     badge: 'Webhook',
     defaultConfig: {
-      webhookUrl: 'https://hooks.zapier.com/hooks/catch/sample',
+      webhookUrl: '',
       webhookMethod: 'POST',
     },
   },
@@ -486,6 +476,16 @@ export const COMPREHENSIVE_PALETTE_ITEMS: NodePaletteItem[] = [
     },
   },
 ];
+
+const SIMPLE_NODE_GROUPS = [
+  { label: 'Triggers', types: ['trigger_incoming', 'trigger_keyword', 'trigger_button', 'trigger_list'] },
+  { label: 'Messages', types: ['whatsapp_message', 'message_media', 'message_template', 'whatsapp_button', 'whatsapp_list', 'whatsapp_carousel', 'whatsapp_catalog', 'whatsapp_flow'] },
+  { label: 'Logic', types: ['conditional_logic', 'multi_branch'] },
+  { label: 'Actions', types: ['ai_agent', 'tag_management', 'lead_management', 'crm_action', 'api_node', 'webhook_node'] },
+  { label: 'Flow control', types: ['delay', 'wait_for_reply', 'end'] },
+] as const;
+
+const SIMPLE_NODE_TYPES = new Set(SIMPLE_NODE_GROUPS.flatMap((group) => group.types));
 
 interface LeftWorkflowSidebarProps {
   workflow: WorkflowDefinition;
@@ -521,8 +521,9 @@ export function LeftWorkflowSidebar({
   // Filtered nodes
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return COMPREHENSIVE_PALETTE_ITEMS;
-    return COMPREHENSIVE_PALETTE_ITEMS.filter((item) => {
+    const coreItems = COMPREHENSIVE_PALETTE_ITEMS.filter((item) => SIMPLE_NODE_TYPES.has(item.type as any));
+    if (!q) return coreItems;
+    return coreItems.filter((item) => {
       return (
         item.title.toLowerCase().includes(q) ||
         item.description.toLowerCase().includes(q) ||
@@ -615,7 +616,7 @@ export function LeftWorkflowSidebar({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search all 25+ nodes..."
+                placeholder="Search workflow steps..."
                 className="w-full bg-slate-900/90 border border-slate-800 focus:border-emerald-500 rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 outline-none transition-colors"
               />
               {search && (
@@ -631,8 +632,9 @@ export function LeftWorkflowSidebar({
 
           {/* Categories List (Fully visible, no clipping, custom scrollbar) */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3.5 custom-scrollbar">
-            {PALETTE_CATEGORIES.map((category) => {
-              const items = filteredItems.filter((i) => i.category === category);
+            {SIMPLE_NODE_GROUPS.map((group) => {
+              const category = group.label;
+              const items = filteredItems.filter((item) => (group.types as readonly string[]).includes(item.type));
               if (items.length === 0) return null;
               const isCollapsed = collapsedCategories[category];
 

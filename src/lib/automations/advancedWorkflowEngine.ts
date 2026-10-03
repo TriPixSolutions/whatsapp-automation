@@ -11,8 +11,8 @@ import {
 } from '@/types/automations';
 import { TestCenterStore } from './testCenterStore';
 import { WhatsAppMessageService } from '@/lib/whatsapp/messageService';
-import { ConversationsDB, ContactsDB, MessagesDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
-import { MetaWhatsAppClient } from '@/lib/meta/api';
+import { ConversationsDB, ContactsDB, SettingsDB, DEFAULT_WORKSPACE_ID } from '@/lib/db';
+import { messageFromWorkflowNode, validateOutboundMessage } from '@/lib/whatsapp/messageModel';
 export function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -406,6 +406,7 @@ export class AdvancedWorkflowEngine {
     const buttonTitle = (event.buttonTitle || '').trim().toLowerCase();
     const cardButtonId = (event.cardButtonId || buttonId).trim();
     const cardIndex = event.cardIndex !== undefined ? event.cardIndex : undefined;
+    const defaultInteractiveEdge = nodeEdges.find((edge) => edge.sourceHandle === 'default');
 
     // Check if current node (or parent if wait_for_reply) has carousel cards or buttons
     let cards = currentNode.config?.cards || [];
@@ -423,6 +424,7 @@ export class AdvancedWorkflowEngine {
 
     // 1. CAROUSEL CARDS RESOLUTION
     if (cards.length > 0 && (event.action === 'carousel_click' || event.action === 'button_click')) {
+      let matchedCarouselChoice = false;
       for (let cIdx = 0; cIdx < cards.length; cIdx++) {
         const card = cards[cIdx];
         const cardBtns = card.buttons || [];
@@ -434,6 +436,7 @@ export class AdvancedWorkflowEngine {
         );
 
         if (matchedCardBtn || isTargetCardIndex) {
+          matchedCarouselChoice = true;
           const targetCardBtnId = matchedCardBtn?.id || cardButtonId || buttonId;
           // Match edge by card button ID
           if (targetCardBtnId) {
@@ -467,6 +470,9 @@ export class AdvancedWorkflowEngine {
           }
         }
       }
+      if (!matchedCarouselChoice) return defaultInteractiveEdge
+        ? { nextNodeId: defaultInteractiveEdge.target, sourceHandle: 'default', matchedEdge: defaultInteractiveEdge }
+        : {};
     }
 
     // 2. INTERACTIVE BUTTON RESOLUTION
@@ -478,6 +484,7 @@ export class AdvancedWorkflowEngine {
           (buttonId && b.title && b.title.trim().toLowerCase() === buttonId.toLowerCase())
       );
       const matchedBtn = btnIndex !== -1 ? buttons[btnIndex] : null;
+      let matchedListRow: any = null;
 
       // 2a. Direct edge match by buttonId (e.g., sourceHandle === 'btn_catalog')
       if (buttonId) {
@@ -500,6 +507,7 @@ export class AdvancedWorkflowEngine {
               (buttonTitle && r.title && r.title.toLowerCase() === buttonTitle.toLowerCase())
           );
           if (matchedRow) {
+            matchedListRow = matchedRow;
             const edgeByRow = nodeEdges.find(
               (e) =>
                 e.sourceHandle === matchedRow.id ||
@@ -550,15 +558,19 @@ export class AdvancedWorkflowEngine {
       if ((currentNode.config as any)?.buttonRoutes?.[buttonId]) return { nextNodeId: (currentNode.config as any).buttonRoutes[buttonId], sourceHandle: buttonId };
       if ((currentNode.config as any)?.branches?.[buttonId]) return { nextNodeId: (currentNode.config as any).branches[buttonId], sourceHandle: buttonId };
 
-      // 2g. If only 1 edge exists leaving this button node, follow it
-      if (nodeEdges.length === 1) {
+      // Legacy graphs with one route remain valid only after a configured choice matched.
+      if ((matchedBtn || matchedListRow) && nodeEdges.length === 1) {
         return { nextNodeId: nodeEdges[0].target, sourceHandle: nodeEdges[0].sourceHandle || undefined, matchedEdge: nodeEdges[0] };
       }
 
-      // 2h. Fallback: match nth edge to nth button if counts match
+      // Legacy index routing remains valid only for a configured button.
       if (btnIndex >= 0 && btnIndex < nodeEdges.length) {
         return { nextNodeId: nodeEdges[btnIndex].target, sourceHandle: nodeEdges[btnIndex].sourceHandle || undefined, matchedEdge: nodeEdges[btnIndex] };
       }
+
+      // Unknown or stale provider interaction IDs must never enter an arbitrary branch.
+      if (defaultInteractiveEdge) return { nextNodeId: defaultInteractiveEdge.target, sourceHandle: 'default', matchedEdge: defaultInteractiveEdge };
+      return {};
     }
 
     if (event.action === 'reply') {
@@ -706,6 +718,28 @@ export class AdvancedWorkflowEngine {
 
     if (!nextNodeId) {
       console.warn('[WorkflowEngine] Operation failed; inspect authorized execution diagnostics.');
+      const existingLog = await TestCenterStore.getExecutionLog(session.executionId, session.workspaceId);
+      if (existingLog) {
+        existingLog.status = 'waiting';
+        existingLog.waitingFor = session.waitingFor;
+        existingLog.steps = [...(existingLog.steps || []), {
+          nodeId: pausedNode.id,
+          nodeType: pausedNode.type,
+          nodeTitle: `${pausedNode.title} — unmatched interaction`,
+          status: 'failed',
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          durationMs: 0,
+          inputPayload: {
+            action: event.action,
+            buttonId: event.buttonId,
+            cardButtonId: event.cardButtonId,
+            cardIndex: event.cardIndex,
+          },
+          error: 'The interaction ID does not match a configured workflow branch. The session remains waiting.',
+        }];
+        await TestCenterStore.recordExecutionLog(existingLog);
+      }
       return null;
     }
 
@@ -1087,6 +1121,7 @@ export class AdvancedWorkflowEngine {
             break;
           }
 
+          case 'wait':
           case 'wait_for_reply': {
             traceStep.status = 'waiting_user_action';
             traceStep.outputResult = {
@@ -1220,8 +1255,12 @@ export class AdvancedWorkflowEngine {
 
           case 'message':
           case 'whatsapp_message':
+          case 'message_media':
+          case 'message_template':
+          case 'message_location':
           case 'whatsapp_catalog':
-          case 'whatsapp_flow': {
+          case 'whatsapp_flow':
+          case 'flow': {
             const sendResult = await this.dispatchNodeMessage(
               currentNode,
               context,
@@ -1350,6 +1389,7 @@ export class AdvancedWorkflowEngine {
             break;
           }
 
+          case 'branch':
           case 'multi_branch': {
             const varVal = (executionVariables[currentNode.config.conditionVariable || 'text'] || context.triggerPayload?.text || '').toString().toLowerCase();
             const branches = currentNode.config.branches || [];
@@ -1660,41 +1700,47 @@ export class AdvancedWorkflowEngine {
     metaCall?: any;
   }> {
     const config = node.config || {};
-    const messageType: PlatformMessageType =
-      (node.messageType as any) ||
-      (node.type === 'button' || node.type === 'whatsapp_button'
-        ? 'interactive_button'
-        : node.type === 'carousel' || node.type === 'whatsapp_carousel'
-        ? 'carousel'
-        : node.type === 'list' || node.type === 'whatsapp_list'
-        ? 'list'
-        : node.type === 'whatsapp_catalog' || node.type === 'catalog'
-        ? 'catalog'
-        : node.type === 'whatsapp_flow' || node.type === 'flow'
-        ? 'whatsapp_flow'
-        : 'text');
-
     const cleanTo = context.phoneNumber;
     const settings = await SettingsDB.get(context.workspaceId);
     // A simulation must never contact real recipients, even with live credentials.
     const isSandboxSimulation = context.isTestSimulation === true;
+    const canonical = messageFromWorkflowNode(node);
+    if (!canonical) return { success: false, error: `Node type "${node.type}" cannot send a WhatsApp message.` };
 
-    const rawBody = config.bodyText || config.text;
-    const interpolatedBody = this.interpolateVariables(rawBody, variables, contact);
-    const interpolatedHeader = this.interpolateVariables(config.headerText, variables, contact);
-    const interpolatedFooter = this.interpolateVariables(config.footerText, variables, contact);
+    const interpolate = (value?: string) => this.interpolateVariables(value, variables, contact);
+    canonical.text = interpolate(canonical.text) || undefined;
+    canonical.headerText = interpolate(canonical.headerText) || undefined;
+    canonical.bodyText = interpolate(canonical.bodyText) || undefined;
+    canonical.footerText = interpolate(canonical.footerText) || undefined;
+    canonical.caption = interpolate(canonical.caption) || undefined;
+    canonical.buttons = canonical.buttons?.map((button) => ({ ...button, title: interpolate(button.title) }));
+    canonical.sections = canonical.sections?.map((section) => ({
+      ...section,
+      title: interpolate(section.title),
+      rows: section.rows.map((row) => ({
+        ...row,
+        title: interpolate(row.title),
+        description: interpolate(row.description) || undefined,
+      })),
+    }));
+    canonical.cards = canonical.cards?.map((card) => ({
+      ...card,
+      title: interpolate(card.title),
+      description: interpolate(card.description),
+      buttons: card.buttons.map((button) => ({ ...button, title: interpolate(button.title) })),
+    }));
 
-    const callPayload: any = {
-      type: messageType,
-      to: cleanTo,
-      header: interpolatedHeader,
-      body: interpolatedBody,
-      footer: interpolatedFooter,
-      buttons: config.buttons,
-      cards: config.cards,
-      templateName: config.templateName,
-      mediaUrl: config.mediaUrl,
-    };
+    const validationErrors = validateOutboundMessage(canonical);
+    if (validationErrors.length) return { success: false, error: validationErrors.join(' ') };
+
+    const messageType: PlatformMessageType = canonical.kind === 'button'
+      ? 'interactive_button'
+      : canonical.kind === 'flow'
+        ? 'cta_button'
+        : canonical.kind === 'catalog'
+          ? 'product'
+          : canonical.kind as PlatformMessageType;
+    const callPayload: any = { ...canonical, type: canonical.kind, to: cleanTo };
 
     if (isSandboxSimulation) {
       const simulatedMessageId = `wamid.test_sandbox_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -1751,99 +1797,15 @@ export class AdvancedWorkflowEngine {
       };
     }
 
-    // Live Meta Dispatch via WhatsAppMessageService
-    let serviceResult: any;
-    if (messageType === 'carousel') {
-
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'carousel',
-        bodyText: interpolatedBody,
-        cards: config.cards || [],
-        templateName: config.templateName,
-        requireRealDelivery: true,
-      });
-
-    } else if (messageType === 'interactive_button' || messageType === 'quick_reply') {
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'button',
-        headerText: interpolatedHeader,
-        bodyText: interpolatedBody || 'Choose an option:',
-        footerText: interpolatedFooter,
-        buttons: (config.buttons || [{ id: 'opt_1', title: 'Proceed' }]).map((b: any) => ({
-          id: b.id,
-          title: b.title,
-        })),
-        requireRealDelivery: true,
-      });
-    } else if (messageType === 'list') {
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'list',
-        headerText: interpolatedHeader,
-        bodyText: interpolatedBody || 'Select an item:',
-        footerText: interpolatedFooter,
-        buttonText: config.buttonText || 'View Options',
-        sections: config.sections || [],
-        requireRealDelivery: true,
-      });
-    } else if (messageType === 'template') {
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'template',
-        templateName: config.templateName || 'teaser_alert',
-        languageCode: config.languageCode || 'en_US',
-        requireRealDelivery: true,
-      });
-    } else if (node.type === 'whatsapp_catalog' || (messageType as any) === 'catalog' || messageType === 'product') {
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'interactive',
-        bodyText: `${config.bodyText || 'Explore our verified product collection:'}\n\n*${config.productTitle || 'Signature Item'}* - ${config.productPrice || '$149.00'}\n${config.productSubtitle || 'In Stock · Fast Courier Delivery'}`,
-        buttons: [{ id: 'view_catalog', title: 'View Catalog' }],
-        catalogId: config.catalogId,
-        productRetailerId: config.retailerId,
-        requireRealDelivery: true,
-      });
-    } else if (node.type === 'whatsapp_flow' || (messageType as any) === 'whatsapp_flow') {
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'interactive',
-        bodyText: config.bodyText || 'Please complete our interactive form below:',
-        buttonText: config.flowCta || 'Start Form',
-        buttons: [{ id: config.flowId || 'flow_btn', title: config.flowCta || 'Open Form' }],
-        requireRealDelivery: true,
-      });
-    } else if (['image', 'video', 'audio', 'document', 'pdf'].includes(messageType)) {
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: messageType === 'pdf' ? 'document' : (messageType as any),
-        mediaUrl: config.mediaUrl,
-        caption: this.interpolateVariables(config.caption || config.text, variables, contact),
-        filename: config.fileName,
-        requireRealDelivery: true,
-      });
-    } else {
-      // Standard text or fallback
-      serviceResult = await WhatsAppMessageService.send({
-        workspaceId: context.workspaceId,
-        to: cleanTo,
-        type: 'text',
-        text: interpolatedBody || 'Automated message',
-        requireRealDelivery: true,
-      });
-      if (node.id === 'node_pricing_info' || node.title?.toLowerCase().includes('pricing')) {
-
-      }
-    }
+    // Live dispatch always uses the same canonical model as the builder preview.
+    const { kind, ...messageFields } = canonical;
+    const serviceResult = await WhatsAppMessageService.send({
+      ...messageFields,
+      workspaceId: context.workspaceId,
+      to: cleanTo,
+      type: kind,
+      requireRealDelivery: true,
+    });
 
     const messageId = serviceResult.messageId || serviceResult.metaMessageId;
     const now = new Date().toISOString();

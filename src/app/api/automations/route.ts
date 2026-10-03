@@ -1,4 +1,4 @@
-import { workflowValidationError } from '@/lib/automations/validateWorkflow';
+import { workflowValidationErrors } from '@/lib/automations/validateWorkflow';
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_WORKSPACE_ID } from '@/lib/db';
 import { TestCenterStore } from '@/lib/automations/testCenterStore';
@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
 
     // Check if this is a Workflow 2.0 DAG definition
     if (Array.isArray(body.nodes)) {
-      const validation = workflowValidationError(body);
-      if (validation) return NextResponse.json({ error: validation }, { status: 422 });
+      const validation = workflowValidationErrors(body);
+      if (validation.length) return NextResponse.json({ error: validation[0], details: validation }, { status: 422 });
       const existing = body.id ? await TestCenterStore.getWorkflow(body.id, targetWorkspaceId) : null;
       if (existing && existing.workspaceId !== targetWorkspaceId) {
         return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
@@ -94,8 +94,12 @@ export async function PUT(request: NextRequest) {
       if ((existingWf.workspaceId === 'default' ? DEFAULT_WORKSPACE_ID : existingWf.workspaceId) !== targetWorkspaceId) {
         return NextResponse.json({ error: 'Flow not found' }, { status: 404 });
       }
-      const validation = workflowValidationError({ nodes: partial.nodes ?? existingWf.nodes, edges: partial.edges ?? existingWf.edges });
-      if (validation) return NextResponse.json({ error: validation }, { status: 422 });
+      const validation = workflowValidationErrors({
+        nodes: partial.nodes ?? existingWf.nodes,
+        edges: partial.edges ?? existingWf.edges,
+        isActive: partial.isActive ?? existingWf.isActive,
+      });
+      if (validation.length) return NextResponse.json({ error: validation[0], details: validation }, { status: 422 });
       const updatedWf = await TestCenterStore.saveWorkflow({
         ...existingWf,
         name: partial.name ?? existingWf.name,

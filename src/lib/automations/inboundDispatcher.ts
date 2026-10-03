@@ -41,7 +41,20 @@ export class InboundAutomationDispatcher {
       } else {
         const action = session.waitingFor==='carousel_selection' || event.interaction?.kind==='carousel_button' ? 'carousel_click' : event.interaction?'button_click':'reply';
         const resumed = await AdvancedWorkflowEngine.resumeWorkflowExecution(session,{action,...payload},event.isTestSimulation);
-        if (!resumed) return {...base,success:!event.isTestSimulation,error:'No branch matched the interaction',code:'NO_MATCHING_BRANCH'};
+        if (!resumed) return {
+          ...base,
+          // Live webhooks are acknowledged after persistence to avoid an endless Meta retry loop.
+          // The execution trace records the failed match and the active session stays available.
+          success: !event.isTestSimulation,
+          error: 'This reply does not match any configured workflow branch. The workflow is still waiting for a valid choice.',
+          code: 'NO_MATCHING_BRANCH',
+          trace: [...base.trace, {
+            step: 'Interaction branch resolution',
+            status: 'failed',
+            timestamp: new Date().toISOString(),
+            details: { interactionId: event.interaction?.id, sessionId: session.id },
+          }],
+        };
         executions.push(resumed); base.sessionAction='resumed';base.resumedSessionId=session.id;
         base.matchedWorkflowsCount=1;base.success=resumed.status!=='failed';return base;
       }
