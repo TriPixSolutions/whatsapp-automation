@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && node scripts/prepare-standalone.cjs",
-    "start": "next start",
+    "start": "node scripts/start-production.cjs",
     "start:standalone": "node scripts/start-standalone.cjs",
     "worker": "node worker/worker.js",
     "start:pm2": "pm2 start ecosystem.config.js --env production",
