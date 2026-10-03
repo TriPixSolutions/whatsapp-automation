@@ -19,6 +19,7 @@ const requiredTables = [
 
 const results = [];
 let savedWebhookSecretReady = false;
+let savedMetaCandidates = [];
 function record(name, ok, detail) {
   results.push({ name, ok });
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? `: ${detail}` : ''}`);
@@ -58,9 +59,26 @@ async function checkDatabase() {
     if(columns.error) throw new Error('Business/media migration required');
     const bucket = await db.storage.getBucket('workspace-media');
     if(bucket.error || bucket.data.public) throw new Error('Private workspace-media bucket required');
-    const savedSecrets = await db.from('meta_connections').select('app_secret_encrypted').limit(50);
+    const savedSecrets = await db
+      .from('meta_connections')
+      .select('workspace_id,app_secret_encrypted,access_token_encrypted,waba_id')
+      .limit(50);
     if (savedSecrets.error) throw new Error('Meta connection settings unavailable');
+    const savedPhones = await db
+      .from('phone_numbers')
+      .select('workspace_id,phone_number_id,is_default')
+      .eq('is_default', true)
+      .limit(50);
+    if (savedPhones.error) throw new Error('Meta phone settings unavailable');
+    const phoneByWorkspace = new Map((savedPhones.data || []).map(row => [row.workspace_id, row.phone_number_id]));
     savedWebhookSecretReady = (savedSecrets.data || []).some(row => /^[a-f0-9]{32}$/i.test(decryptSavedCredential(row.app_secret_encrypted)));
+    savedMetaCandidates = (savedSecrets.data || [])
+      .map(row => ({
+        token: decryptSavedCredential(row.access_token_encrypted),
+        phoneId: phoneByWorkspace.get(row.workspace_id),
+        wabaId: row.waba_id,
+      }))
+      .filter(candidate => [candidate.token, candidate.phoneId, candidate.wabaId].every(configured));
     record('Supabase schema', true, `${requiredTables.length} core tables available`);
   } catch (error) {
     record('Supabase schema', false, error.message || 'probe failed');
@@ -93,30 +111,39 @@ async function checkRedis() {
 }
 
 async function checkMeta() {
-  const token = process.env.META_ACCESS_TOKEN;
-  const phoneId = process.env.META_PHONE_NUMBER_ID;
-  const wabaId = process.env.META_WABA_ID;
   const version = require('../shared/meta-config.cjs').graphVersion(process.env);
-  if (![token, phoneId, wabaId].every(configured)) {
+  const envCandidate = {
+    token: process.env.META_ACCESS_TOKEN,
+    phoneId: process.env.META_PHONE_NUMBER_ID,
+    wabaId: process.env.META_WABA_ID,
+  };
+  const candidates = [envCandidate, ...savedMetaCandidates]
+    .filter(candidate => [candidate.token, candidate.phoneId, candidate.wabaId].every(configured));
+  if (candidates.length === 0) {
     record('Meta WhatsApp credentials', false, 'token, Phone Number ID or WABA ID is missing');
     return;
   }
-  try {
-    const endpoint = new URL(`https://graph.facebook.com/${version}/${phoneId}`);
-    endpoint.searchParams.set('fields', 'id');
-    const response = await fetch(endpoint, {
-      headers: { authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10000),
-    });
-    const body = await response.json();
-    record(
-      'Meta WhatsApp credentials',
-      response.ok && body.id === phoneId,
-      response.ok ? 'live Phone Number ID probe succeeded' : `Graph API HTTP ${response.status}, code ${body.error?.code || 'unknown'}`,
-    );
-  } catch (error) {
-    record('Meta WhatsApp credentials', false, error.cause?.code || error.name || 'probe failed');
+
+  let lastFailure = 'live probe failed';
+  for (const candidate of candidates) {
+    try {
+      const endpoint = new URL(`https://graph.facebook.com/${version}/${candidate.phoneId}`);
+      endpoint.searchParams.set('fields', 'id');
+      const response = await fetch(endpoint, {
+        headers: { authorization: `Bearer ${candidate.token}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      const body = await response.json();
+      if (response.ok && body.id === candidate.phoneId) {
+        record('Meta WhatsApp credentials', true, 'live Phone Number ID probe succeeded');
+        return;
+      }
+      lastFailure = `Graph API HTTP ${response.status}, code ${body.error?.code || 'unknown'}`;
+    } catch (error) {
+      lastFailure = error.cause?.code || error.name || 'probe failed';
+    }
   }
+  record('Meta WhatsApp credentials', false, lastFailure);
 }
 
 async function main() {

@@ -7,7 +7,7 @@ Branch: `rebuild/product-experience-2026-10-03`
 
 The product architecture and application code have been rebuilt around one inbound workflow path and one outbound message service. The repository passes its type check, 109 regression tests, production build, and dependency audit. The Supabase migration for worker heartbeat evidence and scheduled workflow jobs was applied successfully to project `madbskyoofviycpedshs` on 2026-10-03.
 
-The code is ready to deploy. The live service is **not yet production-ready** because the current Meta token returns Graph API error 190 and Redis cannot be reached. These external failures cannot be reported as successful by the application.
+The code is ready to deploy. A newly generated Meta token was saved through the application into encrypted workspace settings and the deployed application returned **Connected & Live** on 2026-10-03. The live service is **not yet production-ready** because Redis is not configured, the rebuilt branch is not yet deployed, and the complete real WhatsApp acceptance matrix has not yet been rerun on that deployment.
 
 ## Architecture now in use
 
@@ -49,11 +49,11 @@ Outbound sends from the Inbox, Automation Lab live tests, workflow engine, sched
 | Production dependency audit | PASS — 0 vulnerabilities |
 | Supabase core schema | PASS — 25 tables, including worker heartbeats |
 | Worker/scheduled migration | PASS — applied in Supabase SQL Editor |
-| Meta live phone probe | NEEDS FIX — HTTP 401, code 190 |
+| Meta live phone probe | PASS — deployed Settings returned Connected & Live with the refreshed encrypted token |
 | Redis queue probe | NEEDS FIX — connection failed |
 | Public deployment URL environment | PASS — verified in Hostinger |
 | Meta App Secret | PASS — valid-format encrypted workspace secret verified |
-| Real WhatsApp end-to-end retest after deployment | BLOCKED by Meta token and deployment update |
+| Real WhatsApp end-to-end retest after deployment | BLOCKED by deployment update and Redis configuration |
 
 ## Required deployment values
 
@@ -62,7 +62,7 @@ Configure these in Hostinger for both the web process and worker where applicabl
 - keep `NEXT_PUBLIC_APP_URL=https://lightcoral-owl-812884.hostingersite.com` unchanged
 - keep the encrypted workspace Meta App Secret and `ENCRYPTION_KEY` unchanged
 - a reachable TLS Redis `REDIS_URL`
-- a fresh permanent Meta System User token assigned to the correct app and WABA
+- replace the current generated test token with a permanent Meta System User token assigned to the correct app and WABA before public production launch
 - `WORKER_SECRET`, `ENCRYPTION_KEY`, and session signing secret must remain stable and at least 32 characters
 - `GEMINI_API_KEY` and `GEMINI_MODEL` are required only when an AI Agent step is activated
 
